@@ -64,8 +64,8 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
   }
 });
 
-//Force mainLoop stop after 60s for test purpose
-$loop->addTimer(60, function () use ($loop) {
+//Force mainLoop stop after 120s for test purpose
+$loop->addTimer(120, function () use ($loop) {
   echo 'before stop' . PHP_EOL;
   $loop->stop();
 });
