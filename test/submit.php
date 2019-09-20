@@ -15,16 +15,15 @@ $mainLoop_path = "/var/www/archipelago/web/modules/contrib/strawberry_runners/sr
 $cmd = $drush_path . 'drush scr mainLoop --script-path=' . $mainLoop_path;
 $outputfile = "/tmp/runners.log";
 
-
 //check state
-$ser_data = \Drupal::state()->get('strawberryfield_mainLoop');
-if (!is_null($ser_data)) {
-  $data = unserialize($ser_data);
+$data = unserialize(\Drupal::state()->get('strawberryfield_mainLoop'));
+if (!($data)) {
+  $lastRunTime = 0;
 }
-else {
-  $data = ['processId' => NULL, 'lastRunTime' => 0, ];
+else{
+  $lastRunTime = $data['lastRunTime'];
 }
-$delta = \Drupal::time()->getCurrentTime() - $data['lastRunTime'];
+$delta = \Drupal::time()->getCurrentTime() - $lastRunTime;
 
 if ($delta < 10) {
   echo 'mainLoop running' . PHP_EOL;
@@ -37,7 +36,6 @@ if ($delta < 10) {
   }
   $totalItems = $queue->numberOfItems();
   echo 'Queue totalItems ' . $totalItems . PHP_EOL;
-
 }
 else {
   echo 'mainLoop to start' . PHP_EOL;
@@ -58,6 +56,8 @@ else {
     'lastRunTime' => \Drupal::time()->getCurrentTime(),
   ];
   \Drupal::state()->set('strawberryfield_mainLoop', serialize($data));
+
+  \Drupal::state()->delete('strawberryfield_childList');
 }
 
 ?>
