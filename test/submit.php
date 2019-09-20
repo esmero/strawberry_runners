@@ -5,6 +5,9 @@ use Drupal\Core\State\State;
 //copy this script into site root i.e. /var/www/archipelago
 //then launch it from site root with:
 //$ sudo -u www-data vendor/drush/drush/drush scr submit
+//after launched the submit script exit and mailLoop script run in background
+//to see mailLoop output check /tmp/runners.log file
+//i.e. tail -f /tmp/runners.log
 
 //build command
 $drush_path = "/var/www/archipelago/vendor/drush/drush/";
