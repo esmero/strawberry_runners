@@ -8,7 +8,6 @@ use Drupal\Core\State\State;
 //after launched the submit script exit and mailLoop script run in background
 //to see mailLoop output check /tmp/runners.log file
 //i.e. tail -f /tmp/runners.log
-//Launch submit when mainLoop is running produce adding elements to queue
 
 //build command
 $drush_path = "/var/www/archipelago/vendor/drush/drush/";
@@ -16,14 +15,16 @@ $mainLoop_path = "/var/www/archipelago/web/modules/contrib/strawberry_runners/sr
 $cmd = $drush_path . 'drush scr mainLoop --script-path=' . $mainLoop_path;
 $outputfile = "/tmp/runners.log";
 
-//check state
-$data = \Drupal::state()->get('strawberryfield_mainLoop');
-$data = explode(',', $data);
-$data = array_pad($data, 2, 0);
-list($processId, $lastRunTime) = $data;
 
-//$lastRunTime = 0 means state no exist
-$delta = \Drupal::time()->getCurrentTime() - $lastRunTime;
+//check state
+$ser_data = \Drupal::state()->get('strawberryfield_mainLoop');
+if (!is_null($ser_data)) {
+  $data = unserialize($ser_data);
+}
+else {
+  $data = ['processId' => NULL, 'lastRunTime' => 0, ];
+}
+$delta = \Drupal::time()->getCurrentTime() - $data['lastRunTime'];
 
 if ($delta < 10) {
   echo 'mainLoop running' . PHP_EOL;
@@ -56,7 +57,7 @@ else {
     'processId' => $pid,
     'lastRunTime' => \Drupal::time()->getCurrentTime(),
   ];
-  \Drupal::state()->set('strawberryfield_mainLoop', implode(',', $data));
+  \Drupal::state()->set('strawberryfield_mainLoop', serialize($data));
 }
 
 ?>
