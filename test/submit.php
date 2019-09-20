@@ -4,8 +4,8 @@ use Drupal\Core\State\State;
 
 //build command
 $drush_path = "/var/www/archipelago/vendor/drush/drush/";
-$mainLoop_path = "/var/www/archipelago/web/modules/contrib/strawberryfield/src/Scripts";
-$cmd = $drush_path . 'drush scr test --script-path=' . $mainLoop_path;
+$mainLoop_path = "/var/www/archipelago/web/modules/contrib/strawberry_runners/src/Scripts";
+$cmd = $drush_path . 'drush scr mainLoop --script-path=' . $mainLoop_path;
 $outputfile = "/tmp/runners.log";
 
 
