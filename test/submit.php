@@ -2,6 +2,10 @@
 
 use Drupal\Core\State\State;
 
+//copy this script into site root i.e. /var/www/archipelago
+//then launch it from site root with:
+//$ sudo -u www-data vendor/drush/drush/drush scr submit
+
 //build command
 $drush_path = "/var/www/archipelago/vendor/drush/drush/";
 $mainLoop_path = "/var/www/archipelago/web/modules/contrib/strawberry_runners/src/Scripts";
