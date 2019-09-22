@@ -15,6 +15,7 @@ $mainLoop_path = "/var/www/archipelago/web/modules/contrib/strawberry_runners/sr
 $cmd = $drush_path . 'drush scr mainLoop --script-path=' . $mainLoop_path;
 $outputfile = "/tmp/runners.log";
 
+
 //check state
 $data = unserialize(\Drupal::state()->get('strawberryfield_mainLoop'));
 if (!($data)) {
@@ -30,12 +31,11 @@ if ($delta < 10) {
 
   //add elements to queue
   $queue = \Drupal::queue('strawberry_runners');
-  for ($x = 1; $x <= 3; $x++) {
+  for ($x = 1; $x <= 2; $x++) {
     $element = "Element " . $x;
     $queue->createItem($element);
   }
   $totalItems = $queue->numberOfItems();
-  echo 'Queue totalItems ' . $totalItems . PHP_EOL;
 }
 else {
   echo 'mainLoop to start' . PHP_EOL;
@@ -43,12 +43,11 @@ else {
   //clear and populate queue
   $queue = \Drupal::queue('strawberry_runners');
   $queue->deleteQueue();
-  for ($x = 1; $x <= 5; $x++) {
+  for ($x = 1; $x <= 2; $x++) {
     $element = "Element " . $x;
     $queue->createItem($element);
   }
   $totalItems = $queue->numberOfItems();
-  echo 'Queue totalItems ' . $totalItems . PHP_EOL;
 
   $pid = shell_exec(sprintf("%s > %s 2>&1 & echo $!", $cmd, $outputfile));
   $data = [
@@ -56,8 +55,7 @@ else {
     'lastRunTime' => \Drupal::time()->getCurrentTime(),
   ];
   \Drupal::state()->set('strawberryfield_mainLoop', serialize($data));
-
-  \Drupal::state()->delete('strawberryfield_childList');
 }
+  echo 'Queue totalItems ' . $totalItems . PHP_EOL;
 
 ?>
