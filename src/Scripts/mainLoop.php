@@ -11,7 +11,6 @@ require __DIR__ . '/../../../../../../vendor/autoload.php';
 echo 'MAIN LOOP getmypid: ' . getmypid() . PHP_EOL;
 
 //ToDO: add to main configuration
-$alivePeriod = 5;
 $queuecheckPeriod = 3;
 $idleCycle_timeout = 5;
 $max_childProcess = 2;
@@ -20,35 +19,28 @@ $loop = Factory::create();
 $queue = \Drupal::queue('strawberry_runners');
 $cycleBefore_timeout = $idleCycle_timeout;
 
-
-//Timer to update lastRunTime
-$loop->addPeriodicTimer($alivePeriod, function () use ($loop) {
-  //update lastRunTime
-  $data = unserialize(\Drupal::state()->get('strawberryfield_mainLoop'));
-  $data['lastRunTime'] = \Drupal::time()->getCurrentTime();
-  \Drupal::state()->set('strawberryfield_mainLoop', serialize($data));
-});
-
 //Timer to check queue
 $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore_timeout, $queue, $idleCycle_timeout, $max_childProcess) {
-
-  //decrement idle timeout counter
-  --$cycleBefore_timeout;
-
+  \Drupal::state()->set('strawberryfield_mainLoop_keepalive', \Drupal::time()->getCurrentTime());
   //Count queue element
   $totalItems = $queue->numberOfItems();
-  echo 'totalItemsinLoop ' . $totalItems . PHP_EOL;
+  echo 'totalItems on queue ' . $totalItems . PHP_EOL;
 
-  //Queue empty and timeout then stop
-  if (($totalItems < 1) && ($cycleBefore_timeout < 1 )){
-    echo 'Idle timeout reached' . PHP_EOL;
-    \Drupal::state()->delete('strawberryfield_mainLoop');
-    $loop->stop();
+  //Queue empty
+  if ($totalItems == 0) {
+    //decrement idle timeout counter
+    --$cycleBefore_timeout;
+    //Queue empty and timeout then stop
+    if ($cycleBefore_timeout == 0){
+      echo 'Idle timeout reached' . PHP_EOL;
+      \Drupal::state()->delete('strawberryfield_mainLoop_keepalive');
+      \Drupal::state()->delete('strawberryfield_mainLoop_pid');
+      $loop->stop();
+    }
   }
 
   //Queue no empty
-  if ($totalItems > 0) {
-
+  else {
     //reset idle timeout
     $cycleBefore_timeout = $idleCycle_timeout;
 
@@ -147,7 +139,6 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
         $child_data_ser = \Drupal::state()->getMultiple($child_ref);
         foreach ($child_data_ser as $child_uuid => $child_data_value_ser){
           $child_data[$child_uuid] = unserialize($child_data_value_ser);
-
           $totalChild++;
           $totalChild_status[$child_data[$child_uuid]['status']]++;
         }
@@ -265,9 +256,11 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
   }
 });
 
-//Force mainLoop stop after 120s for test purpose
-$loop->addTimer(120, function () use ($loop) {
+//Force mainLoop stop after 360s for test purpose
+$loop->addTimer(360, function () use ($loop) {
   echo 'before stop' . PHP_EOL;
+  \Drupal::state()->delete('strawberryfield_mainLoop_keepalive');
+  \Drupal::state()->delete('strawberryfield_mainLoop_pid');
   $loop->stop();
 });
 //
