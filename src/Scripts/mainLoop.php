@@ -47,11 +47,6 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
     //process item
     //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
     //
-    $item = $queue->claimItem();
-    //if not released then next claim will be of next item in queue
-    $queue->releaseItem($item);
-    $item_id = $item->item_id;
-    echo 'Process element:' . $item_id . PHP_EOL;
 
     //check current item
     $item_state_data_ser = \Drupal::state()->get('strawberryfield_runningItem');
@@ -59,10 +54,19 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
     //no running item
     if (is_null($item_state_data_ser)) {
 
+      //moved here from outside if
+      //claim item from queue
+      $item = $queue->claimItem();
+      //if not released then next claim will be of next item in queue
+      //NO MORE NEED IF HERE $queue->releaseItem($item);
+      $item_id = $item->item_id;
+      echo 'Start to process element:' . $item_id . PHP_EOL;
+
       //set item status to init (1)
       //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
       $item_state_data = [
-        'itemId' => $item_id,
+      //  'itemId' => $item_id,
+        'item' => $item,
         'itemStatus' => 1,
       ];
       \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
@@ -103,8 +107,9 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       else {
         //No child to process, set item status allDone (3)
         //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
-      $item_state_data = [
-          'itemId' => $item_id,
+        $item_state_data = [
+          //'itemId' => $item_id,
+          'item' => $item,
           'itemStatus' => 3,
         ];
         \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
@@ -115,7 +120,8 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
     else {
       //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
       $item_state_data = unserialize($item_state_data_ser);
-      $itemId = $item_state_data['itemId'];
+      $item = $item_state_data['item'];
+      $itemId = $item->item_id;
       $itemStatus = $item_state_data['itemStatus'];
       echo 'Item ' . $itemId . ' status ' . $itemStatus . PHP_EOL;
 
@@ -149,29 +155,26 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
 //TEST
 
         //... child allDONE OK
-        if ($totalChild_status[2] == $totalChild){
+        if ($totalChild_status[2] == $totalChild) {
           //Set item status allDone(3) without errors
           //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
           $item_state_data['itemStatus'] = 3;
           \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
-          echo 'Item ' . $item_id . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
+          echo 'Item ' . $itemId . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
         }
-
         //... child allDONE with errors
-        if (($totalChild_status[2] + $totalChild_status[3]) == $totalChild){
+        elseif (($totalChild_status[2] + $totalChild_status[3]) == $totalChild) {
           //Set item status allDone(4) with errors
           //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
           $item_state_data['itemStatus'] = 4;
           \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
-          echo 'Item ' . $item_id . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
+          echo 'Item ' . $itemId . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
         }
-
         //... child processing = max
-        if ($totalChild_status[1] == $max_childProcess){
+        elseif ($totalChild_status[1] == $max_childProcess){
           //ToDO: check running process alive
           //wait next cycle
         }
-
         //... some child to process
         elseif ($totalChild_status[0] > 0){
 
