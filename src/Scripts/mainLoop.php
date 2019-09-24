@@ -209,28 +209,28 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
             //\Drupal::state()->set($child_uuid, serialize($child_data[$child_uuid]));
           });
 
-          $process->on('exit', function ($exit, $term) use (&$child_data, $child_uuid){
-
-            //set child done ok
-            //ToDO: check if really ok
-            $child_data[$child_uuid]['status'] = 2;
-            \Drupal::state()->set($child_uuid, serialize($child_data[$child_uuid]));
-
-            if ($term === null) {
-              echo '*****exit with code ' . $code . ' process: ' . $child_uuid . PHP_EOL;
-            } else {
-              echo '*****terminated with signal ' . $term . ' process: ' . $child_uuid . PHP_EOL;
+          $process->on('exit', function ($code, $term) use (&$child_data, $child_uuid){
+            //set child done ok or error
+            //ToDO: more deep check
+            if ($code == 0) {
+              $child_data[$child_uuid]['status'] = 2;
+              \Drupal::state()->set($child_uuid, serialize($child_data[$child_uuid]));
+            }
+            else {
+              $child_data[$child_uuid]['status'] = 3;
+              \Drupal::state()->set($child_uuid, serialize($child_data[$child_uuid]));
             }
 
+            echo '*****exit with code: ' . $code . ' with signal: ' . $term . ' process: ' . $child_uuid . PHP_EOL;
           });
           //ToDO: do we have to add process timeout???
-          //$loop_child->addTimer(2.0, function () use ($process) {
-          //    foreach ($process->pipes as $pipe) {
-          //        $pipe->close();
-          //    }
-          //    $process->terminate();
-          //});
-          //TEST
+            //$loop->addTimer(5, function () use ($process) {
+            // Running with exec we don't have to close pipes before terminate
+            //    foreach ($process->pipes as $pipe) {
+            //        $pipe->close();
+            //    }
+            //$process->terminate();
+            //});
         }
       }
 
