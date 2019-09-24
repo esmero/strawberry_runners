@@ -189,16 +189,24 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
           $drush_path = "/var/www/archipelago/vendor/drush/drush/";
           $childProcess_path = "/var/www/archipelago/web/modules/contrib/strawberry_runners/src/Scripts";
           //added child_uuid as variable to child process call
-          $cmd = $drush_path . 'drush scr --script-path=' . $childProcess_path . ' childTestProcess -- ' . $child_uuid;
+          $cmd = 'exec ' . $drush_path . 'drush scr --script-path=' . $childProcess_path . ' childTestProcess -- ' . $child_uuid;
 
           $process = new Process($cmd, null, null, null);
           $process->start($loop);
 
+          //set process running
+          $child_data[$child_uuid]['status'] = 1;
+          //set process PID
+          $child_data[$child_uuid]['pid'] = $process->getPid();
+          //store on State
+          \Drupal::state()->set($child_uuid, serialize($child_data[$child_uuid]));
+
           $process->stdout->on('data', function ($chunk) use (&$child_data, $child_uuid){
             //read pid from child then set data on state
-            $child_data[$child_uuid]['pid'] = (unserialize($chunk))['pid'];
-            $child_data[$child_uuid]['status'] = 1;
-            \Drupal::state()->set($child_uuid, serialize($child_data[$child_uuid]));
+            //WE DON'T NEED THIS AS WE GET PID FROM PROCESS
+            //$child_data[$child_uuid]['pid'] = (unserialize($chunk))['pid'];
+            //$child_data[$child_uuid]['status'] = 1;
+            //\Drupal::state()->set($child_uuid, serialize($child_data[$child_uuid]));
           });
 
           $process->on('exit', function ($exit, $term) use (&$child_data, $child_uuid){
