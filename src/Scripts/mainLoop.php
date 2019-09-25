@@ -51,23 +51,20 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
     //check current item
     $item_state_data_ser = \Drupal::state()->get('strawberryfield_runningItem');
 
-    //no running item
+    //no running item and queue not empty
     if (is_null($item_state_data_ser)) {
 
-      //moved here from outside if
       //claim item from queue
       $item = $queue->claimItem();
-      //if not released then next claim will be of next item in queue
-      //NO MORE NEED IF HERE $queue->releaseItem($item);
       $item_id = $item->item_id;
       echo 'Start to process element:' . $item_id . PHP_EOL;
 
-      //set item status to init (1)
-      //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
+      //set item status to init (0)
+      //item status = initialized(0)/running(1)/allDone(2)/allDone with errors(3)
       $item_state_data = [
       //  'itemId' => $item_id,
         'item' => $item,
-        'itemStatus' => 1,
+        'itemStatus' => 0,
       ];
       \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
       echo 'Item ' . $item_id . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
@@ -105,20 +102,19 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
         \Drupal::state()->setMultiple($child_data_ser);
       }
       else {
-        //No child to process, set item status allDone (3)
-        //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
+        //No child to process, set item status allDone (2)
         $item_state_data = [
           //'itemId' => $item_id,
           'item' => $item,
-          'itemStatus' => 3,
+          'itemStatus' => 2,
         ];
         \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
         echo 'Item ' . $item_id . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
       }
     }
-    //running item
+    //running item and queue not empty
     else {
-      //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
+      //item status = initialized(0)/running(1)/allDone(2)/allDone with errors(3)
       $item_state_data = unserialize($item_state_data_ser);
       $item = $item_state_data['item'];
       $itemId = $item->item_id;
@@ -126,16 +122,14 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       echo 'Item ' . $itemId . ' status ' . $itemStatus . PHP_EOL;
 
       //initialized, switch to running, child data and ref already on state
-      if ($itemStatus == 1) {
-        //Set item status running(2)
-        //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
-        $item_state_data['itemStatus'] = 2;
+      if ($itemStatus == 0) {
+        //Set item status running(1)
+        $item_state_data['itemStatus'] = 1;
         \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
       }
 
       //running (processing child)
-      //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
-      if ($itemStatus == 2) {
+      if ($itemStatus == 1) {
 
         //child status = 0:to process 1:processing 2:OK processed 3:error processing
         //check child status then ...
@@ -156,17 +150,15 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
 
         //... child allDONE OK
         if ($totalChild_status[2] == $totalChild) {
-          //Set item status allDone(3) without errors
-          //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
-          $item_state_data['itemStatus'] = 3;
+          //Set item status allDone(2) without errors
+          $item_state_data['itemStatus'] = 2;
           \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
           echo 'Item ' . $itemId . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
         }
         //... child allDONE with errors
         elseif (($totalChild_status[2] + $totalChild_status[3]) == $totalChild) {
-          //Set item status allDone(4) with errors
-          //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
-          $item_state_data['itemStatus'] = 4;
+          //Set item status allDone(3) with errors
+          $item_state_data['itemStatus'] = 3;
           \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
           echo 'Item ' . $itemId . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
         }
@@ -238,8 +230,7 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       }
 
       //allDone without errors
-      //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
-      if ($itemStatus == 3) {
+      if ($itemStatus == 2) {
         //delete runningItem and child ref and data from state
         \Drupal::state()->delete('strawberryfield_runningItem');
         $c_ref = unserialize(\Drupal::state()->get('strawberryfield_child_ref'));
@@ -250,8 +241,7 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       }
 
       //allDone with errors
-      //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
-      if ($itemStatus == 4) {
+      if ($itemStatus == 3) {
         //
         //ToDO!!
         //
