@@ -5,6 +5,7 @@ use React\EventLoop\LoopInterface;
 use React\EventLoop\TimerInterface;
 use React\ChildProcess\Process;
 use Drupal\Core\State\State;
+use Drupal\Core\Queue;
 
 require __DIR__ . '/../../../../../../vendor/autoload.php';
 
@@ -19,15 +20,30 @@ $loop = Factory::create();
 $queue = \Drupal::queue('strawberry_runners');
 $cycleBefore_timeout = $idleCycle_timeout;
 
+//§
+//§init queues
+// _init + _started = total
+// item pulled from _init and pushed into _started
+// item NOT pulled from _started
+// item pushed into _done or _error
+if (\Drupal::queue('strawberryfields_child_init')->numberOfItems > 0) {\Drupal::queue('strawberryfields_child_init')->deleteQueue;}
+if (\Drupal::queue('strawberryfields_child_started')->numberOfItems > 0) {\Drupal::queue('strawberryfields_child_started')->deleteQueue;}
+if (\Drupal::queue('strawberryfields_child_done')->numberOfItems > 0) {\Drupal::queue('strawberryfields_child_done')->deleteQueue;}
+if (\Drupal::queue('strawberryfields_child_error')->numberOfItems > 0) {\Drupal::queue('strawberryfields_child_error')->deleteQueue;}
+$childQueue_init = \Drupal::queue('strawberryfields_child_init');
+$childQueue_started = \Drupal::queue('strawberryfields_child_started');
+$childQueue_done = \Drupal::queue('strawberryfields_child_done');
+$childQueue_error = \Drupal::queue('strawberryfields_child_error');
+
 //Timer to check queue
-$loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore_timeout, $queue, $idleCycle_timeout, $max_childProcess) {
+$loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore_timeout, $queue, $idleCycle_timeout, $max_childProcess, $childQueue_init, $childQueue_started, $childQueue_done, $childQueue_error) {
   \Drupal::state()->set('strawberryfield_mainLoop_keepalive', \Drupal::time()->getCurrentTime());
   //Count queue element
   $totalItems = $queue->numberOfItems();
   echo 'totalItems on queue ' . $totalItems . PHP_EOL;
 
-  //Queue empty
-  if ($totalItems == 0) {
+  if ($totalItems == 0) { //Queue empty
+
     //decrement idle timeout counter
     --$cycleBefore_timeout;
     //Queue empty and timeout then stop
@@ -38,31 +54,26 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       $loop->stop();
     }
   }
+  else { //Queue not empty
 
-  //Queue no empty
-  else {
     //reset idle timeout
     $cycleBefore_timeout = $idleCycle_timeout;
 
     //process item
-    //item status = initialized(1)/running(2)/allDone(3)/allDone with errors(4)
-    //
+    //item status = initialized(0)/running(1)/allDone(2)/allDone with errors(3)
 
-    //check current item
+    //Pull running item status
     $item_state_data_ser = \Drupal::state()->get('strawberryfield_runningItem');
 
-    //no running item and queue not empty
-    if (is_null($item_state_data_ser)) {
+    if (is_null($item_state_data_ser)) { //no running item and queue not empty
 
       //claim item from queue
       $item = $queue->claimItem();
       $item_id = $item->item_id;
       echo 'Start to process element:' . $item_id . PHP_EOL;
 
-      //set item status to init (0)
-      //item status = initialized(0)/running(1)/allDone(2)/allDone with errors(3)
+      //initialize item (status = 0) and child
       $item_state_data = [
-      //  'itemId' => $item_id,
         'item' => $item,
         'itemStatus' => 0,
       ];
@@ -71,40 +82,35 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
 
       //extract childs to process from item
       //
-      //child_uuid includes item_id
-      //
-      //child_uuid used as key for child_state_data
-      //
-      //child_ref used to multiple get/set child state
-      //
-      //child_data[child_uuid][status] = 0:to process 1:processing 2:OK processed 3:error processing
-      //child_data[child_uuid][pid] = child pid process
-      //
+      //child_id includes item_id
+      //child_ref contains all child_id
       //
       //ToDO: add something about type of process to run ???!!!
 
       //TEST. build child_data and child_ref
       $child_number = 3;
       for ($x = 1; $x <= $child_number; $x++) {
-        $child_uuid = $item_id . "_Child_" . $x;
-        $child_data[$child_uuid]['status'] = 0;
-        $child_data[$child_uuid]['pid'] = 0;
-        $child_ref[] = $child_uuid;
+        $child_id = $item_id . "_Child_" . $x;
+        //§§$child_data[$child_id]['status'] = 0;
+        //§§$child_data[$child_id]['pid'] = 0;
+        $child_ref[] = $child_id;
       }
       //TEST
 
-      if ($child_number > 0) {
-        //Item has child to process: push ref on state and push each child data on state by setMultiple
+      if ($child_number > 0) { //Item has child to process
+
+        //Push ref on state
         \Drupal::state()->set('strawberryfield_child_ref', serialize($child_ref));
-        foreach ($child_data as $child_uuid => $child_data_value){
-          $child_data_ser[$child_uuid] = serialize($child_data_value);
+
+        //§Push child on init queue
+        foreach ($child_ref as $child_id) {
+          $childQueue_init->createItem($child_id);
         }
-        \Drupal::state()->setMultiple($child_data_ser);
       }
-      else {
-        //No child to process, set item status allDone (2)
+      else { //No child to process
+
+        //set item status allDone (2)
         $item_state_data = [
-          //'itemId' => $item_id,
           'item' => $item,
           'itemStatus' => 2,
         ];
@@ -112,110 +118,98 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
         echo 'Item ' . $item_id . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
       }
     }
-    //running item and queue not empty
-    else {
-      //item status = initialized(0)/running(1)/allDone(2)/allDone with errors(3)
+    else { //Item is running and queue not empty
+
+      //Read running item status
       $item_state_data = unserialize($item_state_data_ser);
       $item = $item_state_data['item'];
       $itemId = $item->item_id;
       $itemStatus = $item_state_data['itemStatus'];
       echo 'Item ' . $itemId . ' status ' . $itemStatus . PHP_EOL;
 
-      //child status = 0:to process 1:processing 2:OK processed 3:error processing
+      //initialized(0),running(1),allDone(2),allDone with errors(3)
       switch ($itemStatus) {
         case 0:
-          //initialized, switch to running, child data and ref already on state
+          //initialized, move to running
           //Set item status running(1)
           $item_state_data['itemStatus'] = 1;
           \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
           break;
         case 1:
-          //running (processing child)
+          //running (ready or already processing child)
+          //child status = 0:to process 1:processing 2:OK processed 3:error processing
+
           //check child status then ...
-          $totalChild = 0;
-          $totalChild_status = array_fill(0, 4, 0);
-          $child_ref = unserialize(\Drupal::state()->get('strawberryfield_child_ref'));
-          $child_data_ser = \Drupal::state()->getMultiple($child_ref);
-          foreach ($child_data_ser as $child_uuid => $child_data_value_ser){
-            $child_data[$child_uuid] = unserialize($child_data_value_ser);
-            $totalChild++;
-            $totalChild_status[$child_data[$child_uuid]['status']]++;
-          }
+          $total_child_status = array();
+          $total_child_status[0] = $childQueue_init->numberOfItems();
+          $total_child_status[1] = $childQueue_started->numberOfItems();
+          $total_child_status[2] = $childQueue_done->numberOfItems();
+          $total_child_status[3] = $childQueue_error->numberOfItems();
+          $total_child = $total_child_status[0] + $total_child_status[1];
+          $total_child_running = $total_child_status[1] - $total_child_status[2] - $total_child_status[3];
 
   //TEST
-          print_r($child_data);
-          print_r($totalChild_status);
+          print_r($total_child_status);
   //TEST
 
-          //... child allDONE OK
-          if ($totalChild_status[2] == $totalChild) {
+          if ($total_child_status[2] == $total_child) {
+            //... child allDONE OK
+
             //Set item status allDone(2) without errors
             $item_state_data['itemStatus'] = 2;
             \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
             echo 'Item ' . $itemId . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
           }
-          //... child allDONE with errors
-          elseif (($totalChild_status[2] + $totalChild_status[3]) == $totalChild) {
+          elseif (($total_child_status[2] + $total_child_status[3]) == $total_child) {
+            //... child allDONE with errors
+
             //Set item status allDone(3) with errors
             $item_state_data['itemStatus'] = 3;
             \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
             echo 'Item ' . $itemId . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
           }
-          //... child processing = max
-          elseif ($totalChild_status[1] == $max_childProcess){
+          elseif ($total_child_running >= $max_childProcess) {
+            //... child running = max
+
             //ToDO: check running process alive
-            //wait next cycle
+            //Wait next cycle
           }
-          //... some child to process
-          elseif ($totalChild_status[0] > 0){
+          elseif ($total_child_status[0] > 0) {
+            //... some child to process
 
-            //search first child to process => $child_uuid
-            foreach ($child_data as $c_uuid => $c_stat) {
-              if ($c_stat['status'] == 0) {
-                $child_uuid = $c_uuid;
-                break;
-              }
-            }
-
-            //start process $child_uuid
-            echo '***** start process: ' . $child_uuid . PHP_EOL;
+            //§ claim first child to process
+            $child_queue_item = $childQueue_init->claimItem();
+            $child_id = $child_queue_item->data;
+            //start process $child_id
+            echo '***** start process: ' . $child_id . PHP_EOL;
 
             $drush_path = "/var/www/archipelago/vendor/drush/drush/";
             $childProcess_path = "/var/www/archipelago/web/modules/contrib/strawberry_runners/src/Scripts";
-            //added child_uuid as variable to child process call
-            $cmd = 'exec ' . $drush_path . 'drush scr --script-path=' . $childProcess_path . ' childTestProcess -- ' . $child_uuid;
+            //added child_id as variable to child process call
+            $cmd = 'exec ' . $drush_path . 'drush scr --script-path=' . $childProcess_path . ' childTestProcess -- ' . $child_id;
 
             $process = new Process($cmd, null, null, null);
             $process->start($loop);
 
-            //set process running
-            $child_data[$child_uuid]['status'] = 1;
-            //set process PID
-            $child_data[$child_uuid]['pid'] = $process->getPid();
-            //store on State
-            \Drupal::state()->set($child_uuid, serialize($child_data[$child_uuid]));
+            //§ remove from init queue and push on started queue
+            $childQueue_init->deleteItem($child_queue_item);
+            $childQueue_started->createItem($child_id . '|' . $process->getPid());
 
-            $process->stdout->on('data', function ($chunk) use (&$child_data, $child_uuid){
-              //read pid from child then set data on state
-              //WE DON'T NEED THIS AS WE GET PID FROM PROCESS
-              //$child_data[$child_uuid]['pid'] = (unserialize($chunk))['pid'];
-              //$child_data[$child_uuid]['status'] = 1;
-              //\Drupal::state()->set($child_uuid, serialize($child_data[$child_uuid]));
+            $process->stdout->on('data', function ($chunk) use ($child_id){
+              //code to read chunck from child process output
             });
 
-            $process->on('exit', function ($code, $term) use (&$child_data, $child_uuid){
-              //set child done ok or error
+            $process->on('exit', function ($code, $term) use ($child_id, $childQueue_done, $childQueue_error){
+              //copy to queue done or error
               //ToDO: more deep check
               if ($code == 0) {
-                $child_data[$child_uuid]['status'] = 2;
-                \Drupal::state()->set($child_uuid, serialize($child_data[$child_uuid]));
+                $childQueue_done->createItem($child_id);
               }
               else {
-                $child_data[$child_uuid]['status'] = 3;
-                \Drupal::state()->set($child_uuid, serialize($child_data[$child_uuid]));
+                $childQueue_error->createItem($child_id);
               }
 
-              echo '*****exit with code: ' . $code . ' with signal: ' . $term . ' process: ' . $child_uuid . PHP_EOL;
+              echo '*****exit with code: ' . $code . ' with signal: ' . $term . ' process: ' . $child_id . PHP_EOL;
             });
             //ToDO: do we have to add process timeout???
               //$loop->addTimer(5, function () use ($process) {
@@ -229,26 +223,40 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
           break;
         case 2:
           //allDone without errors
-          //delete runningItem and child ref and data from state
-          \Drupal::state()->delete('strawberryfield_runningItem');
-          $c_ref = unserialize(\Drupal::state()->get('strawberryfield_child_ref'));
-          \Drupal::state()->deleteMultiple($c_ref);
-          \Drupal::state()->delete('strawberryfield_child_ref');
+
           //remove item from queue
           $queue->deleteItem($item);
+
+          //delete runningItem and child ref
+          \Drupal::state()->delete('strawberryfield_runningItem');
+          \Drupal::state()->delete('strawberryfield_child_ref');
+
+          //§delete queues
+          $childQueue_init->deleteQueue();
+          $childQueue_started->deleteQueue();
+          $childQueue_done->deleteQueue();
+          $childQueue_error->deleteQueue();
+
           break;
         case 3:
           //allDone with errors
           //
           //ToDO!!
           //
-          //remove runningItem and child ref and data
-          \Drupal::state()->delete('strawberryfield_runningItem');
-          $c_ref = unserialize(\Drupal::state()->get('strawberryfield_child_ref'));
-          \Drupal::state()->deleteMultiple($c_ref);
-          \Drupal::state()->delete('strawberryfield_child_ref');
+
           //remove item from queue
           $queue->deleteItem($item);
+
+          //remove runningItem and child ref
+          \Drupal::state()->delete('strawberryfield_runningItem');
+          \Drupal::state()->delete('strawberryfield_child_ref');
+
+          //§delete queues
+          $childQueue_init->deleteQueue();
+          $childQueue_started->deleteQueue();
+          $childQueue_done->deleteQueue();
+          $childQueue_error->deleteQueue();
+
           break;
       }
     }
