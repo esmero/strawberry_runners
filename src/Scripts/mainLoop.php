@@ -70,7 +70,9 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       //claim item from queue
       $item = $queue->claimItem();
       $item_id = $item->item_id;
-      echo 'Start to process element:' . $item_id . PHP_EOL;
+      $element = unserialize($item->data);
+      echo 'Start to process element ID:' . $item_id . PHP_EOL;
+      echo '... node ID: ' . $element[0] . PHP_EOL;
 
       //initialize item (status = 0) and child
       $item_state_data = [
@@ -91,8 +93,6 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       $child_number = 3;
       for ($x = 1; $x <= $child_number; $x++) {
         $child_id = $item_id . "_Child_" . $x;
-        //§§$child_data[$child_id]['status'] = 0;
-        //§§$child_data[$child_id]['pid'] = 0;
         $child_ref[] = $child_id;
       }
       //TEST
