@@ -30,13 +30,15 @@ if (\Drupal::queue('strawberryfields_child_init')->numberOfItems > 0) {\Drupal::
 if (\Drupal::queue('strawberryfields_child_started')->numberOfItems > 0) {\Drupal::queue('strawberryfields_child_started')->deleteQueue;}
 if (\Drupal::queue('strawberryfields_child_done')->numberOfItems > 0) {\Drupal::queue('strawberryfields_child_done')->deleteQueue;}
 if (\Drupal::queue('strawberryfields_child_error')->numberOfItems > 0) {\Drupal::queue('strawberryfields_child_error')->deleteQueue;}
+if (\Drupal::queue('strawberryfields_child_output')->numberOfItems > 0) {\Drupal::queue('strawberryfields_child_output')->deleteQueue;}
 $childQueue_init = \Drupal::queue('strawberryfields_child_init');
 $childQueue_started = \Drupal::queue('strawberryfields_child_started');
 $childQueue_done = \Drupal::queue('strawberryfields_child_done');
 $childQueue_error = \Drupal::queue('strawberryfields_child_error');
+$childQueue_output = \Drupal::queue('strawberryfields_child_output');
 
 //Timer to check queue
-$loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore_timeout, $queue, $idleCycle_timeout, $max_childProcess, $childQueue_init, $childQueue_started, $childQueue_done, $childQueue_error) {
+$loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore_timeout, $queue, $idleCycle_timeout, $max_childProcess, $childQueue_init, $childQueue_started, $childQueue_done, $childQueue_error, $childQueue_output) {
   \Drupal::state()->set('strawberryfield_mainLoop_keepalive', \Drupal::time()->getCurrentTime());
   //Count queue element
   $totalItems = $queue->numberOfItems();
@@ -76,7 +78,7 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
 
       echo 'Start to process element ID:' . $item_id . ' node ID: ' . $node_id . PHP_EOL;
 
-      //initialize item (status = 0) and child
+      //initialize item (status = 0)
       $item_state_data = [
         'item' => $item,
         'itemStatus' => 0,
@@ -180,8 +182,9 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
 
             $drush_path = "/var/www/archipelago/vendor/drush/drush/";
             $childProcess_path = "/var/www/archipelago/web/modules/contrib/strawberry_runners/src/Scripts";
+            $childProcess_script = 'strawberryfield_flavour_' . explode(':', $child_id)[1];
             //added child_id as variable to child process call
-            $cmd = 'exec ' . $drush_path . 'drush scr --script-path=' . $childProcess_path . ' childTestProcess -- ' . $child_id;
+            $cmd = 'exec ' . $drush_path . 'drush scr --script-path=' . $childProcess_path . ' ' . $childProcess_script . ' -- ' . $child_id;
 
             $process = new Process($cmd, null, null, null);
             $process->start($loop);
@@ -192,6 +195,7 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
 
             $process->stdout->on('data', function ($chunk) use ($child_id){
               //code to read chunck from child process output
+              echo 'Chunk ' . $child_id . ': ' . $chunk . PHP_EOL;
             });
 
             $process->on('exit', function ($code, $term) use ($child_id, $childQueue_done, $childQueue_error){
@@ -219,6 +223,27 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
         case 2:
           //allDone without errors
 
+          //manage results from child output queue
+          //
+          //ToDO!!
+          //
+
+          //TEST
+          $child_output_item_number = $childQueue_output->numberOfItems();
+          while ($child_output_item_number > 0) {
+            $child_output_item = $childQueue_output->claimItem();
+            $child_output_data = unserialize($child_output_item->data);
+            $childQueue_output->deleteItem($child_output_item);
+            $child_output_item_number = $childQueue_output->numberOfItems();
+
+            echo 'OUTPUT QUEUE ************* ' . $child_output_item_number . PHP_EOL;
+            print_r($child_output_data);
+            echo 'OUTPUT QUEUE ^^^^^^^^^^^^^' . PHP_EOL;
+
+          }
+          //TEST
+
+
           //remove item from queue
           $queue->deleteItem($item);
 
@@ -231,7 +256,8 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
           $childQueue_started->deleteQueue();
           $childQueue_done->deleteQueue();
           $childQueue_error->deleteQueue();
-
+          $childQueue_output->deleteQueue();
+          
           break;
         case 3:
           //allDone with errors
@@ -251,6 +277,7 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
           $childQueue_started->deleteQueue();
           $childQueue_done->deleteQueue();
           $childQueue_error->deleteQueue();
+          $childQueue_output->deleteQueue();
 
           break;
       }
