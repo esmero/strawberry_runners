@@ -19,14 +19,14 @@ use Drupal\Core\Field\FieldItemListInterface;
 use Drupal\Core\Entity\EntityInterface;
 
 //TEST
-$node_id = 18;
+$node_id = 25;
 //TEST
 
 $ado = \Drupal::entityTypeManager()->getStorage('node')->load($node_id);
 $sbf_json = $ado->get('field_descriptive_metadata');
 $jsondata = json_decode($sbf_json->value, true);
 
-print_r($jsondata);
+//print_r($jsondata);
 
 pushItemOnQueue($node_id, $jsondata);
 mainLoopWakeUp();

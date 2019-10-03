@@ -71,8 +71,10 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       $item = $queue->claimItem();
       $item_id = $item->item_id;
       $element = unserialize($item->data);
-      echo 'Start to process element ID:' . $item_id . PHP_EOL;
-      echo '... node ID: ' . $element[0] . PHP_EOL;
+      $node_id = $element[0];
+      $jsondata = $element[1];
+
+      echo 'Start to process element ID:' . $item_id . ' node ID: ' . $node_id . PHP_EOL;
 
       //initialize item (status = 0) and child
       $item_state_data = [
@@ -82,20 +84,13 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       \Drupal::state()->set('strawberryfield_runningItem', serialize($item_state_data));
       echo 'Item ' . $item_id . ' set status ' . $item_state_data['itemStatus'] . PHP_EOL;
 
-      //extract childs to process from item
+      //extract childs to process from SBF-JSON
       //
-      //child_id includes item_id
-      //child_ref contains all child_id
-      //
-      //ToDO: add something about type of process to run ???!!!
+      //child_id = node_id, type and status
+      //child_ref contains all child_id to process
 
-      //TEST. build child_data and child_ref
-      $child_number = 3;
-      for ($x = 1; $x <= $child_number; $x++) {
-        $child_id = $item_id . "_Child_" . $x;
-        $child_ref[] = $child_id;
-      }
-      //TEST
+      $child_ref = listFlavoursToProcess($node_id, $jsondata);
+      $child_number = count($child_ref);
 
       if ($child_number > 0) { //Item has child to process
 
@@ -273,5 +268,49 @@ $loop->addTimer(360, function () use ($loop) {
 //
 
 $loop->run();
+
+/**
+ * List flavours to process from SBF-JSON
+ *
+ * (0) ready, runner executed and STB-JSON updated
+ * (1) new, runner to execute
+ * (2) update, runner to execute as STB-JSON was updated
+ * (3) remove, runner must remove entry related to this flavour
+ *
+ *
+ *  Expected something like this:
+ *
+ *     "ap:flavours": {
+ *        "ap:exif": {
+ *            "status": 1,
+ *            "requires": [
+ *                "as:image"
+ *            ]
+ *        },
+ *        "ap:thumbnail": {
+ *            "status": 1,
+ *            "requires": [
+ *                "as:image"
+ *            ]
+ *        }
+ *    },
+ */
+function listFlavoursToProcess($node_id, $jsondata) {
+  $child_index = 0;
+  $child_ref = array();
+  $flavours = $jsondata['ap:flavours'];
+  foreach ($flavours as $flavour => $flavour_data) {
+    $flavour_type = explode(':', $flavour)[1];
+    $flavour_status = $flavour_data['status'];
+    $flavour_requires = $flavour_data['requires'];
+    //ToDO check requires
+    //Status 1,2 or 3 => runner to execute
+    if ($flavour_status > 0) {
+      $child_ref[$child_index] = "{$node_id}:{$flavour_type}:{$flavour_status}";
+      $child_index++;
+    }
+  }
+  return $child_ref;
+}
 
 ?>
