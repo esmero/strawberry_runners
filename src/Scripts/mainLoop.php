@@ -121,6 +121,9 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       $item_state_data = unserialize($item_state_data_ser);
       $item = $item_state_data['item'];
       $itemId = $item->item_id;
+      $element = unserialize($item->data);
+      $node_id = $element[0];
+      $jsondata = $element[1];
       $itemStatus = $item_state_data['itemStatus'];
       echo 'Item ' . $itemId . ' status ' . $itemStatus . PHP_EOL;
 
@@ -239,10 +242,32 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
             $flavour_type = explode(':', $child_output_data[0])[1];
             $flavour_node_id = explode(':', $child_output_data[0])[0];
 
+            $new_jsondata_array = $jsondata;
+
             echo 'OUTPUT QUEUE ************* ' . $child_output_item_number . PHP_EOL;
             echo 'Node ID: ' . $flavour_node_id . ' Flavour: ' . $flavour_type . ' Error: ' . $child_output_data[1] . PHP_EOL;
-            print_r(json_decode($child_output_data[2]));
+            $flavour_json_array = json_decode($child_output_data[2], TRUE);
+            print_r($flavour_json_array);
             echo 'OUTPUT QUEUE ^^^^^^^^^^^^^' . PHP_EOL;
+
+            echo 'OLD JSON *************' . PHP_EOL;
+            $jsondata_flavour_key = 'ap:' . $flavour_type;
+            print_r($jsondata['ap:flavours'][$jsondata_flavour_key]);
+            echo 'OLD JSON ^^^^^^^^^^^^^' . PHP_EOL;
+
+            echo 'NEW JSON *************' . PHP_EOL;
+            $new_jsondata_array['ap:flavours'][$jsondata_flavour_key]['status'] = 0;
+            $new_jsondata_array['ap:flavours'][$jsondata_flavour_key]['data'] = $flavour_json_array;
+            print_r($new_jsondata_array['ap:flavours'][$jsondata_flavour_key]);
+            echo 'NEW JSON ^^^^^^^^^^^^^' . PHP_EOL;
+
+
+            $new_jsondata = json_encode($new_jsondata_array);
+
+            $ado = \Drupal::entityTypeManager()->getStorage('node')->load($flavour_node_id);
+            $ado->set('field_descriptive_metadata', $new_jsondata);
+            $ado->save();
+
 
           }
           //TEST
