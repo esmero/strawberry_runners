@@ -10,15 +10,37 @@ $element = unserialize($item_state_data['item']->data);
 $node_id = $element[0];
 $jsondata = $element[1];
 
+//get first image uri
+foreach ($jsondata['as:image'] as $image) {
+  $uri = $image['url'];
+  break;
+}
 
+//get image path
+$stream = \Drupal::service('stream_wrapper_manager')->getViaUri($uri);
+$image_path = $stream->realpath();
 
+//call external command
+unset($exif_output);
+unset($exif_array_output);
+exec('exif -m ' . $image_path, $exif_output, $exif_return);
+
+if ($exif_return == 0) {
+  foreach ($exif_output as $line) {
+    $line_split = explode("\t", $line);
+    $exif_array_output[$line_split[0]] = $line_split[1];
+  }
+  $exif_json_output = json_encode($exif_array_output);
+}
+else {
+  $exif_json_output = '{"Exif return error":"' . $exif_return . '"}';
+}
 
 //output on queue child output
 $childQueue_output = \Drupal::queue('strawberryfields_child_output');
 
 $output[0] = $child_id;
-$output[1] = 'Test Exif';
+$output[1] = $exif_json_output;
 $childQueue_output->createItem(serialize($output));
 
-sleep(3);
 ?>
