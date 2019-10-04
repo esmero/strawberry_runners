@@ -40,7 +40,11 @@ else {
 $childQueue_output = \Drupal::queue('strawberryfields_child_output');
 
 $output[0] = $child_id;
-$output[1] = $exif_json_output;
+$output[1] = $exif_return;
+$output[2] = $exif_json_output;
 $childQueue_output->createItem(serialize($output));
+
+//set return code 0=OK, other= error
+drush_set_context('DRUSH_EXIT_CODE', $exif_return);
 
 ?>

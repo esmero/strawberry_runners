@@ -208,7 +208,7 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
                 $childQueue_error->createItem($child_id);
               }
 
-              echo '*****exit with code: ' . $code . ' with signal: ' . $term . ' process: ' . $child_id . PHP_EOL;
+              echo '*****exit with code: ' . $code . ' process: ' . $child_id . PHP_EOL;
             });
             //ToDO: do we have to add process timeout???
               //$loop->addTimer(5, function () use ($process) {
@@ -257,7 +257,7 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
           $childQueue_done->deleteQueue();
           $childQueue_error->deleteQueue();
           $childQueue_output->deleteQueue();
-          
+
           break;
         case 3:
           //allDone with errors
