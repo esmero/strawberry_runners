@@ -183,44 +183,63 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
             //start process $child_id
             echo '***** start process: ' . $child_id . PHP_EOL;
 
-            $drush_path = "/var/www/archipelago/vendor/drush/drush/";
-            $childProcess_path = "/var/www/archipelago/web/modules/contrib/strawberry_runners/src/Scripts";
-            $childProcess_script = 'strawberryfield_flavour_' . explode(':', $child_id)[1];
-            //added child_id as variable to child process call
-            $cmd = 'exec ' . $drush_path . 'drush scr --script-path=' . $childProcess_path . ' ' . $childProcess_script . ' -- ' . $child_id;
+            $child_flavour_status = explode(':', $child_id)[2];
 
-            $process = new Process($cmd, null, null, null);
-            $process->start($loop);
+            if ($child_flavour_status == 3) {
+              //flavour to remove
 
-            //§ remove from init queue and push on started queue
-            $childQueue_init->deleteItem($child_queue_item);
-            $childQueue_started->createItem($child_id . '|' . $process->getPid());
+              //§ remove from init queue and push on started and done queues
+              $childQueue_init->deleteItem($child_queue_item);
+              $childQueue_started->createItem($child_id . '|0');
+              $childQueue_done->createItem($child_id);
+              $childQueue_output = \Drupal::queue('strawberryfields_child_output');
 
-            $process->stdout->on('data', function ($chunk) use ($child_id){
-              //code to read chunck from child process output
-              echo 'Chunk ' . $child_id . ': ' . $chunk . PHP_EOL;
-            });
+              unset($output);
+              $output[0] = $child_id;
+              $output[1] = 0;
+              $output[2] = '';
+              $childQueue_output->createItem(serialize($output));
+            }
+            else {
+              $drush_path = "/var/www/archipelago/vendor/drush/drush/";
+              $childProcess_path = "/var/www/archipelago/web/modules/contrib/strawberry_runners/src/Scripts";
+              $childProcess_script = 'strawberryfield_flavour_' . explode(':', $child_id)[1];
+              //added child_id as variable to child process call
+              $cmd = 'exec ' . $drush_path . 'drush scr --script-path=' . $childProcess_path . ' ' . $childProcess_script . ' -- ' . $child_id;
 
-            $process->on('exit', function ($code, $term) use ($child_id, $childQueue_done, $childQueue_error){
-              //copy to queue done or error
-              //ToDO: more deep check
-              if ($code == 0) {
-                $childQueue_done->createItem($child_id);
-              }
-              else {
-                $childQueue_error->createItem($child_id);
-              }
+              $process = new Process($cmd, null, null, null);
+              $process->start($loop);
 
-              echo '*****exit with code: ' . $code . ' process: ' . $child_id . PHP_EOL;
-            });
-            //ToDO: do we have to add process timeout???
-              //$loop->addTimer(5, function () use ($process) {
-              // Running with exec we don't have to close pipes before terminate
-              //    foreach ($process->pipes as $pipe) {
-              //        $pipe->close();
-              //    }
-              //$process->terminate();
-              //});
+              //§ remove from init queue and push on started queue
+              $childQueue_init->deleteItem($child_queue_item);
+              $childQueue_started->createItem($child_id . '|' . $process->getPid());
+
+              $process->stdout->on('data', function ($chunk) use ($child_id){
+                //code to read chunck from child process output
+                echo 'Chunk ' . $child_id . ': ' . $chunk . PHP_EOL;
+              });
+
+              $process->on('exit', function ($code, $term) use ($child_id, $childQueue_done, $childQueue_error){
+                //copy to queue done or error
+                //ToDO: more deep check
+                if ($code == 0) {
+                  $childQueue_done->createItem($child_id);
+                }
+                else {
+                  $childQueue_error->createItem($child_id);
+                }
+
+                echo '*****exit with code: ' . $code . ' process: ' . $child_id . PHP_EOL;
+              });
+              //ToDO: do we have to add process timeout???
+                //$loop->addTimer(5, function () use ($process) {
+                // Running with exec we don't have to close pipes before terminate
+                //    foreach ($process->pipes as $pipe) {
+                //        $pipe->close();
+                //    }
+                //$process->terminate();
+                //});
+            }
           }
           break;
         case 2:
@@ -240,16 +259,17 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
             $child_output_item_number = $childQueue_output->numberOfItems();
 
             $flavour_type = explode(':', $child_output_data[0])[1];
+            $flavour_status = explode(':', $child_output_data[0])[2];
             $flavour_node_id = explode(':', $child_output_data[0])[0];
 
             $new_jsondata_array = $jsondata;
 
-            echo 'OUTPUT QUEUE ************* ' . $child_output_item_number . PHP_EOL;
-            echo 'Node ID: ' . $flavour_node_id . ' Flavour: ' . $flavour_type . ' Error: ' . $child_output_data[1] . PHP_EOL;
-            $flavour_json_array = json_decode($child_output_data[2], TRUE);
-            print_r($flavour_json_array);
-            echo 'OUTPUT QUEUE ^^^^^^^^^^^^^' . PHP_EOL;
-
+            if ($flavour_status == 3) {
+              $flavour_json_array = array();
+            }
+            else {
+              $flavour_json_array = json_decode($child_output_data[2], TRUE);
+            }
             echo 'OLD JSON *************' . PHP_EOL;
             $jsondata_flavour_key = 'ap:' . $flavour_type;
             print_r($jsondata['ap:flavours'][$jsondata_flavour_key]);
