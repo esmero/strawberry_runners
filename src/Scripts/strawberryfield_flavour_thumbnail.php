@@ -12,13 +12,20 @@ $jsondata = $element[1];
 
 
 
+//TEST
+  $thumbnail_return = 0;
+//TEST
+
 
 //output on queue child output
 $childQueue_output = \Drupal::queue('strawberryfields_child_output');
 
 $output[0] = $child_id;
-$output[1] = 'Test Thumbnail';
+$output[1] = $thumbnail_return;
+$output[2] = 'Test Thumbnail';
 $childQueue_output->createItem(serialize($output));
 
-sleep(3);
+//set return code 0=OK, other= error
+drush_set_context('DRUSH_EXIT_CODE', $thumbnail_return);
+
 ?>

@@ -236,8 +236,12 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
             $childQueue_output->deleteItem($child_output_item);
             $child_output_item_number = $childQueue_output->numberOfItems();
 
+            $flavour_type = explode(':', $child_output_data[0])[1];
+            $flavour_node_id = explode(':', $child_output_data[0])[0];
+
             echo 'OUTPUT QUEUE ************* ' . $child_output_item_number . PHP_EOL;
-            print_r($child_output_data);
+            echo 'Node ID: ' . $flavour_node_id . ' Flavour: ' . $flavour_type . ' Error: ' . $child_output_data[1] . PHP_EOL;
+            print_r(json_decode($child_output_data[2]));
             echo 'OUTPUT QUEUE ^^^^^^^^^^^^^' . PHP_EOL;
 
           }
