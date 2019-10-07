@@ -20,6 +20,7 @@ use Drupal\Core\Entity\EntityInterface;
 
 //TEST
 $node_id = 25;
+$flavour = "exif";
 //TEST
 
 $ado = \Drupal::entityTypeManager()->getStorage('node')->load($node_id);
@@ -28,16 +29,17 @@ $jsondata = json_decode($sbf_json->value, true);
 
 //print_r($jsondata);
 
-pushItemOnQueue($node_id, $jsondata);
+pushItemOnQueue($node_id, $jsondata, $flavour);
 mainLoopWakeUp();
 exitClean();
 
 /**
  * Push an Item on 'strawberry_runners' queue
  */
-function pushItemOnQueue($node_id, $jsondata) {
+function pushItemOnQueue($node_id, $jsondata, $flavour) {
   $element[0] = $node_id;
   $element[1] = $jsondata;
+  $element[2] = $flavour;
   //add element to queue
   echo 'Push 1 item on queue' . PHP_EOL;
   $queue = \Drupal::queue('strawberry_runners');

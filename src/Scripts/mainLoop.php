@@ -75,8 +75,9 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       $element = unserialize($item->data);
       $node_id = $element[0];
       $jsondata = $element[1];
+      $flavour_toProcess = $element[2];
 
-      echo 'Start to process element ID:' . $item_id . ' node ID: ' . $node_id . PHP_EOL;
+      echo 'Start to process element ID:' . $item_id . ' node ID: ' . $node_id . ' Flavour: ' . $flavour_toProcess . PHP_EOL;
 
       //initialize item (status = 0)
       $item_state_data = [
@@ -91,7 +92,8 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       //child_id = node_id, type and status
       //child_ref contains all child_id to process
 
-      $child_ref = listFlavoursToProcess($node_id, $jsondata);
+      //$child_ref = listFlavoursToProcess($node_id, $jsondata);
+      $child_ref = listChildsToProcess($node_id, $jsondata, $flavour_toProcess);
       $child_number = count($child_ref);
 
       if ($child_number > 0) { //Item has child to process
@@ -124,6 +126,7 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
       $element = unserialize($item->data);
       $node_id = $element[0];
       $jsondata = $element[1];
+      $flavour_toProcess = $element[2];
       $itemStatus = $item_state_data['itemStatus'];
       echo 'Item ' . $itemId . ' status ' . $itemStatus . PHP_EOL;
 
@@ -347,6 +350,54 @@ $loop->addTimer(360, function () use ($loop) {
 //
 
 $loop->run();
+
+/**
+ * List childs to process from SBF-JSON
+ *
+ * (0) ready, runner executed and STB-JSON updated
+ * (1) new, runner to execute
+ * (2) update, runner to execute as STB-JSON was updated
+ * (3) remove, runner must remove entry related to this flavour
+ *
+ *
+ *  Expected something like this:
+ *
+ *     "as:image": {
+ *        "urn:uuid:35915592-83c8-40b6-b097-29c51c134cc7": {
+ *            "url": "private:\/\/53d\/image-giovane-uomo-del-ballerino-che-indossa-un-salto-russo-piega-del-costume-28730977_3.jpg",
+ *            "name": "giovane-uomo-del-ballerino-che-indossa-un-salto-russo-piega-del-costume-28730977_3.jpg",
+ *            "tags": [],
+ *            "type": "Image",
+ *            "dr:fid": 62,
+ *            "dr:for": "images",
+ *            "dr:uuid": "35915592-83c8-40b6-b097-29c51c134cc7",
+ *            "flv:exif": {
+ *               "status": 1
+ *            },
+ */
+ function listChildsToProcess($node_id, $jsondata, $flavour_toProcess) {
+   //First level keys where to search for flavours
+   //Flavours will be in 3rd level
+   $flavour_mainContainer_keys = array("as:image");
+   $flavour_key = 'flv:' . $flavour_toProcess;
+
+   $child_index = 0;
+   $child_ref = array();
+   foreach ($flavour_mainContainer_keys as $mainContainer_key) {
+     if (isset($jsondata[$mainContainer_key])) {
+       foreach ($jsondata[$mainContainer_key] as $subContainer_key => $subContainer) {
+         if (array_key_exists($flavour_key, $subContainer)) {
+           $flavour_status = $subContainer[$flavour_key]['status'];
+           if ($flavour_status > 0) {
+             $child_ref[$child_index] = "{$node_id}|{$mainContainer_key}|{$subContainer_key}|{$flavour_toProcess}|{$flavour_status}";
+             $child_index++;
+           }
+         }
+       }
+     }
+   }
+   return $child_ref;
+}
 
 /**
  * List flavours to process from SBF-JSON
