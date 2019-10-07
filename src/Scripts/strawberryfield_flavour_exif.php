@@ -10,11 +10,13 @@ $element = unserialize($item_state_data['item']->data);
 $node_id = $element[0];
 $jsondata = $element[1];
 
-//get first image uri
-foreach ($jsondata['as:image'] as $image) {
-  $uri = $image['url'];
-  break;
-}
+$flavour_type = explode('|', $child_id)[3];
+$flavour_status = explode('|', $child_id)[4];
+$flavour_node_id = explode('|', $child_id)[0];
+$flavour_mainContainer_key = explode('|', $child_id)[1];
+$flavour_subContainer_key = explode('|', $child_id)[2];
+
+$uri = $jsondata[$flavour_mainContainer_key][$flavour_subContainer_key]['url'];
 
 //get image path
 $stream = \Drupal::service('stream_wrapper_manager')->getViaUri($uri);

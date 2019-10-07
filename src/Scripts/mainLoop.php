@@ -183,7 +183,7 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
             //start process $child_id
             echo '***** start process: ' . $child_id . PHP_EOL;
 
-            $child_flavour_status = explode(':', $child_id)[2];
+            $child_flavour_status = explode('|', $child_id)[4];
 
             if ($child_flavour_status == 3) {
               //flavour to remove
@@ -203,9 +203,9 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
             else {
               $drush_path = "/var/www/archipelago/vendor/drush/drush/";
               $childProcess_path = "/var/www/archipelago/web/modules/contrib/strawberry_runners/src/Scripts";
-              $childProcess_script = 'strawberryfield_flavour_' . explode(':', $child_id)[1];
+              $childProcess_script = 'strawberryfield_flavour_' . explode('|', $child_id)[3];
               //added child_id as variable to child process call
-              $cmd = 'exec ' . $drush_path . 'drush scr --script-path=' . $childProcess_path . ' ' . $childProcess_script . ' -- ' . $child_id;
+              $cmd = 'exec ' . $drush_path . 'drush scr --script-path=' . $childProcess_path . ' ' . $childProcess_script . ' -- "' . $child_id . '"';
 
               $process = new Process($cmd, null, null, null);
               $process->start($loop);
@@ -258,9 +258,11 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
             $childQueue_output->deleteItem($child_output_item);
             $child_output_item_number = $childQueue_output->numberOfItems();
 
-            $flavour_type = explode(':', $child_output_data[0])[1];
-            $flavour_status = explode(':', $child_output_data[0])[2];
-            $flavour_node_id = explode(':', $child_output_data[0])[0];
+            $flavour_type = explode('|', $child_output_data[0])[3];
+            $flavour_status = explode('|', $child_output_data[0])[4];
+            $flavour_node_id = explode('|', $child_output_data[0])[0];
+            $flavour_mainContainer_key = explode('|', $child_output_data[0])[1];
+            $flavour_subContainer_key = explode('|', $child_output_data[0])[2];
 
             $new_jsondata_array = $jsondata;
 
@@ -271,14 +273,14 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
               $flavour_json_array = json_decode($child_output_data[2], TRUE);
             }
             echo 'OLD JSON *************' . PHP_EOL;
-            $jsondata_flavour_key = 'ap:' . $flavour_type;
-            print_r($jsondata['ap:flavours'][$jsondata_flavour_key]);
+            $jsondata_flavour_key = 'flv:' . $flavour_type;
+            print_r($jsondata[$flavour_mainContainer_key][$flavour_subContainer_key][$jsondata_flavour_key]);
             echo 'OLD JSON ^^^^^^^^^^^^^' . PHP_EOL;
 
             echo 'NEW JSON *************' . PHP_EOL;
-            $new_jsondata_array['ap:flavours'][$jsondata_flavour_key]['status'] = 0;
-            $new_jsondata_array['ap:flavours'][$jsondata_flavour_key]['data'] = $flavour_json_array;
-            print_r($new_jsondata_array['ap:flavours'][$jsondata_flavour_key]);
+            $new_jsondata_array[$flavour_mainContainer_key][$flavour_subContainer_key][$jsondata_flavour_key]['status'] = 0;
+            $new_jsondata_array[$flavour_mainContainer_key][$flavour_subContainer_key][$jsondata_flavour_key]['data'] = $flavour_json_array;
+            print_r($new_jsondata_array[$flavour_mainContainer_key][$flavour_subContainer_key][$jsondata_flavour_key]);
             echo 'NEW JSON ^^^^^^^^^^^^^' . PHP_EOL;
 
 
@@ -288,6 +290,7 @@ $loop->addPeriodicTimer($queuecheckPeriod, function () use ($loop, &$cycleBefore
             $ado->set('field_descriptive_metadata', $new_jsondata);
             $ado->save();
 
+            $jsondata = $new_jsondata_array;
 
           }
           //TEST
@@ -356,37 +359,44 @@ $loop->run();
  *
  *  Expected something like this:
  *
- *     "ap:flavours": {
- *        "ap:exif": {
- *            "status": 1,
- *            "requires": [
- *                "as:image"
- *            ]
- *        },
- *        "ap:thumbnail": {
- *            "status": 1,
- *            "requires": [
- *                "as:image"
- *            ]
- *        }
- *    },
+ *     "as:image": {
+ *        "urn:uuid:35915592-83c8-40b6-b097-29c51c134cc7": {
+ *            "url": "private:\/\/53d\/image-giovane-uomo-del-ballerino-che-indossa-un-salto-russo-piega-del-costume-28730977_3.jpg",
+ *            "name": "giovane-uomo-del-ballerino-che-indossa-un-salto-russo-piega-del-costume-28730977_3.jpg",
+ *            "tags": [],
+ *            "type": "Image",
+ *            "dr:fid": 62,
+ *            "dr:for": "images",
+ *            "dr:uuid": "35915592-83c8-40b6-b097-29c51c134cc7",
+ *            "flv:exif": {
+ *               "status": 1
+ *            },
  */
-function listFlavoursToProcess($node_id, $jsondata) {
-  $child_index = 0;
-  $child_ref = array();
-  $flavours = $jsondata['ap:flavours'];
-  foreach ($flavours as $flavour => $flavour_data) {
-    $flavour_type = explode(':', $flavour)[1];
-    $flavour_status = $flavour_data['status'];
-    $flavour_requires = $flavour_data['requires'];
-    //ToDO check requires
-    //Status 1,2 or 3 => runner to execute
-    if ($flavour_status > 0) {
-      $child_ref[$child_index] = "{$node_id}:{$flavour_type}:{$flavour_status}";
-      $child_index++;
-    }
-  }
-  return $child_ref;
+ function listFlavoursToProcess($node_id, $jsondata) {
+   //First level keys where to search for flavours
+   //Flavours will be in 3rd level
+   $flavour_mainContainer_keys = array("as:image");
+   $flavour_installed = array("exif", "hocr");
+
+   $child_index = 0;
+   $child_ref = array();
+   foreach ($flavour_mainContainer_keys as $mainContainer_key) {
+     if (isset($jsondata[$mainContainer_key])) {
+       foreach ($jsondata[$mainContainer_key] as $subContainer_key => $subContainer) {
+         foreach ($flavour_installed as $flavour){
+           $flavour_key = 'flv:' . $flavour;
+           if (array_key_exists($flavour_key, $subContainer)) {
+             $flavour_status = $subContainer[$flavour_key]['status'];
+             if ($flavour_status > 0) {
+               $child_ref[$child_index] = "{$node_id}|{$mainContainer_key}|{$subContainer_key}|{$flavour}|{$flavour_status}";
+               $child_index++;
+             }
+           }
+         }
+       }
+     }
+   }
+   return $child_ref;
 }
 
 ?>
