@@ -17,7 +17,7 @@ function strawberry_runners_update_8801() {
       'label' => 'label',
       'uuid' => 'uuid',
       'active' => 'active',
-      'weight'  => 'active',
+      'weight'  => 'weight',
     ],
     'config_export' => [
       'id',
