@@ -1,0 +1,10 @@
+name: Strawberry Runners
+description: Provides Post processing integration based on Strawberryfield JSON data.
+package: Archipelago
+type: module
+core: 8.x
+php: 7.1
+dependencies:
+  - 'drupal:system (>= 8.8)'
+  - 'drupal:user'
+  - 'strawberryfield'

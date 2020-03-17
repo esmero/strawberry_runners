@@ -1,0 +1,6 @@
+#Adds the Archipelago Runners Post Processor Plugin add
+entity.strawberry_runners_postprocessor.add_form:
+  route_name: 'entity.strawberry_runners_postprocessor.add_form'
+  title: 'Add a new Strawberry Runner Post Processor'
+  appears_on:
+    - entity.strawberry_runners_postprocessor.collection

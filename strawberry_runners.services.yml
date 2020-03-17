@@ -1,0 +1,4 @@
+services:
+ strawberry_runner.processor_manager:
+    class: Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager
+    parent: default_plugin_manager

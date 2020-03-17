@@ -1,0 +1,32 @@
+<?PHP
+/**
+ * Implements hook_update_N().
+ *
+ * Installs strawberry_runners_postprocessor config entity for exposing twig output via routes.
+ *
+ * @see 'https://www.drupal.org/node/3034742'
+ */
+function strawberry_runners_update_8801() {
+  \Drupal::entityDefinitionUpdateManager()->installEntityType(new ConfigEntityType([
+    'id' => 'strawberry_runners_postprocessor',
+    'label' => new TranslatableMarkup('Strawberry Runners Post Processor Configuration'),
+    'config_prefix' => 'strawberry_runners_postprocessor',
+    'admin_permission' => 'administer site configuration',
+    'entity_keys' => [
+      'id' => 'id',
+      'label' => 'label',
+      'uuid' => 'uuid',
+      'active' => 'active',
+      'weight'  => 'active',
+    ],
+    'config_export' => [
+      'id',
+      'label',
+      'uuid',
+      'weight',
+      'pluginconfig',
+      'pluginid',
+      'active'
+    ],
+  ]));
+}

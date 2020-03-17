@@ -1,0 +1,4 @@
+strawberry_runners.ado_tools:
+  route_name: strawberry_runners.ado_tools
+  base_route: entity.node.canonical
+  title: 'ADO Tools'
