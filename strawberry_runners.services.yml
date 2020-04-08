@@ -2,3 +2,8 @@ services:
  strawberry_runner.processor_manager:
     class: Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager
     parent: default_plugin_manager
+ strawberry_runner.postprocessing_subscriber:
+    class: Drupal\strawberry_runners\EventSubscriber\StrawberryRunnersEventPreSavePostProcessingSubscriber
+    tags:
+      - {name: event_subscriber}
+    arguments: ['@string_translation', '@messenger', '@logger.factory', '@config.factory', '@stream_wrapper_manager', '@file_system', '@entity_type.manager', '@strawberry_runner.processor_manager']
