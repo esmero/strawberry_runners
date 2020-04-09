@@ -1,6 +1,6 @@
 {
     "name": "strawberryfield/strawberry_runners",
-    "description": "Strawberryfield post processing module for Drupal 8",
+    "description": "Strawberryfield post processing module for Drupal 8 using PHP React",
     "type": "drupal-module",
     "license": "GPL-2.0+",
     "homepage": "https://github.com/esmero/strawberry_runners",
@@ -20,7 +20,10 @@
     ],
     "require": {
         "ml/json-ld": "^1.0",
-        "mtdowling/jmespath.php":"^2.4",
-        "strawberryfield/strawberryfield":"dev-8.x-1.0-beta2"
+        "mtdowling/jmespath.php": "^2.4",
+        "strawberryfield/strawberryfield": "dev-8.x-1.0-beta2",
+        "react/event-loop": "^1.1",
+        "react/child-process": "^0.6",
+        "react/stream": "^1.1"
     }
 }
