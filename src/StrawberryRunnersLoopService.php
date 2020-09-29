@@ -156,9 +156,27 @@ class StrawberryRunnersLoopService {
 
 
 
-public function mainLoop() {
+  public function mainLoop() {
 
-}
+  }
+
+  /**
+   * Push an Item on 'strawberry_runners' queue
+   */
+  public function pushItemOnQueue($node_id, $jsondata, $flavour) {
+    $element[0] = $node_id;
+    $element[1] = $jsondata;
+    $element[2] = $flavour;
+    //add element to queue
+    echo 'Push 1 item on queue' . PHP_EOL;
+
+    $queue = $this->queueFactory->get('strawberry_runners', TRUE);
+    $queue->createItem(serialize($element));
+
+    $totalItems = $queue->numberOfItems();
+    echo 'TotalItems on queue ' . $totalItems . PHP_EOL;
+  }
+
 
 
 }

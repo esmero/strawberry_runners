@@ -178,7 +178,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
       $execstring = $this->buildExecutableCommand($io->input->{$input_property});
       if ($execstring) {
         $io->output = $execstring;
-        dpm($execstring);
+        //dpm($execstring);
       }
     } else {
       throwException(new \InvalidArgumentException);

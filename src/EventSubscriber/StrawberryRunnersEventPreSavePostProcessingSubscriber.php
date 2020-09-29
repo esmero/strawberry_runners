@@ -74,7 +74,7 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
    *
    * @var array
    */
-  protected $instanceCopiesOfFiles;
+  protected $instanceCopiesOfFiles = [];
 
   /**
    * File system service.
@@ -89,7 +89,6 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
    * @var \Drupal\Core\Logger\LoggerChannelFactoryInterface
    */
   protected $loggerFactory;
-
 
 
   /**
@@ -157,14 +156,16 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
         $plugin_definition = $plugin_instance->getPluginDefinition();
         // We don't use the key here to preserve the original weight given order
         // Classify by input type
-        $active_plugins[$plugin_definition['input_type']][] = $plugin_instance;
+
+        //dpm($plugin_instance);
+        $active_plugins[$plugin_definition['input_type']][$entity_id] = $plugin_instance->getConfiguration();
       }
     }
 
     // We will fetch all files and then see if each file can be processed by one
     // or more plugin.
     // Slower option would be to traverse every file per processor.
-
+    //dpm($active_plugins);
     $updated = 0;
     $entity = $event->getEntity();
     $sbf_fields = $event->getFields();
@@ -192,7 +193,7 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
                 if ($file) {
                   //$this->add_file_usage($file, $entity->id(), $entity_type_id);
                   //$updated++;
-                  $this->processFile($file);
+                  $this->ensureFileAvailabilty($file);
                 }
                 else {
                   $this->messenger()->addError(
@@ -210,7 +211,7 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
     }
     $current_class = get_called_class();
     $event->setProcessedBy($current_class, TRUE);
-    $this->messenger->addStatus(t('Post processor was invoked'));
+    //$this->messenger->addStatus(t('Post processor was invoked'));
 
   }
 
@@ -223,7 +224,7 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
    * @return array
    *   Output of processing chain for a particular file.
    */
-  private function processFile(FileInterface $file) {
+  private function ensureFileAvailabilty(FileInterface $file) {
     $uri = $file->getFileUri();
     $processOutput = [];
 
@@ -279,6 +280,57 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
     }
   }
 
+  /**
+   * Adds File usage to DB for temp files used by SB Runners.
+   *
+   * This differs from how we count managed files in other places like SBF.
+   * Every Post Processor that needs the file will add a count
+   * Once done, will remove one. File will become unused when everyone releases it.
+   *
+   *
+   * @param \Drupal\file\FileInterface $file
+   * @param int $nodeid
+   */
+  protected function add_file_usage(FileInterface $file, int $nodeid, string $entity_type_id = 'node') {
+    if (!$file || !$this->moduleHandler->moduleExists('file')) {
+      return;
+    }
+    /** @var \Drupal\file\FileUsage\FileUsageInterface $file_usage */
+
+    if ($file) {
+      $this->fileUsage->add($file, 'strawberry_runners', $entity_type_id, $nodeid);
+    }
+  }
+
+  /**
+   * Deletes File usage from DB for temp files used by SB Runners.
+   *
+   * @param \Drupal\file\FileInterface $file
+   * @param int $nodeid
+   * @param int $count
+   *  If count is 0 it will remove all references.
+   */
+  protected function remove_file_usage(
+    FileInterface $file,
+    int $nodeid,
+    string $entity_type_id = 'node',
+    $count = 1
+  ) {
+    if (!$file || !$this->moduleHandler->moduleExists('file')) {
+      return;
+    }
+    /** @var \Drupal\file\FileUsage\FileUsageInterface $file_usage */
+
+    if ($file) {
+      $this->fileUsage->delete(
+        $file,
+        'strawberry_runners',
+        $entity_type_id,
+        $nodeid,
+        $count
+      );
+    }
+  }
 
 
 
