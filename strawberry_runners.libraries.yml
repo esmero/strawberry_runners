@@ -1,0 +1,7 @@
+jmespath_codemirror_strawberry_runners:
+  version: 1.0
+  js:
+    js/jmespath-codemirror_strawberry_runners.js: {minified: false}
+  dependencies:
+    - core/jquery
+    - core/drupal

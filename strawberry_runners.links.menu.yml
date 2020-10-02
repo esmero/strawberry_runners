@@ -1,0 +1,7 @@
+#Adds the Archipelago Runners Post Processor Config
+entity.strawberry_runners_postprocessor.collection:
+  title: 'Configure Strawberry Runners Post Processors'
+  route_name: entity.strawberry_runners_postprocessor.collection
+  description: 'Configure what Post Processor will run for ADOs'
+  parent: strawberryfield.group.admin
+  weight: 200

@@ -1,0 +1,30 @@
+strawberry_runners.webhook:
+  path: '/strawberry_runners/webhook/{token}'
+  defaults:
+    _controller: '\Drupal\strawberry_runners\Controller\StrawberryRunnersWebhookController::capture'
+    _title: 'Webhook Controller'
+  requirements:
+    _custom_access: '\Drupal\strawberry_runners\Controller\StrawberryRunnersWebhookController::authorize'
+
+entity.strawberry_runners_postprocessor.collection:
+  path: '/admin/config/archipelago/strawberry_runners'
+  defaults:
+    _entity_list: 'strawberry_runners_postprocessor'
+    _title: 'Strawberry Runners Settings'
+  requirements:
+    _permission: 'access administration pages'
+  options:
+    _admin_route: TRUE
+strawberry_runners.ado_tools:
+  path: '/node/{node}/adotools'
+  defaults:
+    _form: '\Drupal\strawberry_runners\Form\StrawberryRunnersToolsForm'
+    _title: 'ADO Tools'
+  requirements:
+    _entity_access: 'node.update'
+  options:
+      parameters:
+        node:
+          type: 'entity:node'
+  options:
+    _node_operation_route: TRUE
