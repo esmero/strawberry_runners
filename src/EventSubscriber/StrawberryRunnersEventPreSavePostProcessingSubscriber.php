@@ -157,7 +157,6 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
         // We don't use the key here to preserve the original weight given order
         // Classify by input type
 
-        //dpm($plugin_instance);
         $active_plugins[$plugin_definition['input_type']][$entity_id] = $plugin_instance->getConfiguration();
       }
     }
@@ -165,11 +164,52 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
     // We will fetch all files and then see if each file can be processed by one
     // or more plugin.
     // Slower option would be to traverse every file per processor.
-    //dpm($active_plugins);
-    $updated = 0;
+
+
     $entity = $event->getEntity();
     $sbf_fields = $event->getFields();
-    $processedcount = 0;
+
+
+    // First pass: for files, all the as:structures we want for, keyed by content type
+    /* check your config
+       "source_type" => "asstructure"
+       "ado_type" => "Document"
+       "jsonkey" => array:6 [▼
+         "as:document" => "as:document"
+         "as:image" => 0
+         "as:audio" => 0
+         "as:video" => 0
+         "as:text" => 0
+         "as:application" => 0
+      ]
+       "mime_type" => "application/pdf"
+       "path" => "/usr/bin/pdftotext"
+       "arguments" => "%file"
+       "output_type" => "json"
+       "output_destination" => array:3 [▼
+          "plugin" => "plugin"
+          "subkey" => 0
+          "ownkey" => 0
+      ]
+      "timeout" => "10"
+      "weight" => "0"
+     "configEntity" => "test"
+   ]*/
+
+    if (isset($active_plugins['entity:file'])) {
+      foreach($active_plugins['entity:file'] as $activePluginId => $config) {
+        if ($config['source_type'] == 'asstructure') {
+          $askeys = array_filter($config['jsonkey']);
+          foreach($askeys as $key => $value) {
+            $askeymap[$key][$activePluginId] = $config;
+          }
+        }
+      }
+    }
+
+
+
+
     foreach ($sbf_fields as $field_name) {
       /* @var $field \Drupal\Core\Field\FieldItemInterface */
       $field = $entity->get($field_name);
@@ -182,26 +222,30 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
           /** @var $itemfield \Drupal\strawberryfield\Plugin\Field\FieldType\StrawberryFieldItem */
           $flatvalues = (array) $itemfield->provideFlatten();
           // Run first on entity:files
+          $sbf_type = NULL;
+          if (isset($flatvalues['type'])) {
+            $sbf_type = $flatvalues['type'];
+          }
+          foreach ($askeymap as $jsonkey => $activePlugins) {
+            if (isset($flatvalues[$jsonkey])) {
+              foreach ($flatvalues[$jsonkey] as $uniqueid => $asstructure) {
+                if (isset($asstructure['dr:fid']) && is_numeric($asstructure['dr:fid'])) {
 
-          if (isset($flatvalues['dr:fid'])) {
-            foreach ($flatvalues['dr:fid'] as $fid) {
-              if (is_numeric($fid)) {
-                $file = $this->entityTypeManager->getStorage('file')->load(
-                  $fid
-                );
-                /** @var $file FileInterface; */
-                if ($file) {
-                  //$this->add_file_usage($file, $entity->id(), $entity_type_id);
-                  //$updated++;
-                  $this->ensureFileAvailabilty($file);
-                }
-                else {
-                  $this->messenger()->addError(
-                    t(
-                      'Your content references a file with Internal ID @file_id that does not exist or was removed.',
-                      ['@file_id' => $fid]
-                    )
-                  );
+                  foreach($activePlugins as $activePluginId => $config) {
+                    $valid_mimes = [];
+                    if (empty($config['ado_type']) || in_array($config['ado_type'] , $sbf_type)) {
+                      $valid_mimes = explode(',', $config['mime_type']);
+                      if (empty($valid_mimes) || (isset($asstructure["dr:mimetype"]) && in_array($asstructure["dr:mimetype"], $valid_mimes))) {
+                        $data = new \stdClass();
+                        $data->fid = $asstructure['dr:fid'];
+                        $data->nid = $entity->id();
+                        $data->plugin_config_entity_id = $activePluginId;
+
+                        \Drupal::queue('strawberryrunners_process_index')
+                          ->createItem($data);
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -211,46 +255,10 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
     }
     $current_class = get_called_class();
     $event->setProcessedBy($current_class, TRUE);
-    //$this->messenger->addStatus(t('Post processor was invoked'));
+    $this->messenger->addStatus(t('Post processor was invoked'));
 
   }
 
-  /**
-   * Move file to local and process.
-   *
-   * @param \Drupal\file\FileInterface $file
-   *   The File URI to look at.
-   *
-   * @return array
-   *   Output of processing chain for a particular file.
-   */
-  private function ensureFileAvailabilty(FileInterface $file) {
-    $uri = $file->getFileUri();
-    $processOutput = [];
-
-    /** @var \Drupal\Core\File\FileSystem $file_system */
-    $scheme = $this->fileSystem->uriScheme($uri);
-
-    // If the file isn't stored locally make a temporary copy.
-    if (!isset($this->streamWrapperManager
-        ->getWrappers(StreamWrapperInterface::LOCAL)[$scheme])) {
-      // Local stream.
-      $cache_key = md5($uri);
-      if (empty($this->instanceCopiesOfFiles[$cache_key])) {
-        if (!($this->instanceCopiesOfFiles[$cache_key] = $this->fileSystem->copy($uri, 'temporary://sbr_' . $cache_key . '_' . basename($uri), FileSystemInterface::EXISTS_REPLACE))) {
-          $this->loggerFactory->get('strawberry_runners')
-            ->notice('Unable to create local temporary copy of remote file for Strawberry Runners Post processing File %file.',
-              [
-                '%file' => $uri,
-              ]);
-          return [];
-        }
-      }
-      $uri = $this->instanceCopiesOfFiles[$cache_key];
-    }
-
-    return $processOutput;
-  }
 
   /**
    * Make sure no HTML or Javascript will be passed around.
@@ -266,18 +274,6 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
       $string = Html::escape(utf8_encode($string));
     }
     return $string;
-  }
-
-  /**
-   * Cleanup of artifacts from processing files.
-   */
-  public function __destruct() {
-    // Get rid of temporary files created for this instance.
-    foreach ($this->instanceCopiesOfFiles as $uri) {
-      error_log('should destroy '.$uri);
-      error_log('better to keep usage count?');
-      // \Drupal::service('file_system')->unlink($uri);
-    }
   }
 
   /**
@@ -331,10 +327,5 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
       );
     }
   }
-
-
-
-
-
 
 }

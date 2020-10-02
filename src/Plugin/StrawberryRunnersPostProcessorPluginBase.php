@@ -75,7 +75,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
   public function defaultConfiguration() {
     return [
       'jsonkey' => ['as:image'],
-      'ado_type' => 'Book',
+      'ado_type' => ['Book'],
       // Max time to run in seconds per item.
       'timeout' => 10,
       // Order in which this processor is executed in the chain
@@ -108,6 +108,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
    * {@inheritdoc}
    */
   public function setConfiguration(array $configuration) {
+    dpm($configuration);
     $this->configuration = $configuration + $this->defaultConfiguration();
   }
 
@@ -131,6 +132,8 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
   public function run(\stdClass $io, $context = strawberryRunnersPostProcessorPluginInterface::PROCESS) {
     return FALSE;
   }
+
+
 
 
 }

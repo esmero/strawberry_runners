@@ -33,7 +33,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
   public function defaultConfiguration() {
     return [
       'source_type' => 'asstructure',
-      'mime_type' => 'application/pdf',
+      'mime_type' => ['application/pdf'],
       'path' => '',
       'arguments' => '',
       'output_type' => 'json',
@@ -153,6 +153,8 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
     return $element;
   }
 
+
+
   public function onDependencyRemoval(array $dependencies) {
     // Since Processors could be chained we need to check if any other
     // processor instance is using an instance of this one
@@ -174,14 +176,27 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
     // In this case it will contain an absolute Path to a File.
     // Needed since this executes locally on the server via SHELL.
     $input_property =  $this->pluginDefinition['input_property'];
+    error_log('run');
+    error_log($io->input->{$input_property});
     if (isset($io->input->{$input_property})) {
+      setlocale(LC_CTYPE, 'en_US.UTF-8');
       $execstring = $this->buildExecutableCommand($io->input->{$input_property});
+      error_log($execstring);
       if ($execstring) {
-        $io->output = $execstring;
-        //dpm($execstring);
+        $backup_locale = setlocale(LC_CTYPE, '0');
+        setlocale(LC_CTYPE, $backup_locale);
+        // Support UTF-8 commands.
+        // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+        shell_exec("LANG=en_US.utf-8");
+        $output = shell_exec($execstring);
+        if (is_null($output)) {
+          throw new \Exception("Could not execute {$execstring}");
+        }
+        $io->output =  $output;
+
       }
     } else {
-      throwException(new \InvalidArgumentException);
+      \throwException(new \InvalidArgumentException);
     }
   }
 
@@ -197,11 +212,17 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
     $execpath = $config['path'];
     $arguments = $config['arguments'];
     $command = '';
-    if ($this->verifyCommand($execpath) && (strpos($arguments, '%file' ) !== false)) {
+
+    error_log('verify!'.(int) \Drupal::service('strawberryfield.utility')->verifyCommand($execpath));
+
+    if (\Drupal::service('strawberryfield.utility')->verifyCommand($execpath) && (strpos($arguments, '%file' ) !== FALSE)) {
+      error_log('its a command, well well');
       $arguments = str_replace('%s','', $arguments);
       $arguments = str_replace_first('%file','%s', $arguments);
       $arguments = sprintf($arguments, $filepath);
+      error_log($arguments);
       $command = escapeshellcmd($execpath.' '.$arguments);
+      error_log($command);
     }
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $filepath) !== false) { return $command;}
