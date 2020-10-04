@@ -21,7 +21,7 @@ use Drupal\Core\Config\Entity\ConfigEntityInterface;
  *       "delete" = "Drupal\strawberry_runners\Form\strawberryRunnerPostprocessorEntityDeleteForm"
  *     },
  *     "route_provider" = {
- *       "html" = "Drupal\strawberry_runners\strawberryRunnerPostprocessorEntityHtmlRouteProvider",
+ *       "html" = "Drupal\strawberry_runners\strawberryRunnerPostProcessorEntityHtmlRouteProvider",
  *     },
  *   },
  *   config_prefix = "strawberry_runners_postprocessor",
