@@ -157,17 +157,19 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
    */
   public function processItem($data) {
 
-    // Decode the JSON that was captured.
-
     $processor_instance = $this->getProcessorPlugin($data->plugin_config_entity_id);
 
-    // Load file from queue item.
+    if (!isset($data->fid) || $data->fid == NULL || !isset($data->nid) || $data->nid == NULL) {
+      return;
+    }
     $file = $this->entityTypeManager->getStorage('file')->load($data->fid);
 
     if ($file === NULL) {
       return;
     }
-    $filelocation = $this->ensureFileAvailabilty($file);
+    //@TODO should we wrap this around a try catch?
+    $filelocation = $this->ensureFileAvailability($file);
+
     if ($filelocation === NULL) {
       return;
     }
@@ -186,8 +188,7 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
 
       // Skip file if element is found in key_value collection.
       $processed_data = $this->keyValue->get($keyvalue_collection)->get($key);
-      error_log('processed data in the keyvalue store');
-      error_log($processed_data);
+
       if (empty($processed_data)) {
         // Extract file and save it in key_value collection.
         $io = new \stdClass();
@@ -244,7 +245,7 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
    * @return array
    *   Output of processing chain for a particular file.
    */
-  private function ensureFileAvailabilty(FileInterface $file) {
+  private function ensureFileAvailability(FileInterface $file) {
     $uri = $file->getFileUri();
     // Local stream.
     $cache_key = md5($uri);

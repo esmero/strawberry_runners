@@ -57,7 +57,7 @@ class StrawberryRunnersPostProcessor extends Plugin {
 
 
   /**
-   * Processing stage: can be Entity PreSave or Index tme search_api
+   * Processing stage: can be Entity PreSave or Index time search_api
    *
    * @var string $when;
    *

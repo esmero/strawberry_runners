@@ -21,9 +21,11 @@
     "require": {
         "ml/json-ld": "^1.0",
         "mtdowling/jmespath.php": "^2.4",
-        "strawberryfield/strawberryfield": "dev-8.x-1.0-beta2",
+        "strawberryfield/strawberryfield": "dev-1.0.0-RC1",
         "react/event-loop": "^1.1",
         "react/child-process": "^0.6",
-        "react/stream": "^1.1"
+        "react/stream": "^1.1",
+        "web64/php-nlp-client" : ">=0.4",
+        "mixnode/mixnode-warcreader-php":">=0.0"
     }
 }

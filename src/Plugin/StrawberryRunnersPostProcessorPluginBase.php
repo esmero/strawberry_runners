@@ -108,7 +108,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
    * {@inheritdoc}
    */
   public function setConfiguration(array $configuration) {
-    dpm($configuration);
+
     $this->configuration = $configuration + $this->defaultConfiguration();
   }
 
