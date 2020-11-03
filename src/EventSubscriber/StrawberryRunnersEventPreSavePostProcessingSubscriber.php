@@ -239,8 +239,23 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
                         $data = new \stdClass();
                         $data->fid = $asstructure['dr:fid'];
                         $data->nid = $entity->id();
+                        // We are passing also the full file metadata.
+                        // This gives us an advantage so we can reuse
+                        // Sequence IDs, PDF pages, etc and act on them
+                        // @TODO. We may want to have also Kill switches in the
+                        // main metadata to act on this
+                        // E.g flv:processor[$activePluginId] = FALSE?
+                        // Also. Do we want to act on metadata and mark
+                        // Files as already send for processing by a certain
+                        // $activePluginId? That would allow us to skip reprocessing
+                        // Easier?
+                        $data->metadata = $asstructure;
                         $data->plugin_config_entity_id = $activePluginId;
-
+                        // See https://github.com/esmero/strawberry_runners/issues/10
+                        // Since the destination Queue can be a modal thing
+                        // And really what defines is the type of worker we want
+                        // But all at the end will eventually feed the ::run() method
+                        // We want to make this a full blown service.
                         \Drupal::queue('strawberryrunners_process_index')
                           ->createItem($data);
                       }
