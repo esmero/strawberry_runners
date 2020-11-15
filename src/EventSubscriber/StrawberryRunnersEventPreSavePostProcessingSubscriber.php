@@ -3,6 +3,7 @@
 namespace Drupal\strawberry_runners\EventSubscriber;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Session\AccountInterface;
 use Drupal\strawberryfield\Event\StrawberryfieldCrudEvent;
 use Drupal\strawberryfield\EventSubscriber\StrawberryfieldEventPresaveSubscriber;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
@@ -99,15 +100,24 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
   protected $strawberryRunnerProcessorPluginManager;
 
   /**
+   * The current user.
+   *
+   * @var \Drupal\Core\Session\AccountInterface
+   */
+  protected $account;
+
+  /**
    * StrawberryRunnersEventPreSavePostProcessingSubscriber constructor.
    *
    * @param \Drupal\Core\StringTranslation\TranslationInterface $string_translation
    * @param \Drupal\Core\Messenger\MessengerInterface $messenger
-   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    * @param \Drupal\Core\Logger\LoggerChannelFactoryInterface $logger_factory
+   * @param \Drupal\Core\Config\ConfigFactoryInterface $config_factory
    * @param \Drupal\Core\StreamWrapper\StreamWrapperManagerInterface $stream_wrapper_manager
    * @param \Drupal\Core\File\FileSystemInterface $file_system
+   * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
    * @param \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager $strawberry_runner_processor_plugin_manager
+   * @param \Drupal\Core\Session\AccountInterface $account
    */
   public function __construct(
     TranslationInterface $string_translation,
@@ -117,7 +127,8 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
     StreamWrapperManagerInterface $stream_wrapper_manager,
     FileSystemInterface $file_system,
     EntityTypeManagerInterface $entity_type_manager,
-    StrawberryRunnersPostProcessorPluginManager $strawberry_runner_processor_plugin_manager
+    StrawberryRunnersPostProcessorPluginManager $strawberry_runner_processor_plugin_manager,
+    AccountInterface $account
   ) {
     $this->stringTranslation = $string_translation;
     $this->messenger = $messenger;
@@ -127,6 +138,7 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
     $this->fileSystem = $file_system;
     $this->entityTypeManager = $entity_type_manager;
     $this->strawberryRunnerProcessorPluginManager = $strawberry_runner_processor_plugin_manager;
+    $this->account = $account;
   }
 
   /**
@@ -270,7 +282,9 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
     }
     $current_class = get_called_class();
     $event->setProcessedBy($current_class, TRUE);
-    $this->messenger->addStatus(t('Post processor was invoked'));
+    if ($this->account->hasPermission('display strawberry messages')) {
+      $this->messenger->addStatus(t('Post processor was invoked'));
+    }
 
   }
 
