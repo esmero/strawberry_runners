@@ -112,9 +112,9 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
       [
         'action' => 'match',
         'relationship' => 'parent',
-        'group' => 'tabledrag-test-parent',
-        'subgroup' => 'tabledrag-test-parent',
-        'source' => 'tabledrag-test-id',
+        'group' => 'tabledrag-postprocessor-parent',
+        'subgroup' => 'tabledrag-postprocessor-parent',
+        'source' => 'tabledrag-postprocessor-id',
         'hidden' => TRUE,
         'limit' => 2,
       ];
@@ -122,7 +122,7 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
         [
           'action' => 'depth',
           'relationship' => 'group',
-          'group' => 'tabledrag-test-depth',
+          'group' => 'tabledrag-postprocessor-depth',
           'hidden' => TRUE,
         ];
     dpm($form);
@@ -163,18 +163,18 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
     $row['id'] = [
       '#type' => 'hidden',
       '#value' => $entity->id(),
-      '#attributes' => ['class' => ['tabledrag-test-id']],
+      '#attributes' => ['class' => ['tabledrag-postprocessor-id']],
     ];
     $row['parent'] =  [
           '#type' => 'hidden',
           '#default_value' => $entity->getParent(),
           '#parents' => [$this->entitiesKey, $entity->id(), 'parent'],
-          '#attributes' => ['class' => ['tabledrag-test-parent']],
+          '#attributes' => ['class' => ['tabledrag-postprocessor-parent']],
     ];
     $row['depth'] = [
         '#type' => 'hidden',
         '#default_value' =>  $entity->getDepth(),
-        '#attributes' => ['class' => ['tabledrag-test-depth']],
+        '#attributes' => ['class' => ['tabledrag-postprocessor-depth']],
     ];
     $row['active'] = $entity->isActive() ? [ '#markup' => $this->t('Yes')] : [ '#markup' =>$this->t('No')];
 
@@ -183,18 +183,18 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
 
   public function submitForm(array &$form, FormStateInterface $form_state) {
     foreach ($form_state->getValue($this->entitiesKey) as $id => $value) {
-      dpm($value);
-      if (isset($this->entities[$id]) &&
+
+      if (isset($this->entities[$id]) && (
         $this->entities[$id]->get($this->weightKey) != $value['weight'] ||
         $this->entities[$id]->getDepth() != $value['depth'] ||
         $this->entities[$id]->getParent() != $value['parent']
+        )
       ) {
         // Save entity only when its weight or depth or parent was changed.
         $this->entities[$id]->set($this->weightKey, $value['weight']);
         $this->entities[$id]->setDepth($value['depth']);
         $this->entities[$id]->setParent($value['parent']);
         $this->entities[$id]->save();
-        dpm($this->entities[$id]);
       }
     }
   }

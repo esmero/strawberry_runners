@@ -193,7 +193,7 @@ class strawberryRunnerPostprocessorEntity extends ConfigEntityBase implements st
     if ($a instanceof strawberryRunnerPostprocessorEntityInterface && $b instanceof strawberryRunnerPostprocessorEntityInterface) {
 
       if ($a->isActive() && $b->isActive()) {
-        return parent::sort($a, $b);
+        return static::hierarchicalSort($a, $b);
       }
       elseif (!$a->isActive()) {
         return -1;
@@ -204,6 +204,29 @@ class strawberryRunnerPostprocessorEntity extends ConfigEntityBase implements st
     }
 
     return parent::sort($a, $b);
+  }
+
+  /**
+   * Helper callback for uasort() to sort configuration entities by weight, parent and label.
+   */
+  public static function hierarchicalSort(ConfigEntityInterface $a, ConfigEntityInterface $b) {
+    $a_parent = isset($a->parent) ? $a->parent : '';
+    $b_parent = isset($b->parent) ? $b->parent : '';
+
+    $a_weight = isset($a->weight) ? $a->weight : 0;
+    $b_weight = isset($b->weight) ? $b->weight : 0;
+    if ($a_parent == $b->id()) {
+      return 1;
+    }
+    if ($b_parent == $a->id()) {
+      return -1;
+    }
+    if ($a_weight == $b_weight) {
+      $a_label = $a->label();
+      $b_label = $b->label();
+      return strnatcasecmp($a_label, $b_label);
+    }
+    return ($a_weight < $b_weight) ? -1 : 1;
   }
 
 }
