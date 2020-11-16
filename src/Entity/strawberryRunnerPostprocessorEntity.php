@@ -41,6 +41,8 @@ use Drupal\Core\Config\Entity\ConfigEntityInterface;
  *     "pluginconfig",
  *     "pluginid",
  *     "active",
+ *     "parent",
+ *     "depth"
  *   },
  *   links = {
  *     "canonical" = "/admin/config/archipelago/strawberry_runner_postprocessor/{strawberry_runners_postprocessor}",
@@ -73,6 +75,20 @@ class strawberryRunnerPostprocessorEntity extends ConfigEntityBase implements st
    * @var int
    */
   protected $weight = 0;
+
+  /**
+   * The parent of the post processor.
+   *
+   * @var string
+   */
+  protected $parent = '';
+
+  /**
+   * The depth of the post processor.
+   *
+   * @var int
+   */
+  protected $depth = 0;
 
   /**
    * The plugin id that will be initialized with this config.
@@ -124,6 +140,33 @@ class strawberryRunnerPostprocessorEntity extends ConfigEntityBase implements st
     $this->active = $active;
   }
 
+  /**
+   * @return string
+   */
+  public function getParent(): string {
+    return $this->parent;
+  }
+
+  /**
+   * @param string $parent
+   */
+  public function setParent($parent): void {
+    $this->parent = $parent;
+  }
+
+  /**
+   * @return int
+   */
+  public function getDepth(): int {
+    return $this->depth;
+  }
+
+  /**
+   * @param int $depth
+   */
+  public function setDepth(int $depth): void {
+    $this->depth = $depth;
+  }
   /**
    * @return array
    */

@@ -219,9 +219,6 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
       }
     }
 
-
-
-
     foreach ($sbf_fields as $field_name) {
       /* @var $field \Drupal\Core\Field\FieldItemInterface */
       $field = $entity->get($field_name);

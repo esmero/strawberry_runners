@@ -29,6 +29,8 @@ function strawberry_runners_update_8100() {
       'pluginconfig',
       'pluginid',
       'active'
+      'parent'
+      'depth'
     ],
   ]));
 }

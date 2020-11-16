@@ -18,6 +18,15 @@ strawberryfield_runners.strawberry_runners_postprocessor.*:
     active:
       type: boolean
       label: 'Whether this plugin is active or not'
+    weight:
+      type: intenger
+      label: 'Weight of the Post processor Plugin'
+    depth:
+      type: intenger
+      label: 'Depth of the Post processor Plugin'
+    parent:
+      type: intenger
+      label: 'Parent ID of the Post processor Plugin'
 
 strawberryfield_runners.strawberry_runners_postprocessor.binary:
   type: config_object
