@@ -156,7 +156,8 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
     $plugin_config_entities = $this->entityTypeManager->getListBuilder('strawberry_runners_postprocessor')->load();
     $active_plugins = [];
     foreach($plugin_config_entities as $plugin_config_entity) {
-      if ($plugin_config_entity->isActive()) {
+      // Only get first level (no Parents) and Active ones.
+      if ($plugin_config_entity->isActive() && $plugin_config_entity->getParent() == '') {
         $entity_id = $plugin_config_entity->id();
         $configuration_options = $plugin_config_entity->getPluginconfig();
         $configuration_options['configEntity'] = $entity_id;
