@@ -28,8 +28,8 @@ function strawberry_runners_update_8100() {
       'weight',
       'pluginconfig',
       'pluginid',
-      'active'
-      'parent'
+      'active',
+      'parent',
       'depth'
     ],
   ]));
