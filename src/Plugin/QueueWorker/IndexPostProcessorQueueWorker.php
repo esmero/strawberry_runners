@@ -193,7 +193,7 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
       error_log(empty($processed_data));
       //@TODO allow a force in case of corrupted key value? Partial output
       // Extragenous weird data?
-      if (empty($processed_data) ||
+      if (true || empty($processed_data) ||
         $data->force == TRUE ||
         (!isset($processed_data->checksum) ||
           empty($processed_data->checksum) ||
@@ -219,6 +219,7 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
         $toindex = new \stdClass();
         $toindex->fulltext = $io->output;
         $toindex->checksum = $data->metadata['checksum'];
+        error_log(var_export($toindex,true));
         $this->keyValue->get($keyvalue_collection)->set($key, $toindex);
 
         // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
