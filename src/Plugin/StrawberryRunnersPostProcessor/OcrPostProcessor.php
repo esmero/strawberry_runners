@@ -210,6 +210,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
       $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
       $pageid = $node_uuid . '/canvas/' . $file_uuid . '/p' . $page_number;
+      // $pageid not used for now, let's go with the page_number only
       setlocale(LC_CTYPE, 'en_US.UTF-8');
       $execstring = $this->buildExecutableCommand($io);
       error_log($execstring);
@@ -224,7 +225,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           throw new \Exception("Could not execute {$execstring} or timed out");
         }
 
-        $miniocr = $this->hOCRtoMiniOCR($output, $pageid);
+        $miniocr = $this->hOCRtoMiniOCR($output, $page_number);
         error_log($miniocr);
         $io->output = $miniocr;
       }
