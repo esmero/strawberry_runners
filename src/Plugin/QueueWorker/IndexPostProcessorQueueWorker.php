@@ -159,12 +159,13 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
 
     $processor_instance = $this->getProcessorPlugin($data->plugin_config_entity_id);
 
-    if (!isset($data->fid) || $data->fid == NULL || !isset($data->nid) || $data->nid == NULL) {
+    if (!isset($data->fid) || $data->fid == NULL || !isset($data->nid) || $data->nid == NULL || !is_array($data->metadata)) {
       return;
     }
     $file = $this->entityTypeManager->getStorage('file')->load($data->fid);
 
-    if ($file === NULL) {
+    if ($file === NULL || !isset($data->metadata['checksum'])) {
+      error_log('Sorry the file does not exist or has no checksum yet. We really need the checksum');
       return;
     }
     //@TODO should we wrap this around a try catch?
@@ -188,37 +189,54 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
 
       // Skip file if element is found in key_value collection.
       $processed_data = $this->keyValue->get($keyvalue_collection)->get($key);
-
-      if (empty($processed_data)) {
+      error_log('Is this already in our temp keyValue?');
+      error_log(empty($processed_data));
+      //@TODO allow a force in case of corrupted key value? Partial output
+      // Extragenous weird data?
+      if (true || empty($processed_data) ||
+        $data->force == TRUE ||
+        (!isset($processed_data->checksum) ||
+          empty($processed_data->checksum) ||
+          $processed_data->checksum != $data->metadata['checksum'])) {
         // Extract file and save it in key_value collection.
         $io = new \stdClass();
         $input =  new \stdClass();
         $input->filepath = $filelocation;
-
+        $input->page_number = 1;
+        // The Node UUID
+        $input->nuuid = $data->nuuid;
+        // All the rest of the associated Metadata in an as:structure
+        $input->metadata = $data->metadata;
         $io->input = $input;
         $io->output = NULL;
+        //@TODO implement the TEST and BENCHMARK logic here
+        // RUN should return exit codes so we can know if something failed
+        // And totally discard indexing.
         $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
         error_log ('processing just run');
-        error_log($io->ouput);
         error_log('writing to keyvalue');
         error_log($key);
-        $this->keyValue->get($keyvalue_collection)->set($key, $io->output);
-      }
+        $toindex = new \stdClass();
+        $toindex->fulltext = $io->output;
+        $toindex->checksum = $data->metadata['checksum'];
+        error_log(var_export($toindex,true));
+        $this->keyValue->get($keyvalue_collection)->set($key, $toindex);
 
-      // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
-      $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
+        // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
+        $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
 
-      $item_ids = [];
-      if (is_a($entity, TranslatableInterface::class)) {
-        $translations = $entity->getTranslationLanguages();
-        foreach ($translations as $translation_id => $translation) {
-          $item_ids[] = $entity->id() . ':'.'1' .':'.$translation_id.':'.$file->uuid().':'.$data->plugin_config_entity_id;
+        $item_ids = [];
+        if (is_a($entity, TranslatableInterface::class)) {
+          $translations = $entity->getTranslationLanguages();
+          foreach ($translations as $translation_id => $translation) {
+            $item_ids[] = $entity->id() . ':'.'1' .':'.$translation_id.':'.$file->uuid().':'.$data->plugin_config_entity_id;
+          }
         }
-      }
-      error_log(var_export($item_ids,true));
-      $datasource_id = 'strawberryfield_flavor_datasource';
-      foreach ($indexes as $index) {
-        $index->trackItemsUpdated($datasource_id, $item_ids);
+        error_log(var_export($item_ids,true));
+        $datasource_id = 'strawberryfield_flavor_datasource';
+        foreach ($indexes as $index) {
+          $index->trackItemsInserted($datasource_id, $item_ids);
+        }
       }
     }
     catch (\Exception $exception) {
@@ -252,7 +270,7 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
     // Check first if the file is already around in temp?
     // @TODO can be sure its the same one? Ideas?
     if (is_readable(
-     $this->fileSystem->realpath(
+      $this->fileSystem->realpath(
         'temporary://sbr_' . $cache_key . '_' . basename($uri)
       )
     )) {

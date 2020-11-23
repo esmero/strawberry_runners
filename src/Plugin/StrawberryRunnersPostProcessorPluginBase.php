@@ -133,6 +133,30 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     return FALSE;
   }
 
+  protected function proc_execute($command, $timeout = 5) {
+    $handle = proc_open($command, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipe);
+    $startTime = microtime(true);
+    $read = NULL;
+    /* Read the command output and kill it if the proccess surpassed the timeout */
+    while(!feof($pipe[1])) {
+      $read .= fread($pipe[1], 8192);
+      if($startTime + $timeout < microtime(true)) {
+        $read = NULL;
+        break;
+      }
+    }
+    $status = proc_get_status($handle);
+    error_log(var_export($status,true));
+    $this->kill($status['pid']);
+    proc_close($handle);
+
+    return $read;
+  }
+
+  /* The proc_terminate() function doesn't end proccess properly on Windows */
+  protected function kill($pid) {
+    return strstr(PHP_OS, 'WIN') ? exec("taskkill /F /T /PID $pid") : exec("kill -9 $pid");
+  }
 
 
 
