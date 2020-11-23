@@ -23,8 +23,7 @@ strawberry_runners.ado_tools:
   requirements:
     _entity_access: 'node.update'
   options:
-      parameters:
-        node:
-          type: 'entity:node'
-  options:
     _node_operation_route: TRUE
+    parameters:
+      node:
+        type: 'entity:node'
