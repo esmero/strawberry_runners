@@ -14,19 +14,18 @@ use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\KeyValueStore\KeyValueFactoryInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\Queue\QueueWorkerBase;
-use Drupal\Component\Serialization\Json;
 use Drupal\Core\StreamWrapper\StreamWrapperInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
 use Drupal\file\FileInterface;
-use Drupal\search_api\Plugin\search_api\datasource\ContentEntity;
-use Drupal\search_api_attachments\Plugin\search_api\processor\FilesExtractor;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
+use Drupal\search_api\Query\QueryInterface;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
+use Drupal\search_api\ParseMode\ParseModePluginManager;
+
 
 /**
  * Process the JSON payload provided by the webhook.
@@ -34,7 +33,7 @@ use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDat
  * @QueueWorker(
  *   id = "strawberryrunners_process_index",
  *   title = @Translation("Strawberry Runners Process to Index Queue Worker"),
- *   cron = {"time" = 5}
+ *   cron = {"time" = 180}
  * )
  */
 class IndexPostProcessorQueueWorker extends QueueWorkerBase implements ContainerFactoryPluginInterface {
@@ -79,6 +78,12 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
    */
   protected $logger;
 
+  /**
+   * The parse mode manager.
+   *
+   * @var \Drupal\search_api\ParseMode\ParseModePluginManager
+   */
+  protected $parseModeManager;
 
   /**
    * Constructor.
@@ -89,7 +94,7 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
    * @param \Drupal\Core\Entity\EntityTypeManager $entity_field_manager
    * @param \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager $strawberry_runner_processor_plugin_manager
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, StrawberryRunnersPostProcessorPluginManager $strawberry_runner_processor_plugin_manager,  FileSystemInterface $file_system, StreamWrapperManagerInterface $stream_wrapper_manager, KeyValueFactoryInterface $key_value, LoggerInterface $logger) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, StrawberryRunnersPostProcessorPluginManager $strawberry_runner_processor_plugin_manager,  FileSystemInterface $file_system, StreamWrapperManagerInterface $stream_wrapper_manager, KeyValueFactoryInterface $key_value, LoggerInterface $logger, ParseModePluginManager $parse_mode_manager) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->entityTypeManager = $entity_type_manager;
     $this->strawberryRunnerProcessorPluginManager = $strawberry_runner_processor_plugin_manager;
@@ -97,6 +102,7 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
     $this->streamWrapperManager = $stream_wrapper_manager;
     $this->keyValue = $key_value;
     $this->logger = $logger;
+    $this->parseModeManager = $parse_mode_manager;
   }
 
   /**
@@ -119,7 +125,8 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
       $container->get('file_system'),
       $container->get('stream_wrapper_manager'),
       $container->get('keyvalue'),
-      $container->get('logger.channel.strawberry_runners')
+      $container->get('logger.channel.strawberry_runners'),
+      $container->get('plugin.manager.search_api.parse_mode')
     );
   }
 
@@ -176,8 +183,13 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
     }
 
     try {
+      // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
+      $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
+
       $keyvalue_collection = 'Strawberryfield_flavor_datasource_temp';
       $key = $keyvalue_collection . ':' . $file->uuid().':'.$data->plugin_config_entity_id;
+
+
 
       //We only deal with NODES.
       $entity = $this->entityTypeManager->getStorage('node')
@@ -186,14 +198,28 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
       if(!$entity) {
         return;
       }
+      $item_ids = [];
+      $inindex = 1;
+      if (is_a($entity, TranslatableInterface::class)) {
+        $translations = $entity->getTranslationLanguages();
+        foreach ($translations as $translation_id => $translation) {
+          //@TODO here, the number 1 needs to come from the sequence.
+          $item_id = $entity->id() . ':'.'1' .':'.$translation_id.':'.$file->uuid().':'.$data->plugin_config_entity_id;
+          // a single 0 as return will force us to reindex.
+          $inindex = $inindex * $this->flavorInSolrIndex($item_id, $data->metadata['checksum'], $indexes);
+          $item_ids[] = $item_id;
+        }
+      }
 
+      // Check if we already have this entry in Solr
+      if ($inindex !== 0) {
+        error_log('Already in search index, skipping');
+      }
       // Skip file if element is found in key_value collection.
       $processed_data = $this->keyValue->get($keyvalue_collection)->get($key);
-      error_log('Is this already in our temp keyValue?');
-      error_log(empty($processed_data));
       //@TODO allow a force in case of corrupted key value? Partial output
       // Extragenous weird data?
-      if (true || empty($processed_data) ||
+      if ($inindex === 0 || empty($processed_data) ||
         $data->force == TRUE ||
         (!isset($processed_data->checksum) ||
           empty($processed_data->checksum) ||
@@ -219,19 +245,8 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
         $toindex = new \stdClass();
         $toindex->fulltext = $io->output;
         $toindex->checksum = $data->metadata['checksum'];
-        error_log(var_export($toindex,true));
+
         $this->keyValue->get($keyvalue_collection)->set($key, $toindex);
-
-        // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
-        $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
-
-        $item_ids = [];
-        if (is_a($entity, TranslatableInterface::class)) {
-          $translations = $entity->getTranslationLanguages();
-          foreach ($translations as $translation_id => $translation) {
-            $item_ids[] = $entity->id() . ':'.'1' .':'.$translation_id.':'.$file->uuid().':'.$data->plugin_config_entity_id;
-          }
-        }
         error_log(var_export($item_ids,true));
         $datasource_id = 'strawberryfield_flavor_datasource';
         foreach ($indexes as $index) {
@@ -240,6 +255,15 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
       }
     }
     catch (\Exception $exception) {
+      $message_params = [
+        '@file_id' => $data->fid,
+        '@entity_id' => $data->nid,
+        '@message' => $exception->getMessage(),
+      ];
+      if (!isset($data->extract_attempts)) {
+        $data->extract_attempts = 0;
+        $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed with message: @message File id @file_id at Node @entity_id.', $message_params);
+      }
       if ($data->extract_attempts < 3) {
         $data->extract_attempts++;
         \Drupal::queue('strawberryrunners_process_index')->createItem($data);
@@ -249,7 +273,7 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
           '@file_id' => $data->fid,
           '@entity_id' => $data->nid,
         ];
-        $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts @file_id for @entity_type @entity_id.', $message_params);
+        $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts File Id @file_id at Node @entity_id.', $message_params);
       }
     }
   }
@@ -322,6 +346,84 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
     else {
       return $wrapper->getExternalUrl();
     }
+  }
+
+  /**
+   * Checks Search API indexes for an Document ID and Checksum Match
+   *
+   * @param string $key
+   * @param string $checksum
+   * @param array $indexes
+   *
+   * @throws \Drupal\Component\Plugin\Exception\PluginException
+   * @throws \Drupal\search_api\SearchApiException
+   */
+  public function flavorInSolrIndex(string $key, string $checksum, array $indexes): int {
+    /* @var \Drupal\search_api\IndexInterface[] $indexes */
+
+    $count = 0;
+    foreach ($indexes as $search_api_index) {
+
+      // Create the query.
+      $query = $search_api_index->query([
+        'limit' => 1,
+        'offset' => 0,
+      ]);
+
+      /*$query->setFulltextFields([
+        'title',
+        'body',
+        'filename',
+        'saa_field_file_document',
+        'saa_field_file_news',
+        'saa_field_file_page'
+      ]);*/
+      //$parse_mode = $this->parseModeManager->createInstance('direct');
+      $parse_mode = $this->parseModeManager->createInstance('terms');
+      $query->setParseMode($parse_mode);
+      // $parse_mode->setConjunction('OR');
+     // $query->keys($search);
+      $query->sort('search_api_relevance', 'DESC');
+
+      $query->addCondition('search_api_id', 'strawberryfield_flavor_datasource/'.$key)
+        ->addCondition('search_api_datasource', 'strawberryfield_flavor_datasource')
+        ->addCondition('checksum', $checksum);
+      //$query = $query->addCondition('ss_checksum', $checksum);
+      // If we allow processing here Drupal adds Content Access Check
+      // That does not match our Data Source \Drupal\search_api\Plugin\search_api\processor\ContentAccess
+      // we get this filter (see 2nd)
+      /*
+       *   array (
+        0 => 'ss_search_api_id:"strawberryfield_flavor_datasource/2006:1:en:3dccdb09-f79f-478e-81c5-0bb680c3984e:ocr"',
+        1 => 'ss_search_api_datasource:"strawberryfield_flavor_datasource"',
+        2 => '{!tag=content_access,content_access_enabled,content_access_grants}(ss_search_api_datasource:"entity:file" (+(bs_status:"true" bs_status_2:"true") +(sm_node_grants:"node_access_all:0" sm_node_grants:"node_access__all")))',
+        3 => '+index_id:default_solr_index +hash:1evb7z',
+        4 => 'ss_search_api_language:("en" "und" "zxx")',
+      ),
+       */
+      // Another solution would be to make our conditions all together an OR
+      // But no post processing here is also good, faster and we just want
+      // to know if its there or not.
+      $query->setProcessingLevel(QueryInterface::PROCESSING_NONE);
+      $results = $query->execute();
+
+      // $solr_response = $results->getExtraData('search_api_solr_response');
+      // In case of more than one Index with the same Data Source we accumulate
+      $count = $count + (int) $results->getResultCount();
+
+    }
+    // This is a good one. If i have multiple indexes, but one is missing the i assume
+    // reprocessing is needed
+    // But if not, then i return 1, which means we have them all
+    // FUTURE thinking is the best.
+    $return = ($count == count($indexes)) ? 1 : 0;
+    return $return;
+    // Keys we need in the Search API
+    // - ss_search_api_id == $key
+    // A checksum field == Should be configurable?
+    // Let's start by naming it checksum? If not present we may trigger some Logger/alert?
+    // Or maybe we can use D8/D9 Status mechanic to let the user know this module
+    // needs it in the data flavor.
   }
 
 }
