@@ -20,6 +20,7 @@
     ],
     "require": {
         "ml/json-ld": "^1.0",
+        "drupal/search_api_solr": "~4.1",
         "mtdowling/jmespath.php": "^2.4",
         "strawberryfield/strawberryfield": "dev-1.0.0-RC1",
         "react/event-loop": "^1.1",
