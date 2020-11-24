@@ -209,8 +209,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
       $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
-      $pageid = $node_uuid . '/canvas/' . $file_uuid . '/p' . $page_number;
-      // $pageid not used for now, let's go with the page_number only
+
       setlocale(LC_CTYPE, 'en_US.UTF-8');
       $execstring = $this->buildExecutableCommand($io);
       error_log($execstring);
@@ -306,7 +305,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
   }
 
   protected function hOCRtoMiniOCR($output, $pageid) {
-    error_log($output);
     $hocr = simplexml_load_string($output);
     $internalErrors = libxml_use_internal_errors(TRUE);
     libxml_clear_errors();
@@ -320,7 +318,20 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $miniocr->startDocument('1.0', 'UTF-8');
     $miniocr->startElement("ocr");
     foreach ($hocr->body->children() as $page) {
-      $coos = explode(" ", substr($page['title'], 5));
+      $titleparts =  explode(';', $page['title']);
+      $pagetitle = NULL;
+      foreach ($titleparts as $titlepart) {
+        $titlepart = trim($titlepart);
+        if (strpos($titlepart, 'bbox') === 0 ) {
+          $pagetitle = substr($titlepart, 5);
+        }
+      }
+      if ($pagetitle == NULL) {
+        $miniocr->flush();
+        error_log('Could not convert HOCR to MiniOCR, no valid page dimensions found');
+        return NULL;
+      }
+      $coos = explode(" ", $pagetitle);
       // To avoid divisions by 0
       $pwidth = (float) $coos[2] ? (float) $coos[2] : 1;
       $pheight = (float) $coos[3] ? (float) $coos[3] : 1;
@@ -346,7 +357,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
               $text = (string) $word;
               $miniocr->startElement("w");
               $miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
-
               $miniocr->text($text);
               $miniocr->endElement();
             }
@@ -360,7 +370,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $miniocr->endElement();
     $miniocr->endDocument();
     unset($hocr);
-
     return $miniocr->outputMemory(TRUE);
   }
 
