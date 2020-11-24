@@ -335,10 +335,11 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       // To avoid divisions by 0
       $pwidth = (float) $coos[2] ? (float) $coos[2] : 1;
       $pheight = (float) $coos[3] ? (float) $coos[3] : 1;
+      // NOTE: floats are in the form of .1 so we need to remove the first 0.
       if (count($coos)) {
         $miniocr->startElement("p");
         $miniocr->writeAttribute("xml:id", $pageid);
-        $miniocr->writeAttribute("wh", $pwidth . " " . $pheight);
+        $miniocr->writeAttribute("wh", ltrim($pwidth, 0) . " " . ltrim($pheight, 0));
         $miniocr->startElement("b");
         $page->registerXPathNamespace('ns', 'http://www.w3.org/1999/xhtml');
         foreach ($page->xpath('.//ns:span[@class="ocr_line"]') as $line) {
@@ -356,7 +357,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
               $h = round((($y1 - $y0) / $pheight), 3);
               $text = (string) $word;
               $miniocr->startElement("w");
-              $miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
+              $miniocr->writeAttribute("x", ltrim($l, '0') . ' ' . ltrim($t, 0) . ' ' . ltrim($w, 0) . ' ' . ltrim($h, 0));
               $miniocr->text($text);
               $miniocr->endElement();
             }
