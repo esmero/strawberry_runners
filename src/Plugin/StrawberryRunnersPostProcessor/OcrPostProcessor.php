@@ -147,9 +147,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#type' => 'checkboxes',
       '#title' => $this->t("Where and how the output will be used."),
       '#options' => [
-        'subkey' => 'In the same Source Metadata, as a child structure of each Processed file',
-        'ownkey' => 'In the same Source Metadata but inside its own, top level, "as:flavour" subkey based on the given machine name of the current plugin',
         'plugin' => 'As Input for another processor Plugin',
+        'searchapi' => 'In a Search API Document using the Strawberryfield Flavor Data Source (e.g used for HOCR highlight)'
       ],
       '#default_value' => (!empty($this->getConfiguration()['output_destination']) && is_array($this->getConfiguration()['output_destination'])) ? $this->getConfiguration()['output_destination'] : [],
       '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this ouput.'),
@@ -219,14 +218,18 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         // Support UTF-8 commands.
         // @see http://www.php.net/manual/en/function.shell-exec.php#85095
         shell_exec("LANG=en_US.utf-8");
-        $output = $this->proc_execute($execstring, $timeout);
-        if (is_null($output)) {
+        $proc_output = $this->proc_execute($execstring, $timeout);
+        if (is_null($proc_output)) {
           throw new \Exception("Could not execute {$execstring} or timed out");
         }
 
-        $miniocr = $this->hOCRtoMiniOCR($output, $page_number);
+        $miniocr = $this->hOCRtoMiniOCR($proc_output, $page_number);
         error_log($miniocr);
-        $io->output = $miniocr;
+        $output = new \stdClass();
+        $output->searchapi = $miniocr;
+        $output->plugin = $miniocr;
+        $io->output = $output;
+
       }
     }
     else {

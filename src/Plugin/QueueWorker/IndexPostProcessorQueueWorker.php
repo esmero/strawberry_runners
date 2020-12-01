@@ -160,17 +160,51 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
 
 
   /**
+   * Gets all Children of the currently being processed Processor Plugin
+   *
+   * @param string $current_id
+   *
+   * @return array
+   */
+  private function getChildProcessorIds(string $plugin_config_entity_id):array {
+    /* @var $plugin_config_entities \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity[] */
+    $plugin_config_entities = $this->entityTypeManager->getListBuilder('strawberry_runners_postprocessor')
+      ->load();
+    $active_plugins = [];
+    // This kids should be cached;
+    // We basically want here what type of processor this is and its input_argument and input_options
+    $plugin_definitions = $this->strawberryRunnerProcessorPluginManager->getDefinitions();
+
+    error_log('getting child processors');
+    foreach ($plugin_config_entities as $plugin_config_entity) {
+      // Only get first level (no Parents) and Active ones.
+      if ($plugin_config_entity->isActive() && $plugin_config_entity->getParent() == $plugin_config_entity_id) {
+        $active_plugins[] = [
+          'config_entity' => $plugin_config_entity,
+          'plugin_definition' => $plugin_definitions[$plugin_config_entity->getPluginid()]
+          ];
+      }
+    }
+    return $active_plugins;
+  }
+
+  /**
    * {@inheritdoc}
    */
   public function processItem($data) {
 
     $processor_instance = $this->getProcessorPlugin($data->plugin_config_entity_id);
+    // Read the Input Properties and Input Arguments of the current Processor
+
+    // Now check if there are any child?
+    error_log('config for this processor');
+    $processor_config = $processor_instance->getConfiguration();
 
     if (!isset($data->fid) || $data->fid == NULL || !isset($data->nid) || $data->nid == NULL || !is_array($data->metadata)) {
       return;
     }
     $file = $this->entityTypeManager->getStorage('file')->load($data->fid);
-
+    // 0 byte files have checksum, check what it is!
     if ($file === NULL || !isset($data->metadata['checksum'])) {
       error_log('Sorry the file does not exist or has no checksum yet. We really need the checksum');
       return;
@@ -181,101 +215,157 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
     if ($filelocation === NULL) {
       return;
     }
+    // Means we could pass also a file directly anytime
+    $data->filelocation = $filelocation;
 
-    try {
-      // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
-      $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
-
-      $keyvalue_collection = 'Strawberryfield_flavor_datasource_temp';
-      $key = $keyvalue_collection . ':' . $file->uuid().':'.$data->plugin_config_entity_id;
-
-
-
-      //We only deal with NODES.
-      $entity = $this->entityTypeManager->getStorage('node')
-        ->load($data->nid);
-
-      if(!$entity) {
-        return;
-      }
-      $item_ids = [];
-      $inindex = 1;
-      if (is_a($entity, TranslatableInterface::class)) {
-        $translations = $entity->getTranslationLanguages();
-        foreach ($translations as $translation_id => $translation) {
-          //@TODO here, the number 1 needs to come from the sequence.
-          $item_id = $entity->id() . ':'.'1' .':'.$translation_id.':'.$file->uuid().':'.$data->plugin_config_entity_id;
-          // a single 0 as return will force us to reindex.
-          $inindex = $inindex * $this->flavorInSolrIndex($item_id, $data->metadata['checksum'], $indexes);
-          $item_ids[] = $item_id;
-        }
-      }
-
-      // Check if we already have this entry in Solr
-      if ($inindex !== 0) {
-        error_log('Already in search index, skipping');
-      }
-      // Skip file if element is found in key_value collection.
-      $processed_data = $this->keyValue->get($keyvalue_collection)->get($key);
-      //@TODO allow a force in case of corrupted key value? Partial output
-      // Extragenous weird data?
-      if ($inindex === 0 || empty($processed_data) ||
-        $data->force == TRUE ||
-        (!isset($processed_data->checksum) ||
-          empty($processed_data->checksum) ||
-          $processed_data->checksum != $data->metadata['checksum'])) {
-        // Extract file and save it in key_value collection.
-        $io = new \stdClass();
-        $input =  new \stdClass();
-        $input->filepath = $filelocation;
-        $input->page_number = 1;
-        // The Node UUID
-        $input->nuuid = $data->nuuid;
-        // All the rest of the associated Metadata in an as:structure
-        $input->metadata = $data->metadata;
-        $io->input = $input;
-        $io->output = NULL;
-        //@TODO implement the TEST and BENCHMARK logic here
-        // RUN should return exit codes so we can know if something failed
-        // And totally discard indexing.
-        $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
-        error_log ('processing just run');
-        error_log('writing to keyvalue');
-        error_log($key);
-        $toindex = new \stdClass();
-        $toindex->fulltext = $io->output;
-        $toindex->checksum = $data->metadata['checksum'];
-
-        $this->keyValue->get($keyvalue_collection)->set($key, $toindex);
-        error_log(var_export($item_ids,true));
-        $datasource_id = 'strawberryfield_flavor_datasource';
-        foreach ($indexes as $index) {
-          $index->trackItemsInserted($datasource_id, $item_ids);
-        }
-      }
+    if (isset($processor_config['output_destination']['searchapi']) && $processor_config['output_destination']['searchapi'] == 'searchapi') {
+      $tobeindexed = TRUE;
     }
-    catch (\Exception $exception) {
-      $message_params = [
-        '@file_id' => $data->fid,
-        '@entity_id' => $data->nid,
-        '@message' => $exception->getMessage(),
-      ];
-      if (!isset($data->extract_attempts)) {
-        $data->extract_attempts = 0;
-        $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed with message: @message File id @file_id at Node @entity_id.', $message_params);
-      }
-      if ($data->extract_attempts < 3) {
-        $data->extract_attempts++;
-        \Drupal::queue('strawberryrunners_process_index')->createItem($data);
-      }
-      else {
+
+
+    // Only applies to those that will be indexed
+    if ($tobeindexed) {
+      try {
+        // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
+        $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
+
+        $keyvalue_collection = 'Strawberryfield_flavor_datasource_temp';
+        // This can repeat/overwrite, lacks the sequence ID.
+        $key = $keyvalue_collection . ':' . $file->uuid() . ':' . $data->plugin_config_entity_id;
+
+        //We only deal with NODES.
+        $entity = $this->entityTypeManager->getStorage('node')
+          ->load($data->nid);
+
+        if (!$entity) {
+          return;
+        }
+
+        $item_ids = [];
+        $inindex = 1;
+        $input_property = $processor_instance->getPluginDefinition()['input_property'];
+        $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
+
+        // @TODO If argument is not here, do we return??
+        $data->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
+
+        if (is_a($entity, TranslatableInterface::class)) {
+          $translations = $entity->getTranslationLanguages();
+          foreach ($translations as $translation_id => $translation) {
+            //@TODO here, the number 1 needs to come from the sequence.
+            $item_id = $entity->id() . ':' . $data->{$input_argument} . ':' . $translation_id . ':' . $file->uuid() . ':' . $data->plugin_config_entity_id;
+            // a single 0 as return will force us to reindex.
+            $inindex = $inindex * $this->flavorInSolrIndex($item_id, $data->metadata['checksum'], $indexes);
+            $item_ids[] = $item_id;
+          }
+        }
+
+        // Check if we already have this entry in Solr
+        if ($inindex !== 0) {
+          error_log('Already in search index, skipping');
+        }
+        // Skip file if element is found in key_value collection.
+        $processed_data = $this->keyValue->get($keyvalue_collection)->get($key);
+        //@TODO allow a force in case of corrupted key value? Partial output
+        // Extragenous weird data?
+        if ($tobeindexed && ($inindex === 0 || empty($processed_data) ||
+          $data->force == TRUE ||
+          (!isset($processed_data->checksum) ||
+            empty($processed_data->checksum) ||
+            $processed_data->checksum != $data->metadata['checksum']))) {
+          // Extract file and save it in key_value collection.
+          $io = $this->invokeProcessor($processor_instance, $data);
+          error_log('processing just run');
+          error_log('writing to keyvalue');
+          error_log($key);
+          // Check if $io->output exists?
+          $toindex = new \stdClass();
+          $toindex->fulltext = $io->output->searchapi;
+          $toindex->checksum = $data->metadata['checksum'];
+
+          $this->keyValue->get($keyvalue_collection)->set($key, $toindex);
+          error_log(var_export($item_ids, TRUE));
+          $datasource_id = 'strawberryfield_flavor_datasource';
+          foreach ($indexes as $index) {
+            $index->trackItemsInserted($datasource_id, $item_ids);
+          }
+        }
+      } catch (\Exception $exception) {
         $message_params = [
           '@file_id' => $data->fid,
           '@entity_id' => $data->nid,
+          '@message' => $exception->getMessage(),
         ];
-        $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts File Id @file_id at Node @entity_id.', $message_params);
+        if (!isset($data->extract_attempts)) {
+          $data->extract_attempts = 0;
+          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed with message: @message File id @file_id at Node @entity_id.', $message_params);
+        }
+        if ($data->extract_attempts < 3) {
+          $data->extract_attempts++;
+          \Drupal::queue('strawberryrunners_process_index')->createItem($data);
+        }
+        else {
+          $message_params = [
+            '@file_id' => $data->fid,
+            '@entity_id' => $data->nid,
+          ];
+          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts File Id @file_id at Node @entity_id.', $message_params);
+        }
       }
     }
+    else {
+      // This will not
+      $io = $this->invokeProcessor($processor_instance, $data);
+      error_log('we do not need to index this');
+      error_log(var_export($io, true));
+      error_log('we do not need to index this');
+    }
+
+    if (isset($io->output->plugin) && !empty($io->output->plugin)) {
+      error_log('Time to check on children');
+      error_log($data->plugin_config_entity_id);
+      $childprocessors = $this->getChildProcessorIds($data->plugin_config_entity_id);
+      error_log(print_r($childprocessors,true));
+      foreach($childprocessors as $plugin_info) {
+        $childdata = clone $data; // So we do not touch original data
+        /* @var  $strawberry_runners_postprocessor_config \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity */
+        $postprocessor_config_entity = $plugin_info['config_entity'];
+        $postprocessor_plugin_definition = $plugin_info['plugin_definition'];
+        $input_property = $plugin_info['plugin_definition']['input_property'];
+        $input_argument = $plugin_info['plugin_definition']['input_argument'];
+        //@TODO check if this are here and not null!
+        // $io->ouput will contain whatever the output is
+        // We will check if the child processor
+        // contains a property contained in $output
+        // If so we check if there is a single value or multiple ones
+        // For each we enqueue a child using that property in its data
+
+        // Possible input properties:
+        // - Can come from the original Data (most likely)
+        // - May be overriden by the $io->output, e.g when a processor generates a file that is not part of any node
+        $input_property_value = isset($io->output->plugin) && isset($io->output->plugin[$input_property]) ? $io->output->plugin[$input_property] : $data->{$input_property};
+        // Warning Diego. This may lead to a null
+        $childdata->{$input_property} = $input_property_value;
+        $childdata->plugin_config_entity_id = $postprocessor_config_entity->id();
+        $input_argument_value = isset($io->output->plugin) && isset($io->output->plugin[$input_argument]) ? $io->output->plugin[$input_argument] : $data->{$input_argument};
+        error_log(print_r($input_argument_value,true));
+        if (is_array($input_argument_value)) {
+          foreach ($input_argument_value as $value) {
+            // Here is the catch.
+            // Output properties may be many
+            // Input Properties matching always need to be one
+            if (!is_array($value)) {
+              $childdata->{$input_argument} = $value;
+              error_log("should add to queue {$childdata->plugin_config_entity_id}");
+              error_log(var_export($childdata,true));
+              \Drupal::queue('strawberryrunners_process_index')
+                ->createItem($childdata);
+            }
+          }
+        }
+      }
+    }
+
   }
 
   /**
@@ -313,7 +403,6 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
       );
     }
 
-
     if (!$templocation) {
       $this->loggerFactory->get('strawberry_runners')->warning(
         'Could not adquire a local accessible location for text extraction for file with URL @fileurl',
@@ -346,6 +435,39 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
     else {
       return $wrapper->getExternalUrl();
     }
+  }
+
+  /**
+   * This method actually invokes the processor.
+   *
+   * @param StrawberryRunnersPostProcessorPluginInterface $processor_instance
+   * @param \stdClass $data
+   *
+   * @return \stdClass
+   */
+  private function invokeProcessor(StrawberryRunnersPostProcessorPluginInterface $processor_instance, \stdClass $data): \stdClass {
+
+    $input_property = $processor_instance->getPluginDefinition()['input_property'];
+    $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
+
+    $io = new \stdClass();
+    $input = new \stdClass();
+
+    // @NOTE: this is the only place where we just pass filelocation fixed instead of the
+    // actual property named $input_property. Which may be weird?
+    $input->{$input_property} = $data->filelocation;
+    $input->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
+    // The Node UUID
+    $input->nuuid = $data->nuuid;
+    // All the rest of the associated Metadata in an as:structure
+    $input->metadata = $data->metadata;
+    $io->input = $input;
+    $io->output = NULL;
+    //@TODO implement the TEST and BENCHMARK logic here
+    // RUN should return exit codes so we can know if something failed
+    // And totally discard indexing.
+    $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
+    return $io;
   }
 
   /**
@@ -425,5 +547,4 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
     // Or maybe we can use D8/D9 Status mechanic to let the user know this module
     // needs it in the data flavor.
   }
-
 }
