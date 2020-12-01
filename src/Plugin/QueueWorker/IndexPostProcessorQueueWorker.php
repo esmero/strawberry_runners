@@ -228,10 +228,7 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
       try {
         // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
         $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
-
         $keyvalue_collection = 'Strawberryfield_flavor_datasource_temp';
-        // This can repeat/overwrite, lacks the sequence ID.
-        $key = $keyvalue_collection . ':' . $file->uuid() . ':' . $data->plugin_config_entity_id;
 
         //We only deal with NODES.
         $entity = $this->entityTypeManager->getStorage('node')
@@ -264,29 +261,41 @@ class IndexPostProcessorQueueWorker extends QueueWorkerBase implements Container
         if ($inindex !== 0) {
           error_log('Already in search index, skipping');
         }
-        // Skip file if element is found in key_value collection.
-        $processed_data = $this->keyValue->get($keyvalue_collection)->get($key);
+        $inkeystore = TRUE;
+        // Skip file if element for every language is found in key_value collection.
+        foreach($item_ids as $item_id) {
+          $processed_data = $this->keyValue->get($keyvalue_collection)
+            ->get($item_id);
+          if (empty($processed_data) || !isset($processed_data->checksum) ||
+            empty($processed_data->checksum) ||
+            $processed_data->checksum != $data->metadata['checksum']) {
+            $inkeystore = $inkeystore && FALSE;
+          }
+        }
         //@TODO allow a force in case of corrupted key value? Partial output
         // Extragenous weird data?
-        if ($tobeindexed && ($inindex === 0 || empty($processed_data) ||
-          $data->force == TRUE ||
-          (!isset($processed_data->checksum) ||
-            empty($processed_data->checksum) ||
-            $processed_data->checksum != $data->metadata['checksum']))) {
+        if ($tobeindexed && ($inindex === 0 || $inkeystore === FALSE) ||
+          $data->force == TRUE) {
           // Extract file and save it in key_value collection.
           $io = $this->invokeProcessor($processor_instance, $data);
-          error_log('processing just run');
-          error_log('writing to keyvalue');
-          error_log($key);
+
           // Check if $io->output exists?
           $toindex = new \stdClass();
           $toindex->fulltext = $io->output->searchapi;
           $toindex->checksum = $data->metadata['checksum'];
 
-          $this->keyValue->get($keyvalue_collection)->set($key, $toindex);
-          error_log(var_export($item_ids, TRUE));
           $datasource_id = 'strawberryfield_flavor_datasource';
           foreach ($indexes as $index) {
+            // For each language we do this
+            // Eventually we will want to have different outputs per language?
+            // But maybe not for HOCR. since the doc will be the same.
+            foreach($item_ids as $item_id) {
+              error_log('processing just run');
+              error_log('writing to keyvalue');
+              error_log($item_id);
+              $this->keyValue->get($keyvalue_collection)
+                ->set($item_id, $toindex);
+            }
             $index->trackItemsInserted($datasource_id, $item_ids);
           }
         }
