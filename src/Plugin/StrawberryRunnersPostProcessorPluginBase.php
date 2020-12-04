@@ -10,6 +10,7 @@ namespace Drupal\strawberry_runners\Plugin;
 
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\File\Exception\FileException;
@@ -46,9 +47,16 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
 
   /**
    * @var \Drupal\Core\Entity\EntityTypeBundleInfoInterface
+   *
    */
-
   protected $entityTypeBundleInfo;
+
+  /**
+   * The file system.
+   *
+   * @var \Drupal\Core\File\FileSystemInterface
+   */
+  protected $fileSystem;
 
   public function __construct(
     array $configuration,
@@ -57,7 +65,8 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     EntityTypeManagerInterface $entityTypeManager,
     EntityTypeBundleInfoInterface $entityTypeBundleInfo,
     Client $httpClient,
-    ConfigFactoryInterface $config_factory
+    ConfigFactoryInterface $config_factory,
+    FileSystemInterface $file_system
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->entityTypeBundleInfo = $entityTypeBundleInfo;
@@ -67,10 +76,8 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     // For files being processed by a binary, the Queue worker will have made sure
     // they are made local
     // \Drupal\strawberry_runners\Plugin\QueueWorker\IndexPostProcessorQueueWorker::ensureFileAvailability
-    $this->temporary_directory = $config_factory->get('system.file')
-      ->get('path.temporary');
-
-
+    $this->fileSystem = $file_system;
+    $this->temporary_directory = $this->fileSystem->getTempDirectory();
 
   }
 
@@ -83,7 +90,8 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       $container->get('entity_type.manager'),
       $container->get('entity_type.bundle.info'),
       $container->get('http_client'),
-      $container->get('config.factory')
+      $container->get('config.factory'),
+      $container->get('file_system')
     );
   }
 
