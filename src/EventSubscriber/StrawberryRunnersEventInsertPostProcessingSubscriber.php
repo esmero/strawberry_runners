@@ -15,12 +15,12 @@ use Drupal\file\FileInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager;
-use Drupal\strawberryfield\EventSubscriber\StrawberryfieldEventSaveSubscriber;
+use Drupal\strawberryfield\EventSubscriber\StrawberryfieldEventInsertSubscriber;
 
 /**
  * Event subscriber for SBF bearing entity json process event.
  */
-class StrawberryRunnersEventSavePostProcessingSubscriber extends StrawberryfieldEventSaveSubscriber {
+class StrawberryRunnersEventInsertPostProcessingSubscriber extends StrawberryfieldEventInsertSubscriber {
 
 
   use StringTranslationTrait;
@@ -149,7 +149,7 @@ class StrawberryRunnersEventSavePostProcessingSubscriber extends Strawberryfield
    * @throws \Drupal\Component\Plugin\Exception\PluginException
    * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
    */
-  public function onEntitySave(StrawberryfieldCrudEvent $event) {
+  public function onEntityInsert(StrawberryfieldCrudEvent $event) {
 
     /* @var $plugin_config_entities \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity[] */
     $plugin_config_entities = $this->entityTypeManager->getListBuilder('strawberry_runners_postprocessor')->load();
