@@ -8,9 +8,11 @@
 
 namespace Drupal\strawberry_runners\Plugin;
 
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
+use Drupal\Core\File\Exception\FileException;
 use Drupal\Component\Plugin\Exception\PluginException;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\Core\Plugin\PluginBase;
@@ -25,6 +27,12 @@ use Drupal\Core\Plugin\PluginWithFormsTrait;
 abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase implements StrawberryRunnersPostProcessorPluginInterface, ContainerFactoryPluginInterface {
 
   use PluginWithFormsTrait;
+
+  /**
+   * Temporary directory setup to be used by Drupal
+   * @var string
+   */
+  protected $temporary_directory;
 
   /**
    * @var \Drupal\Core\Entity\EntityTypeManagerInterface;
@@ -48,13 +56,22 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     $plugin_definition,
     EntityTypeManagerInterface $entityTypeManager,
     EntityTypeBundleInfoInterface $entityTypeBundleInfo,
-    Client $httpClient
+    Client $httpClient,
+    ConfigFactoryInterface $config_factory
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->entityTypeBundleInfo = $entityTypeBundleInfo;
     $this->entityTypeManager = $entityTypeManager;
     $this->setConfiguration($configuration);
     $this->httpClient = $httpClient;
+    // For files being processed by a binary, the Queue worker will have made sure
+    // they are made local
+    // \Drupal\strawberry_runners\Plugin\QueueWorker\IndexPostProcessorQueueWorker::ensureFileAvailability
+    $this->temporary_directory = $config_factory->get('system.file')
+      ->get('path.temporary');
+
+
+
   }
 
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
@@ -65,7 +82,8 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       $plugin_definition,
       $container->get('entity_type.manager'),
       $container->get('entity_type.bundle.info'),
-      $container->get('http_client')
+      $container->get('http_client'),
+      $container->get('config.factory')
     );
   }
 
