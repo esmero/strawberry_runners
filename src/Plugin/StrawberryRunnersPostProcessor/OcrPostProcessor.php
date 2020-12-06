@@ -41,7 +41,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         'arguments' => '',
         'arguments_tesseract' => '',
         'output_type' => 'json',
-        'output_destination' => 'subkey',
+        'output_destination' => 'searchapi',
       ] + parent::defaultConfiguration();
   }
 

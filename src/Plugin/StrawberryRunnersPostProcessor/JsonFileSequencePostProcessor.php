@@ -37,7 +37,7 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
         'source_type' => 'asstructure',
         'mime_type' => ['application/pdf'],
         'output_type' => 'json',
-        'output_destination' => 'plugin',
+        'output_destination' => ['plugin' =>'plugin'],
       ] + parent::defaultConfiguration();
   }
 
@@ -76,6 +76,13 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
       ],
       '#default_value' => (!empty($this->getConfiguration()['jsonkey']) && is_array($this->getConfiguration()['jsonkey'])) ? $this->getConfiguration()['jsonkey'] : [],
       '#required' => TRUE,
+    ];
+
+    // Because we are using the default entity Form, we want to ensure the
+    // Settings for contains all the values
+    $element['output_destination'] = [
+      '#type' => 'value',
+      '#default_value' => $this->defaultConfiguration()['output_destination']
     ];
 
     $element['mime_type'] = [
@@ -152,7 +159,7 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
       $io->output = $output;
     }
     else {
-      \throwException(new \InvalidArgumentException);
+      throw new \InvalidArgumentException(\sprintf("Invalid arguments passed to %s",$this->getPluginId()));
     }
   }
 }

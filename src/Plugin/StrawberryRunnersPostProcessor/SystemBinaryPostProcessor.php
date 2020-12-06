@@ -233,7 +233,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
 
       }
     } else {
-      throw new \InvalidArgumentException('Invalid/misisng arguments for this processor');
+      throw new \InvalidArgumentException(\sprintf("Invalid arguments passed to %s",$this->getPluginId()));
     }
   }
 
