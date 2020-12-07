@@ -106,7 +106,7 @@ class StrawberryRunnersEventInsertPostProcessingSubscriber extends Strawberryfie
   protected $account;
 
   /**
-   * StrawberryRunnersEventPreSavePostProcessingSubscriber constructor.
+   * StrawberryRunnersEventInsertPostProcessingSubscriber constructor.
    *
    * @param \Drupal\Core\StringTranslation\TranslationInterface $string_translation
    * @param \Drupal\Core\Messenger\MessengerInterface $messenger
