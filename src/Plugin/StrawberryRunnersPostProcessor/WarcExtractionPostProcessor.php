@@ -174,7 +174,7 @@ class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBa
 
       }
     else {
-      \throwException(new \InvalidArgumentException);
+      throw new \InvalidArgumentException(\sprintf("Invalid arguments passed to %s",$this->getPluginId()));
     }
   }
 }

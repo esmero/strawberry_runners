@@ -8,9 +8,12 @@
 
 namespace Drupal\strawberry_runners\Plugin;
 
+use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
+use Drupal\Core\File\Exception\FileException;
 use Drupal\Component\Plugin\Exception\PluginException;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\Core\Plugin\PluginBase;
@@ -27,6 +30,12 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
   use PluginWithFormsTrait;
 
   /**
+   * Temporary directory setup to be used by Drupal
+   * @var string
+   */
+  protected $temporary_directory;
+
+  /**
    * @var \Drupal\Core\Entity\EntityTypeManagerInterface;
    */
   protected $entityTypeManager;
@@ -38,9 +47,16 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
 
   /**
    * @var \Drupal\Core\Entity\EntityTypeBundleInfoInterface
+   *
    */
-
   protected $entityTypeBundleInfo;
+
+  /**
+   * The file system.
+   *
+   * @var \Drupal\Core\File\FileSystemInterface
+   */
+  protected $fileSystem;
 
   public function __construct(
     array $configuration,
@@ -48,13 +64,21 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     $plugin_definition,
     EntityTypeManagerInterface $entityTypeManager,
     EntityTypeBundleInfoInterface $entityTypeBundleInfo,
-    Client $httpClient
+    Client $httpClient,
+    ConfigFactoryInterface $config_factory,
+    FileSystemInterface $file_system
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->entityTypeBundleInfo = $entityTypeBundleInfo;
     $this->entityTypeManager = $entityTypeManager;
     $this->setConfiguration($configuration);
     $this->httpClient = $httpClient;
+    // For files being processed by a binary, the Queue worker will have made sure
+    // they are made local
+    // \Drupal\strawberry_runners\Plugin\QueueWorker\IndexPostProcessorQueueWorker::ensureFileAvailability
+    $this->fileSystem = $file_system;
+    $this->temporary_directory = $this->fileSystem->getTempDirectory();
+
   }
 
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
@@ -65,7 +89,9 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       $plugin_definition,
       $container->get('entity_type.manager'),
       $container->get('entity_type.bundle.info'),
-      $container->get('http_client')
+      $container->get('http_client'),
+      $container->get('config.factory'),
+      $container->get('file_system')
     );
   }
 
@@ -76,6 +102,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     return [
       'jsonkey' => ['as:image'],
       'ado_type' => ['Book'],
+      'output_destination' => ['plugin' => 'plugin'],
       // Max time to run in seconds per item.
       'timeout' => 10,
       // Order in which this processor is executed in the chain
@@ -108,7 +135,6 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
    * {@inheritdoc}
    */
   public function setConfiguration(array $configuration) {
-
     $this->configuration = $configuration + $this->defaultConfiguration();
   }
 
@@ -133,6 +159,30 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     return FALSE;
   }
 
+  protected function proc_execute($command, $timeout = 5) {
+    $handle = proc_open($command, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipe);
+    $startTime = microtime(true);
+    $read = NULL;
+    /* Read the command output and kill it if the proccess surpassed the timeout */
+    while(!feof($pipe[1])) {
+      $read .= fread($pipe[1], 8192);
+      if($startTime + $timeout < microtime(true)) {
+        $read = NULL;
+        break;
+      }
+    }
+    $status = proc_get_status($handle);
+    error_log(var_export($status,true));
+    $this->kill($status['pid']);
+    proc_close($handle);
+
+    return $read;
+  }
+
+  /* The proc_terminate() function doesn't end proccess properly on Windows */
+  protected function kill($pid) {
+    return strstr(PHP_OS, 'WIN') ? exec("taskkill /F /T /PID $pid") : exec("kill -9 $pid");
+  }
 
 
 

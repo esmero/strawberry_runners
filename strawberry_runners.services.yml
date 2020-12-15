@@ -2,11 +2,19 @@ services:
   strawberry_runner.processor_manager:
     class: Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager
     parent: default_plugin_manager
-  strawberry_runner.postprocessing_subscriber:
-    class: Drupal\strawberry_runners\EventSubscriber\StrawberryRunnersEventPreSavePostProcessingSubscriber
+
+  strawberry_runner.postprocessing_save_subscriber:
+    class: Drupal\strawberry_runners\EventSubscriber\StrawberryRunnersEventSavePostProcessingSubscriber
     tags:
       - {name: event_subscriber}
     arguments: ['@string_translation', '@messenger', '@logger.factory', '@config.factory', '@stream_wrapper_manager', '@file_system', '@entity_type.manager', '@strawberry_runner.processor_manager', '@current_user']
+
+  strawberry_runner.postprocessing_insert_subscriber:
+    class: Drupal\strawberry_runners\EventSubscriber\StrawberryRunnersEventInsertPostProcessingSubscriber
+    tags:
+      - {name: event_subscriber}
+    arguments: ['@string_translation', '@messenger', '@logger.factory', '@config.factory', '@stream_wrapper_manager', '@file_system', '@entity_type.manager', '@strawberry_runner.processor_manager', '@current_user']
+
 
   strawberry_runner.loop:
     class: Drupal\strawberry_runners\StrawberryRunnersLoopService

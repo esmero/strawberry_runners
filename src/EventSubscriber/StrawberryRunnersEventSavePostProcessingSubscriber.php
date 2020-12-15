@@ -5,7 +5,6 @@ namespace Drupal\strawberry_runners\EventSubscriber;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\strawberryfield\Event\StrawberryfieldCrudEvent;
-use Drupal\strawberryfield\EventSubscriber\StrawberryfieldEventPresaveSubscriber;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\Core\Messenger\MessengerInterface;
@@ -14,14 +13,14 @@ use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Component\Utility\Unicode;
 use Drupal\file\FileInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
-use Drupal\Core\StreamWrapper\StreamWrapperInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager;
+use Drupal\strawberryfield\EventSubscriber\StrawberryfieldEventSaveSubscriber;
 
 /**
  * Event subscriber for SBF bearing entity json process event.
  */
-class StrawberryRunnersEventPreSavePostProcessingSubscriber extends StrawberryfieldEventPresaveSubscriber {
+class StrawberryRunnersEventSavePostProcessingSubscriber extends StrawberryfieldEventSaveSubscriber {
 
 
   use StringTranslationTrait;
@@ -107,7 +106,7 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
   protected $account;
 
   /**
-   * StrawberryRunnersEventPreSavePostProcessingSubscriber constructor.
+   * StrawberryRunnersEventSavePostProcessingSubscriber constructor.
    *
    * @param \Drupal\Core\StringTranslation\TranslationInterface $string_translation
    * @param \Drupal\Core\Messenger\MessengerInterface $messenger
@@ -150,7 +149,7 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
    * @throws \Drupal\Component\Plugin\Exception\PluginException
    * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
    */
-  public function onEntityPresave(StrawberryfieldCrudEvent $event) {
+  public function onEntitySave(StrawberryfieldCrudEvent $event) {
 
     /* @var $plugin_config_entities \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity[] */
     $plugin_config_entities = $this->entityTypeManager->getListBuilder('strawberry_runners_postprocessor')->load();
@@ -178,10 +177,8 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
     // or more plugin.
     // Slower option would be to traverse every file per processor.
 
-
     $entity = $event->getEntity();
     $sbf_fields = $event->getFields();
-
 
     // First pass: for files, all the as:structures we want for, keyed by content type
     /* check your config
@@ -232,23 +229,43 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
           /** @var $itemfield \Drupal\strawberryfield\Plugin\Field\FieldType\StrawberryFieldItem */
           $flatvalues = (array) $itemfield->provideFlatten();
           // Run first on entity:files
-          $sbf_type = NULL;
+          $sbf_type = [];
           if (isset($flatvalues['type'])) {
-            $sbf_type = $flatvalues['type'];
+            $sbf_type = (array) $flatvalues['type'];
           }
           foreach ($askeymap as $jsonkey => $activePlugins) {
             if (isset($flatvalues[$jsonkey])) {
               foreach ($flatvalues[$jsonkey] as $uniqueid => $asstructure) {
                 if (isset($asstructure['dr:fid']) && is_numeric($asstructure['dr:fid'])) {
+                  foreach ($activePlugins as $activePluginId => $config) {
+                    // Never ever run a processor over its own creation
+                    if ($asstructure["dr:for"] == 'flv:'.$activePluginId) {
+                      error_log('skipping '. $asstructure['dr:fid']);
+                      continue;
+                    }
 
-                  foreach($activePlugins as $activePluginId => $config) {
                     $valid_mimes = [];
-                    if (empty($config['ado_type']) || in_array($config['ado_type'] , $sbf_type)) {
+                    //@TODO also split $config['ado_type'] so we can check
+                    $valid_ado_type = [];
+                    $valid_ado_type = explode(',', $config['ado_type']);
+                    if (empty($config['ado_type']) || count(array_intersect($valid_ado_type, $sbf_type)) > 0) {
                       $valid_mimes = explode(',', $config['mime_type']);
-                      if (empty($valid_mimes) || (isset($asstructure["dr:mimetype"]) && in_array($asstructure["dr:mimetype"], $valid_mimes))) {
+                      if (
+                        (!isset($asstructure['flv:' . $activePluginId]) || empty($asstructure['flv:' . $activePluginId])) &&
+                        (
+                          empty($valid_mimes) ||
+                          (isset($asstructure["dr:mimetype"]) && in_array($asstructure["dr:mimetype"], $valid_mimes))
+                        )
+                      ) {
                         $data = new \stdClass();
                         $data->fid = $asstructure['dr:fid'];
                         $data->nid = $entity->id();
+                        $data->asstructure_uniqueid = $uniqueid;
+                        $data->asstructure_key = $jsonkey;
+                        $data->nuuid = $entity->uuid();
+                        $data->field_name = $field_name;
+                        $data->field_delta = $delta;
+
                         // We are passing also the full file metadata.
                         // This gives us an advantage so we can reuse
                         // Sequence IDs, PDF pages, etc and act on them
@@ -260,6 +277,16 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
                         // $activePluginId? That would allow us to skip reprocessing
                         // Easier?
                         $data->metadata = $asstructure;
+
+                        // @TODO how to force?
+                        // Can be a state key, valuekey, or a JSON passed property.
+                        // Issue with JSON passed property is that we can no longer
+                        // Here modify it (Entity is saved)
+                        // So we should really better have a non Metadata method for this
+                        // Or/ we can have a preSave Subscriber that reads the prop,
+                        // sets the state and then removes if before saving
+
+                        $data->force = FALSE;
                         $data->plugin_config_entity_id = $activePluginId;
                         // See https://github.com/esmero/strawberry_runners/issues/10
                         // Since the destination Queue can be a modal thing
@@ -286,7 +313,6 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
 
   }
 
-
   /**
    * Make sure no HTML or Javascript will be passed around.
    *
@@ -302,57 +328,4 @@ class StrawberryRunnersEventPreSavePostProcessingSubscriber extends Strawberryfi
     }
     return $string;
   }
-
-  /**
-   * Adds File usage to DB for temp files used by SB Runners.
-   *
-   * This differs from how we count managed files in other places like SBF.
-   * Every Post Processor that needs the file will add a count
-   * Once done, will remove one. File will become unused when everyone releases it.
-   *
-   *
-   * @param \Drupal\file\FileInterface $file
-   * @param int $nodeid
-   */
-  protected function add_file_usage(FileInterface $file, int $nodeid, string $entity_type_id = 'node') {
-    if (!$file || !$this->moduleHandler->moduleExists('file')) {
-      return;
-    }
-    /** @var \Drupal\file\FileUsage\FileUsageInterface $file_usage */
-
-    if ($file) {
-      $this->fileUsage->add($file, 'strawberry_runners', $entity_type_id, $nodeid);
-    }
-  }
-
-  /**
-   * Deletes File usage from DB for temp files used by SB Runners.
-   *
-   * @param \Drupal\file\FileInterface $file
-   * @param int $nodeid
-   * @param int $count
-   *  If count is 0 it will remove all references.
-   */
-  protected function remove_file_usage(
-    FileInterface $file,
-    int $nodeid,
-    string $entity_type_id = 'node',
-    $count = 1
-  ) {
-    if (!$file || !$this->moduleHandler->moduleExists('file')) {
-      return;
-    }
-    /** @var \Drupal\file\FileUsage\FileUsageInterface $file_usage */
-
-    if ($file) {
-      $this->fileUsage->delete(
-        $file,
-        'strawberry_runners',
-        $entity_type_id,
-        $nodeid,
-        $count
-      );
-    }
-  }
-
 }

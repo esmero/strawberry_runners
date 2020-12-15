@@ -21,8 +21,7 @@ use Drupal\Component\Annotation\Plugin;
 class StrawberryRunnersPostProcessor extends Plugin {
 
   const PRESAVE = 'preSave';
-  const INDEX = 'search_api';
-
+  const POSTSAVE = 'postSave';
 
   /**
    * The plugin id.
@@ -55,13 +54,20 @@ class StrawberryRunnersPostProcessor extends Plugin {
    */
   public $input_property;
 
+  /**
+   * The Object property that contains the additional data needed by the Processor ::run method
+   *
+   * @var string $input_arguments;
+   *
+   */
+  public $input_arguments;
 
   /**
-   * Processing stage: can be Entity PreSave or Index time search_api
+   * Processing stage: can be Entity PreSave or PostSave
    *
    * @var string $when;
    *
    */
-  public $when = StrawberryRunnersPostProcessor::PRESAVE;
+  public $when = StrawberryRunnersPostProcessor::POSTSAVE;
 
 }
