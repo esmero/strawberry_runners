@@ -341,7 +341,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       // NOTE: floats are in the form of .1 so we need to remove the first 0.
       if (count($coos)) {
         $miniocr->startElement("p");
-        $miniocr->writeAttribute("xml:id", $pageid);
+        $miniocr->writeAttribute("xml:id", 'sequence_'.$pageid);
         $miniocr->writeAttribute("wh", ltrim($pwidth, 0) . " " . ltrim($pheight, 0));
         $miniocr->startElement("b");
         $page->registerXPathNamespace('ns', 'http://www.w3.org/1999/xhtml');
