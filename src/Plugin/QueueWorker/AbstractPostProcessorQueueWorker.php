@@ -243,15 +243,12 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $tobechained = FALSE;
     error_log(print_r($enabled_processor_output_types, true));
     if (array_key_exists('searchapi', $enabled_processor_output_types) && $enabled_processor_output_types['searchapi'] === 'searchapi') {
-      error_log("processor says this goes into Solr");
       $tobeindexed = TRUE;
     }
     if (array_key_exists('file', $enabled_processor_output_types) && $enabled_processor_output_types['file'] === 'file') {
-      error_log("processor says this goes into Solr");
       $tobeupdated = TRUE;
     }
     if (array_key_exists('plugin', $enabled_processor_output_types) && $enabled_processor_output_types['plugin'] === 'plugin') {
-      error_log("processor says this goes into Solr");
       $tobechained = TRUE;
     }
 
@@ -395,7 +392,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
               $childdata->{$input_argument} = $value;
               error_log("should add to queue {$childdata->plugin_config_entity_id}");
               error_log(var_export($childdata, TRUE));
-              Drupal::queue('strawberryrunners_process_index')
+              Drupal::queue('strawberryrunners_process_background')
                 ->createItem($childdata);
             }
           }
