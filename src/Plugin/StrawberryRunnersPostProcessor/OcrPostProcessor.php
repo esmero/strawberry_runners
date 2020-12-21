@@ -209,28 +209,91 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
       $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
 
+      //check if PDF is searchable: has DJVU file the layer TXTz?
+      //pdf2djvu -q --no-metadata -p 2 -j0 -o page2.djv some_file.pdf && djvudump page2.djv |grep TXTz |wc -l
+      //
       setlocale(LC_CTYPE, 'en_US.UTF-8');
-      $execstring = $this->buildExecutableCommand($io);
-      error_log($execstring);
-      if ($execstring) {
+      $execstring_checkSearchable = $this->buildExecutableCommand_checkSearchable($io);
+      error_log($execstring_checkSearchable);
+      if ($execstring_checkSearchable) {
         $backup_locale = setlocale(LC_CTYPE, '0');
         setlocale(LC_CTYPE, $backup_locale);
         // Support UTF-8 commands.
         // @see http://www.php.net/manual/en/function.shell-exec.php#85095
         shell_exec("LANG=en_US.utf-8");
-        $proc_output = $this->proc_execute($execstring, $timeout);
-        if (is_null($proc_output)) {
-          throw new \Exception("Could not execute {$execstring} or timed out");
+        $proc_output_checkS = $this->proc_execute($execstring_checkSearchable, $timeout);
+        if (is_null($proc_output_checkS)) {
+          throw new \Exception("Could not execute {$execstring_checkSearchable} or timed out");
         }
 
-        $miniocr = $this->hOCRtoMiniOCR($proc_output, $page_number);
-        error_log($miniocr);
-        $output = new \stdClass();
-        $output->searchapi = $miniocr;
-        $output->plugin = $miniocr;
-        $io->output = $output;
+        error_log($proc_output_checkS);
 
       }
+
+
+      if ($proc_output_checkS == 1) {
+
+        //if searchable run djvu2hocr
+        //
+        setlocale(LC_CTYPE, 'en_US.UTF-8');
+        $execstring_djvu2hocr = $this->buildExecutableCommand_djvu2hocr($io);
+        error_log($execstring_djvu2hocr);
+        if ($execstring_djvu2hocr) {
+          $backup_locale = setlocale(LC_CTYPE, '0');
+          setlocale(LC_CTYPE, $backup_locale);
+          // Support UTF-8 commands.
+          // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+          shell_exec("LANG=en_US.utf-8");
+          $proc_output = $this->proc_execute($execstring_djvu2hocr, $timeout);
+          if (is_null($proc_output)) {
+            throw new \Exception("Could not execute {$execstring_djvu2hocr} or timed out");
+          }
+
+          //djvu2hocr output uses ocrx_line while tesseract uses ocr_line
+          //
+          $proc_output_mod = str_replace('ocrx_line', 'ocr_line', $proc_output);
+
+          $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $page_number);
+          error_log($miniocr);
+          $output = new \stdClass();
+          $output->searchapi = $miniocr;
+          $output->plugin = $miniocr;
+          $io->output = $output;
+
+        }
+
+        //Do we have to remove djvu file?
+
+      }
+      else {
+
+        //if not searchable run tesseract
+        //
+        setlocale(LC_CTYPE, 'en_US.UTF-8');
+        $execstring = $this->buildExecutableCommand($io);
+        error_log($execstring);
+        if ($execstring) {
+          $backup_locale = setlocale(LC_CTYPE, '0');
+          setlocale(LC_CTYPE, $backup_locale);
+          // Support UTF-8 commands.
+          // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+          shell_exec("LANG=en_US.utf-8");
+          $proc_output = $this->proc_execute($execstring, $timeout);
+          if (is_null($proc_output)) {
+            throw new \Exception("Could not execute {$execstring} or timed out");
+          }
+
+          $miniocr = $this->hOCRtoMiniOCR($proc_output, $page_number);
+          error_log($miniocr);
+          $output = new \stdClass();
+          $output->searchapi = $miniocr;
+          $output->plugin = $miniocr;
+          $io->output = $output;
+
+        }
+
+      }
+
     }
     else {
       \throwException(new \InvalidArgumentException);
@@ -377,8 +440,129 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     return $miniocr->outputMemory(TRUE);
   }
 
+  /**
+   * Builds a clean Command string using a File path.
+   *
+   * @param \stdClass $io
+   *    $io->input needs to contain
+   *           \Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor::$input_property
+   *           \Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor::$input_arguments
+   *    $io->output will contain the result of the processor
+   *
+   * @return null|string
+   */
+  public function buildExecutableCommand_checkSearchable(\stdClass $io) {
+    $input_property = $this->pluginDefinition['input_property'];
+    $input_argument = $this->pluginDefinition['input_argument'];
+    // Sets the default page to 1 if not passed.
+    $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+    $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+    $config = $this->getConfiguration();
+    $execpath_pdf2djvu = '/usr/bin/pdf2djvu';
+    $arguments_pdf2djvu = '%file';
+    $execpath_djvudump = '/usr/bin/djvudump';
+    $arguments_djvudump = '%file';
+
+    if (empty($file_path)) {
+      return NULL;
+    }
+
+    // This run function executes a 2 step function
+    // First pdf2djvu -q --no-metadata -p 2 -j0 -o some_output_file.djv %file
+    // Second djvudump some_output_file.djv |grep TXTz |wc -l
+
+    $command = '';
+    $can_run_pdf2djvu = \Drupal::service('strawberryfield.utility')
+      ->verifyCommand($execpath_pdf2djvu);
+    $can_run_djvudump = \Drupal::service('strawberryfield.utility')
+      ->verifyCommand($execpath_djvudump);
+    $filename = pathinfo($file_path, PATHINFO_FILENAME);
+    $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
+    $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
+    $pdf2djvu_destination_filename = "{$sourcefolder}{$filename}_{$page_number}.djv";
+    if ($can_run_pdf2djvu &&
+      $can_run_djvudump &&
+      (strpos($arguments_pdf2djvu, '%file') !== FALSE) &&
+      (strpos($arguments_djvudump, '%file') !== FALSE)) {
+      $arguments_pdf2djvu = "-q --no-metadata -j0 -p {$page_number} -o $pdf2djvu_destination_filename " . $arguments_pdf2djvu;
+      $arguments_pdf2djvu = str_replace('%s', '', $arguments_pdf2djvu);
+      $arguments_pdf2djvu = str_replace_first('%file', '%s', $arguments_pdf2djvu);
+      $arguments_pdf2djvu = sprintf($arguments_pdf2djvu, $file_path);
+
+      $arguments_djvudump = str_replace('%s', '', $arguments_djvudump);
+      $arguments_djvudump = str_replace_first('%file', '%s', $arguments_djvudump);
+      $arguments_djvudump = sprintf($arguments_djvudump, $pdf2djvu_destination_filename);
+
+      $command_pdf2djvu = escapeshellcmd($execpath_pdf2djvu . ' ' . $arguments_pdf2djvu);
+      $command_djvudump = escapeshellcmd($execpath_djvudump . ' ' . $arguments_djvudump);
+
+      $command = $command_pdf2djvu . ' && ' . $command_djvudump . ' |grep TXTz |wc -l';
+
+    }
+    else {
+      error_log("missing arguments for OCR");
+    }
+    // Only return $command if it contains the original filepath somewhere
+    if (strpos($command, $file_path) !== FALSE) {
+      return $command;
+    }
+    return '';
+
+  }
+
+  /**
+   * Builds a clean Command string using a File path.
+   *
+   * @param \stdClass $io
+   *    $io->input needs to contain
+   *           \Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor::$input_property
+   *           \Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor::$input_arguments
+   *    $io->output will contain the result of the processor
+   *
+   * @return null|string
+   */
+  public function buildExecutableCommand_djvu2hocr(\stdClass $io) {
+    $input_property = $this->pluginDefinition['input_property'];
+    $input_argument = $this->pluginDefinition['input_argument'];
+    // Sets the default page to 1 if not passed.
+    $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+    $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+    $config = $this->getConfiguration();
+    $execpath_djvu2hocr = '/usr/bin/djvu2hocr';
+    $arguments_djvu2hocr = '%file';
+
+    if (empty($file_path)) {
+      return NULL;
+    }
+
+    // This run function executes a 1 step function
+    // First djvu2hocr some_output_file.djv
+
+    $command = '';
+    $can_run_djvu2hocr = \Drupal::service('strawberryfield.utility')
+      ->verifyCommand($execpath_djvu2hocr);
+    $filename = pathinfo($file_path, PATHINFO_FILENAME);
+    $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
+    $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
+    $pdf2djvu_destination_filename = "{$sourcefolder}{$filename}_{$page_number}.djv";
+    if ($can_run_djvu2hocr &&
+      (strpos($arguments_djvu2hocr, '%file') !== FALSE)) {
+
+      $arguments_djvu2hocr = str_replace('%s', '', $arguments_djvu2hocr);
+      $arguments_djvu2hocr = str_replace_first('%file', '%s', $arguments_djvu2hocr);
+      $arguments_djvu2hocr = sprintf($arguments_djvu2hocr, $pdf2djvu_destination_filename);
+
+      $command_djvu2hocr = escapeshellcmd($execpath_djvu2hocr . ' ' . $arguments_djvu2hocr);
+
+      $command = $command_djvu2hocr;
+
+    }
+    else {
+      error_log("missing arguments for OCR");
+    }
+
+    return $command;
+
+  }
+
 }
-
-
-
-
