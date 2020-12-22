@@ -38,6 +38,17 @@ interface StrawberryRunnersPostProcessorPluginInterface extends PluginInspection
   const BENCHMARK = 2;
 
   /**
+   * Different Types of Outputs a processor can have
+   */
+  const OUTPUT_TYPE = [
+    'subkey' => 'subkey',
+    'ownkey' => 'ownkey',
+    'file' => 'file',
+    'plugin' => 'plugin',
+    'searchapi' => 'searchapi'
+  ];
+
+  /**
    * Provides a list of Post Processor Plugins
    *
    * @param string $config_entity_id

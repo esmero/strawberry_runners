@@ -29,10 +29,9 @@ use Drupal\search_api\ParseMode\ParseModePluginManager;
  * Process the JSON payload provided by the webhook.
  *
  * @QueueWorker(
- *   id = "strawberryrunners_process_index",
+ *   id = "strawberryrunners_process_background",
  *   title = @Translation("Strawberry Runners Process to Index Queue Worker"),
- *   cron = {"time" = 180}
  * )
  */
-class IndexPostProcessorQueueWorker extends AbstractPostProcessorQueueWorker {
+class backgroundPostProcessorQueueWorker extends AbstractPostProcessorQueueWorker {
 }

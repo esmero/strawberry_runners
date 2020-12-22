@@ -8,7 +8,7 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
  *
  * @see 'https://www.drupal.org/node/3034742'
  */
-function strawberry_runners_update_8100() {
+function strawberry_runners_update_8001() {
   \Drupal::entityDefinitionUpdateManager()->installEntityType(new ConfigEntityType([
     'id' => 'strawberry_runners_postprocessor',
     'label' => new TranslatableMarkup('Strawberry Runners Post Processor Configuration'),
@@ -33,4 +33,18 @@ function strawberry_runners_update_8100() {
       'depth'
     ],
   ]));
+}
+/**
+ * Update 8002 - Create AMI Set entity.
+ */
+function strawberry_runners_update_8002() {
+
+  if(!db_table_exists('runneritem_entity')) {
+    \Drupal::entityTypeManager()->clearCachedDefinitions();
+    \Drupal::entityDefinitionUpdateManager()
+      ->installEntityType(\Drupal::entityTypeManager()->getDefinition('runneritem_entity'));
+  }
+  else {
+    return 'runner item entity already exists';
+  }
 }
