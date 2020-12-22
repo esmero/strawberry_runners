@@ -90,10 +90,28 @@ strawberryfield_runners.strawberry_runners_postprocessor.ocr:
     tesseract_arguments:
       type: string
       label: 'Any additional argument your executable binary requires'
+    pdf2djvu_arguments:
+      type: string
+      label: 'Any additional argument your executable binary requires'
+    djvudump_arguments:
+      type: string
+      label: 'Any additional argument your executable binary requires'
+    djvu2hocr_arguments:
+      type: string
+      label: 'Any additional argument your executable binary requires'
     path:
       type: string
       label: 'The path for he binary to execute'
     tesseract_path:
+      type: string
+      label: 'The path for he binary to execute'
+    pdf2djvu_path:
+      type: string
+      label: 'The path for he binary to execute'
+    djvudump_path:
+      type: string
+      label: 'The path for he binary to execute'
+    djvu2hocr_path:
       type: string
       label: 'The path for he binary to execute'
     output_type:
@@ -104,6 +122,9 @@ strawberryfield_runners.strawberry_runners_postprocessor.ocr:
       label: 'Where and how the output will be used'
       sequence:
         - type: string
+    processor_queue_type:
+      type: string
+      label: 'The queue to use for this processor'
     timeout:
       type: integer
       label: 'Timeout in seconds for this process'
