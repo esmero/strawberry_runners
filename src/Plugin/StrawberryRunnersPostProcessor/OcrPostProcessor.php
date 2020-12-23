@@ -328,8 +328,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
         }
 
-        //Do we have to remove djvu file?
-
       }
       else {
 
@@ -356,9 +354,43 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           $output->plugin = $miniocr;
           $io->output = $output;
 
+          //Remove png temporary file
+          $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+          $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+          $filename = pathinfo($file_path, PATHINFO_FILENAME);
+          $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
+          $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
+          $gs_destination_filename = "{$sourcefolder}{$filename}_{$page_number}.png";
+          setlocale(LC_CTYPE, 'en_US.UTF-8');
+          $execstring = "rm -f {$gs_destination_filename}";
+          error_log($execstring);
+          $backup_locale = setlocale(LC_CTYPE, '0');
+          setlocale(LC_CTYPE, $backup_locale);
+          // Support UTF-8 commands.
+          // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+          shell_exec("LANG=en_US.utf-8");
+          $proc_output = $this->proc_execute($execstring, $timeout);
+
         }
 
       }
+
+      //Remove djvu temporary file
+      $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+      $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+      $filename = pathinfo($file_path, PATHINFO_FILENAME);
+      $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
+      $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
+      $pdf2djvu_destination_filename = "{$sourcefolder}{$filename}_{$page_number}.djv";
+      setlocale(LC_CTYPE, 'en_US.UTF-8');
+      $execstring = "rm -f {$pdf2djvu_destination_filename}";
+      error_log($execstring);
+      $backup_locale = setlocale(LC_CTYPE, '0');
+      setlocale(LC_CTYPE, $backup_locale);
+      // Support UTF-8 commands.
+      // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+      shell_exec("LANG=en_US.utf-8");
+      $proc_output = $this->proc_execute($execstring, $timeout);
 
     }
     else {
@@ -507,7 +539,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
   }
 
   /**
-   * Builds a clean Command string using a File path.
+   * Builds a clean Command to check if PDF page is searchable
    *
    * @param \stdClass $io
    *    $io->input needs to contain
@@ -517,7 +549,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
    *
    * @return null|string
    */
-  public function buildExecutableCommand_checkSearchable(\stdClass $io) {
+  private function buildExecutableCommand_checkSearchable(\stdClass $io) {
     $input_property = $this->pluginDefinition['input_property'];
     $input_argument = $this->pluginDefinition['input_argument'];
     // Sets the default page to 1 if not passed.
@@ -577,7 +609,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
   }
 
   /**
-   * Builds a clean Command string using a File path.
+   * Builds a clean Command to extract hOCR from PDF page by djvu file
    *
    * @param \stdClass $io
    *    $io->input needs to contain
@@ -587,7 +619,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
    *
    * @return null|string
    */
-  public function buildExecutableCommand_djvu2hocr(\stdClass $io) {
+  private function buildExecutableCommand_djvu2hocr(\stdClass $io) {
     $input_property = $this->pluginDefinition['input_property'];
     $input_argument = $this->pluginDefinition['input_argument'];
     // Sets the default page to 1 if not passed.
