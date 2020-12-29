@@ -566,7 +566,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     }
     else {
-      error_log("missing arguments for OCR");
+      error_log("missing arguments for PDF2DJVU");
     }
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
@@ -624,7 +624,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     }
     else {
-      error_log("missing arguments for OCR");
+      error_log("missing arguments for djvu 2 OCR");
     }
 
     return $command;
