@@ -226,7 +226,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       return;
     }
     // Means we could pass also a file directly anytime
-    $data->filelocation = $filelocation;
+    $data->filepath = $filelocation;
 
 
     if (!isset($processor_config['output_destination']) || !is_array($processor_config['output_destination'])) {
@@ -243,15 +243,12 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $tobechained = FALSE;
     error_log(print_r($enabled_processor_output_types, true));
     if (array_key_exists('searchapi', $enabled_processor_output_types) && $enabled_processor_output_types['searchapi'] === 'searchapi') {
-      error_log("processor says this goes into Solr");
       $tobeindexed = TRUE;
     }
     if (array_key_exists('file', $enabled_processor_output_types) && $enabled_processor_output_types['file'] === 'file') {
-      error_log("processor says this goes into Solr");
       $tobeupdated = TRUE;
     }
     if (array_key_exists('plugin', $enabled_processor_output_types) && $enabled_processor_output_types['plugin'] === 'plugin') {
-      error_log("processor says this goes into Solr");
       $tobechained = TRUE;
     }
 
@@ -376,11 +373,19 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // contains a property contained in $output
         // If so we check if there is a single value or multiple ones
         // For each we enqueue a child using that property in its data
-
         // Possible input properties:
         // - Can come from the original Data (most likely)
         // - May be overriden by the $io->output, e.g when a processor generates a file that is not part of any node
-        $input_property_value = isset($io->output->plugin) && isset($io->output->plugin[$input_property]) ? $io->output->plugin[$input_property] : $data->{$input_property};
+        $input_property_value = isset($io->output->plugin) && isset($io->output->plugin[$input_property]) ? $io->output->plugin[$input_property] : NULL;
+        if ($input_property_value == NULL) {
+          error_log($input_property_value);
+          $input_property_value = isset($data->{$input_property}) ? $data->{$input_property} : NULL;
+        }
+        // If still null means the child is incompatible with the parent. We abort.
+        if ($input_property_value == NULL) {
+          error_log("{$childdata->plugin_config_entity_id} is incompatible with {$data->plugin_config_entity_id}, skipping");
+          continue;
+        }
         // Warning Diego. This may lead to a null
         $childdata->{$input_property} = $input_property_value;
         $childdata->plugin_config_entity_id = $postprocessor_config_entity->id();
@@ -395,7 +400,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
               $childdata->{$input_argument} = $value;
               error_log("should add to queue {$childdata->plugin_config_entity_id}");
               error_log(var_export($childdata, TRUE));
-              Drupal::queue('strawberryrunners_process_index')
+              Drupal::queue('strawberryrunners_process_background')
                 ->createItem($childdata);
             }
           }
@@ -492,7 +497,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
     // @NOTE: this is the only place where we just pass filelocation fixed instead of the
     // actual property named $input_property. Which may be weird?
-    $input->{$input_property} = $data->filelocation;
+    $input->{$input_property} = $data->filepath;
     $input->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
     // The Node UUID
     $input->nuuid = $data->nuuid;

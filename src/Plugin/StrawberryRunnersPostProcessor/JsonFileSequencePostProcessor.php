@@ -148,10 +148,14 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
         foreach ($io->input->metadata['flv:identify'] as $key => $sequence) {
           $page_number[] = $key;
         }
+      } elseif (isset($io->input->metadata['flv:pdfinfo']) && count($io->input->metadata['flv:pdfinfo']) > 0) {
+        foreach ($io->input->metadata['flv:pdfinfo'] as $key => $sequence) {
+          $page_number[] = $key;
+        }
       }
       // At least give it one page. (Should we?)
       if (empty($page_number)) {
-        $page_numbers[] = 1;
+        $page_number[] = 1;
       }
 
       $output = new \stdClass();
