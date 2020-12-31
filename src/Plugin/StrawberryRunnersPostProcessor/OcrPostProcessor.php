@@ -280,7 +280,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       //
       setlocale(LC_CTYPE, 'en_US.UTF-8');
       $execstring_checkSearchable = $this->buildExecutableCommand_checkSearchable($io);
-      error_log($execstring_checkSearchable);
+
       if ($execstring_checkSearchable) {
         $backup_locale = setlocale(LC_CTYPE, '0');
         setlocale(LC_CTYPE, $backup_locale);
@@ -292,8 +292,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           throw new \Exception("Could not execute {$execstring_checkSearchable} or timed out");
         }
 
-        error_log($proc_output_checkS);
-
       }
 
 
@@ -303,7 +301,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         //
         setlocale(LC_CTYPE, 'en_US.UTF-8');
         $execstring_djvu2hocr = $this->buildExecutableCommand_djvu2hocr($io);
-        error_log($execstring_djvu2hocr);
         if ($execstring_djvu2hocr) {
           $backup_locale = setlocale(LC_CTYPE, '0');
           setlocale(LC_CTYPE, $backup_locale);
@@ -320,7 +317,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           $proc_output_mod = str_replace('ocrx_line', 'ocr_line', $proc_output);
 
           $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $page_number);
-          error_log($miniocr);
           $output = new \stdClass();
           $output->searchapi = $miniocr;
           $output->plugin = $miniocr;
@@ -337,7 +333,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         //
         setlocale(LC_CTYPE, 'en_US.UTF-8');
         $execstring = $this->buildExecutableCommand($io);
-        error_log($execstring);
         if ($execstring) {
           $backup_locale = setlocale(LC_CTYPE, '0');
           setlocale(LC_CTYPE, $backup_locale);
@@ -350,7 +345,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           }
 
           $miniocr = $this->hOCRtoMiniOCR($proc_output, $page_number);
-          error_log($miniocr);
           $output = new \stdClass();
           $output->searchapi = $miniocr;
           $output->plugin = $miniocr;

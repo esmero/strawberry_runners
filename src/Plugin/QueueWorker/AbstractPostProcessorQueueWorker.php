@@ -241,7 +241,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $tobeindexed = FALSE;
     $tobeupdated = FALSE;
     $tobechained = FALSE;
-    error_log(print_r($enabled_processor_output_types, true));
+
     if (array_key_exists('searchapi', $enabled_processor_output_types) && $enabled_processor_output_types['searchapi'] === 'searchapi') {
       $tobeindexed = TRUE;
     }
@@ -332,7 +332,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         }
         if ($data->extract_attempts < 3) {
           $data->extract_attempts++;
-          Drupal::queue('strawberryrunners_process_index')->createItem($data);
+          Drupal::queue('strawberryrunners_process_index', TRUE)->createItem($data);
         }
         else {
           $message_params = [
@@ -347,8 +347,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       // This will not
       $io = $this->invokeProcessor($processor_instance, $data);
       error_log('we do not need to index this');
-      error_log(var_export($io, TRUE));
-      error_log('we do not need to index this');
     }
     // Means we got a file back from the processor
     if ($tobeupdated && isset($io->output->file) && !empty($io->output->file)) {
@@ -358,9 +356,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     // Chains a new Processor into the QUEUE, if there are any children
     if ($tobechained && isset($io->output->plugin) && !empty($io->output->plugin)) {
       error_log('Time to check on children');
-      error_log($data->plugin_config_entity_id);
       $childprocessors = $this->getChildProcessorIds($data->plugin_config_entity_id);
-      error_log(print_r($childprocessors, TRUE));
       foreach ($childprocessors as $plugin_info) {
         $childdata = clone $data; // So we do not touch original data
         /* @var  $strawberry_runners_postprocessor_config \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity */
@@ -390,7 +386,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $childdata->{$input_property} = $input_property_value;
         $childdata->plugin_config_entity_id = $postprocessor_config_entity->id();
         $input_argument_value = isset($io->output->plugin) && isset($io->output->plugin[$input_argument]) ? $io->output->plugin[$input_argument] : $data->{$input_argument};
-        error_log(print_r($input_argument_value, TRUE));
         if (is_array($input_argument_value)) {
           foreach ($input_argument_value as $value) {
             // Here is the catch.
@@ -399,8 +394,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             if (!is_array($value)) {
               $childdata->{$input_argument} = $value;
               error_log("should add to queue {$childdata->plugin_config_entity_id}");
-              error_log(var_export($childdata, TRUE));
-              Drupal::queue('strawberryrunners_process_background')
+              Drupal::queue('strawberryrunners_process_background', TRUE)
                 ->createItem($childdata);
             }
           }
@@ -600,8 +594,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    * @throws \Drupal\Core\TypedData\Exception\MissingDataException
    */
   public function updateNode(ContentEntityInterface $entity, stdClass $data, stdClass $io) {
-    error_log(print_r($data, TRUE));
-    error_log(print_r($io, TRUE));
+
     /** @var $itemfield \Drupal\strawberryfield\Plugin\Field\FieldType\StrawberryFieldItem */
 
     $itemfield = $entity->get($data->field_name)->get($data->field_delta);
