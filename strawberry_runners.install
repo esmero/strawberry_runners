@@ -37,7 +37,7 @@ function strawberry_runners_update_8001() {
 /**
  * Update 8002 - Create AMI Set entity.
  */
-function strawberry_runners_update_8002() {
+function strawberry_runners_update_8701() {
 
   if(!db_table_exists('runneritem_entity')) {
     \Drupal::entityTypeManager()->clearCachedDefinitions();
