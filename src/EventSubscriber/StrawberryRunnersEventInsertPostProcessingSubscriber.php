@@ -248,6 +248,7 @@ class StrawberryRunnersEventInsertPostProcessingSubscriber extends Strawberryfie
                     //@TODO also split $config['ado_type'] so we can check
                     $valid_ado_type = [];
                     $valid_ado_type = explode(',', $config['ado_type']);
+                    $valid_ado_type = array_map('trim', $valid_ado_type);
                     if (empty($config['ado_type']) || count(array_intersect($valid_ado_type, $sbf_type)) > 0) {
                       $valid_mimes = explode(',', $config['mime_type']);
                       if (
