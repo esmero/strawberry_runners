@@ -143,7 +143,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('The system path to the pdf2djvu binary that will be executed by this processor.'),
       '#default_value' => $this->getConfiguration()['path_pdf2djvu'],
       '#description' => t('A full system path to the pdf2djvu binary present in the same environment your PHP runs, e.g  <em>/usr/bin/pdf2djvu</em>'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
     $element['arguments_pdf2djvu'] = [
@@ -151,7 +151,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('Any additional argument for your pdf2djvu binary.'),
       '#default_value' => !empty($this->getConfiguration()['arguments_pdf2djvu']) ? $this->getConfiguration()['arguments_pdf2djvu'] : '%file',
       '#description' => t('Any arguments your binary requires to run. Use %file as replacement for the file that is output by the pdf2djvu binary.'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
     $element['path_djvudump'] = [
@@ -159,7 +159,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('The system path to the djvudump binary that will be executed by this processor.'),
       '#default_value' => $this->getConfiguration()['path_djvudump'],
       '#description' => t('A full system path to the djvudump binary present in the same environment your PHP runs, e.g  <em>/usr/bin/djvudump</em>'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
     $element['arguments_djvudump'] = [
@@ -167,7 +167,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('Any additional argument for your djvudump binary.'),
       '#default_value' => !empty($this->getConfiguration()['arguments_djvudump']) ? $this->getConfiguration()['arguments_djvudump'] : '%file',
       '#description' => t('Any arguments your binary requires to run. Use %file as replacement for the file that is output by the djvudump binary.'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
     $element['path_djvu2hocr'] = [
@@ -175,7 +175,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('The system path to the djvu2hocr binary that will be executed by this processor.'),
       '#default_value' => $this->getConfiguration()['path_djvu2hocr'],
       '#description' => t('A full system path to the djvu2hocr binary present in the same environment your PHP runs, e.g  <em>/usr/bin/djvu2hocr</em>'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
     $element['arguments_djvu2hocr'] = [
@@ -183,7 +183,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('Any additional argument for your djvu2hocr binary.'),
       '#default_value' => !empty($this->getConfiguration()['arguments_djvu2hocr']) ? $this->getConfiguration()['arguments_djvu2hocr'] : '%file',
       '#description' => t('Any arguments your binary requires to run. Use %file as replacement for the file that is output by the djvu2hocr binary.'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
 
