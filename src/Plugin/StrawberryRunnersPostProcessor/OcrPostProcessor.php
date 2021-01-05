@@ -279,23 +279,25 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       //pdf2djvu -q --no-metadata -p 2 -j0 -o page2.djv some_file.pdf && djvudump page2.djv |grep TXTz |wc -l
       //
       setlocale(LC_CTYPE, 'en_US.UTF-8');
-      $execstring_checkSearchable = $this->buildExecutableCommand_checkSearchable($io);
+      $execstring_check_searchable = $this->buildExecutableCommand_checkSearchable($io);
+      // assume its not there/won't work.
+      $proc_output_check_searchable = 0;
 
-      if ($execstring_checkSearchable) {
+      if ($execstring_check_searchable) {
         $backup_locale = setlocale(LC_CTYPE, '0');
         setlocale(LC_CTYPE, $backup_locale);
         // Support UTF-8 commands.
         // @see http://www.php.net/manual/en/function.shell-exec.php#85095
         shell_exec("LANG=en_US.utf-8");
-        $proc_output_checkS = $this->proc_execute($execstring_checkSearchable, $timeout);
-        if (is_null($proc_output_checkS)) {
-          throw new \Exception("Could not execute {$execstring_checkSearchable} or timed out");
+        $proc_output_check_searchable = $this->proc_execute($execstring_check_searchable, $timeout);
+        if (is_null($proc_output_check_searchable)) {
+          throw new \Exception("Could not execute {$execstring_check_searchable} or timed out");
         }
 
       }
 
 
-      if ($proc_output_checkS == 1) {
+      if ($proc_output_check_searchable == 1) {
 
         //if searchable run djvu2hocr
         //
