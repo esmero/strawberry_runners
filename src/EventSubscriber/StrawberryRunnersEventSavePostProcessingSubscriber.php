@@ -251,6 +251,7 @@ class StrawberryRunnersEventSavePostProcessingSubscriber extends Strawberryfield
                     $valid_ado_type = array_map('trim', $valid_ado_type);
                     if (empty($config['ado_type']) || count(array_intersect($valid_ado_type, $sbf_type)) > 0) {
                       $valid_mimes = explode(',', $config['mime_type']);
+                      $valid_mimes = array_map('trim', $valid_mimes);
                       if (
                         (!isset($asstructure['flv:' . $activePluginId]) || empty($asstructure['flv:' . $activePluginId])) &&
                         (

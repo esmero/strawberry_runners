@@ -207,7 +207,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $file = $this->entityTypeManager->getStorage('file')->load($data->fid);
     // 0 byte files have checksum, check what it is!
     if ($file === NULL || !isset($data->metadata['checksum'])) {
-      error_log('Sorry the file does not exist or has no checksum yet. We really need the checksum');
+      $this->logger->log(LogLevel::ERROR, 'Sorry the file ID @fileid does not exist or has no checksum yet. We really need the checksum', [
+        '@fileid' => $data->fid,
+      ]);
       return;
     }
 
@@ -216,7 +218,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ->load($data->nid);
 
     if (!$entity) {
-      error_log('Sorry the Node ID passed to this processor does not exist.');
+      $this->logger->log(LogLevel::ERROR, 'Sorry the Node ID @nodeid passed to this processor does not exist.', [
+        '@nodeid' => $data->nid,
+      ]);
+
     }
 
     //@TODO should we wrap this around a try catch?
@@ -280,7 +285,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
         // Check if we already have this entry in Solr
         if ($inindex !== 0) {
-          error_log('Already in search index, skipping');
+          $this->logger->log(LogLevel::INFO, 'Already in index so skipping.');
         }
         $inkeystore = TRUE;
         // Skip file if element for every language is found in key_value collection.
@@ -311,9 +316,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             // Eventually we will want to have different outputs per language?
             // But maybe not for HOCR. since the doc will be the same.
             foreach ($item_ids as $item_id) {
-              error_log('processing just run');
-              error_log('writing to keyvalue');
-              error_log($item_id);
               $this->keyValue->get($keyvalue_collection)
                 ->set($item_id, $toindex);
             }
@@ -332,7 +334,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         }
         if ($data->extract_attempts < 3) {
           $data->extract_attempts++;
-          Drupal::queue('strawberryrunners_process_index', TRUE)->createItem($data);
+          Drupal::queue('strawberryrunners_process_index', TRUE)
+            ->createItem($data);
         }
         else {
           $message_params = [
@@ -346,16 +349,13 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     else {
       // This will not
       $io = $this->invokeProcessor($processor_instance, $data);
-      error_log('we do not need to index this');
     }
     // Means we got a file back from the processor
     if ($tobeupdated && isset($io->output->file) && !empty($io->output->file)) {
       $this->updateNode($entity, $data, $io);
-      error_log('we got a file');
     }
     // Chains a new Processor into the QUEUE, if there are any children
     if ($tobechained && isset($io->output->plugin) && !empty($io->output->plugin)) {
-      error_log('Time to check on children');
       $childprocessors = $this->getChildProcessorIds($data->plugin_config_entity_id);
       foreach ($childprocessors as $plugin_info) {
         $childdata = clone $data; // So we do not touch original data
@@ -374,12 +374,15 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // - May be overriden by the $io->output, e.g when a processor generates a file that is not part of any node
         $input_property_value = isset($io->output->plugin) && isset($io->output->plugin[$input_property]) ? $io->output->plugin[$input_property] : NULL;
         if ($input_property_value == NULL) {
-          error_log($input_property_value);
           $input_property_value = isset($data->{$input_property}) ? $data->{$input_property} : NULL;
         }
         // If still null means the child is incompatible with the parent. We abort.
         if ($input_property_value == NULL) {
-          error_log("{$childdata->plugin_config_entity_id} is incompatible with {$data->plugin_config_entity_id}, skipping");
+          $this->logger->log(LogLevel::WARNING, 'Sorry @childplugin is  incompatible with @parentplugin, skipping.', [
+            '@parentplugin' => $data->plugin_config_entity_id,
+            '@childplugin' => $childdata->plugin_config_entity_id,
+
+          ]);
           continue;
         }
         // Warning Diego. This may lead to a null
@@ -393,7 +396,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             // Input Properties matching always need to be one
             if (!is_array($value)) {
               $childdata->{$input_argument} = $value;
-              error_log("should add to queue {$childdata->plugin_config_entity_id}");
               Drupal::queue('strawberryrunners_process_background', TRUE)
                 ->createItem($childdata);
             }
@@ -439,7 +441,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     }
 
     if (!$templocation) {
-      $this->loggerFactory->get('strawberry_runners')->warning(
+      $this->logger->warning(
         'Could not adquire a local accessible location for text extraction for file with URL @fileurl',
         [
           '@fileurl' => $file->getFileUri(),
@@ -502,7 +504,16 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     //@TODO implement the TEST and BENCHMARK logic here
     // RUN should return exit codes so we can know if something failed
     // And totally discard indexing.
-    $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
+    try {
+      $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
+    } catch (\Exception $exception) {
+      $this->logger->error('@plugin id threw an exception while trying to call ::run for Node UUID @nodeuuid with message: @msg', [
+          '@msg' => $exception->getMessage(),
+          '@plugin' => $processor_instance->getPluginId(),
+          '@nodeuuid' => $input->nuuid,
+        ]
+      );
+    }
     return $io;
   }
 
