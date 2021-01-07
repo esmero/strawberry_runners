@@ -196,12 +196,10 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
     $output_destination = $config['output_destination'];
     $timeout = $config['timeout']; // in seconds
     // TODO how do we map $input_argument to the callable executable binary?
-    error_log('run system binary');
-    error_log($io->input->{$input_property});
     if (isset($io->input->{$input_property})) {
       setlocale(LC_CTYPE, 'en_US.UTF-8');
       $execstring = $this->buildExecutableCommand($io);
-      error_log($execstring);
+
       if ($execstring) {
         $backup_locale = setlocale(LC_CTYPE, '0');
         setlocale(LC_CTYPE, $backup_locale);
@@ -216,7 +214,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
 
         // If this should generate
         if (($output_type == 'entity:file') && in_array('file', $output_destination)) {
-          error_log($this->out_file_path);
+
           if (!file_exists($this->out_file_path)) {
             throw new FileNotExistsException('The output file for this processor failed to be generated and was required');
           }
@@ -262,14 +260,13 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
     if (($file_path) && ($output_type == 'entity:file') && in_array('file', $output_destination)) {
       $extension = '';
       $pos = strpos(utf8_encode($arguments), utf8_encode('%outfile'));
-      if ( $pos === FALSE) {
-        error_log('ups, no input?');
+      if ($pos === FALSE) {
+        // No input, returning
         return NULL;
       }
       //Ok, let's try to get the an extension if there is one
       // will be 4 characters after
       $extension = substr($arguments, (int) $pos+8,5);
-      error_log('the extension:'.$extension);
       $extension = trim($extension);
       $extension = (strpos($extension,'.') === 0) && strlen($extension) >= 4 ? $extension : '';
 
@@ -277,13 +274,12 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
       $this->out_file_path = $out_file_path.$extension;
     }
 
-    error_log('verify!'.(int) \Drupal::service('strawberryfield.utility')->verifyCommand($execpath));
     if (empty($file_path)) {
       return NULL;
     }
 
     if (\Drupal::service('strawberryfield.utility')->verifyCommand($execpath) && (strpos($arguments, '%file' ) !== FALSE)) {
-      error_log('its a command, well well');
+
       $arguments = str_replace('%s','', $arguments);
       $arguments = str_replace_first('%file','%s', $arguments);
       $arguments = str_replace_first('%outfile','%s', $arguments);
@@ -293,9 +289,9 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
       } else {
         $arguments = sprintf($arguments, $file_path);
       }
-      error_log($arguments);
+
       $command = escapeshellcmd($execpath.' '.$arguments);
-      error_log($command);
+
     }
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== false) { return $command;}

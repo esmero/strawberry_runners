@@ -21,6 +21,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Field\FieldTypePluginManager;
 use GuzzleHttp\Client;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Plugin\PluginWithFormsTrait;
 
@@ -58,6 +59,13 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
    */
   protected $fileSystem;
 
+  /**
+   * The logger service.
+   *
+   * @var \Psr\Log\LoggerInterface
+   */
+  protected $logger;
+
   public function __construct(
     array $configuration,
     string $plugin_id,
@@ -66,7 +74,8 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     EntityTypeBundleInfoInterface $entityTypeBundleInfo,
     Client $httpClient,
     ConfigFactoryInterface $config_factory,
-    FileSystemInterface $file_system
+    FileSystemInterface $file_system,
+    LoggerInterface $logger
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->entityTypeBundleInfo = $entityTypeBundleInfo;
@@ -78,6 +87,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     // \Drupal\strawberry_runners\Plugin\QueueWorker\IndexPostProcessorQueueWorker::ensureFileAvailability
     $this->fileSystem = $file_system;
     $this->temporary_directory = $this->fileSystem->getTempDirectory();
+    $this->logger = $logger;
 
   }
 
@@ -91,7 +101,8 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       $container->get('entity_type.bundle.info'),
       $container->get('http_client'),
       $container->get('config.factory'),
-      $container->get('file_system')
+      $container->get('file_system'),
+      $container->get('logger.channel.strawberry_runners')
     );
   }
 
@@ -172,7 +183,6 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       }
     }
     $status = proc_get_status($handle);
-    error_log(var_export($status,true));
     $this->kill($status['pid']);
     proc_close($handle);
 

@@ -269,7 +269,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
     $config = $this->getConfiguration();
     $timeout = $config['timeout']; // in seconds
-    error_log('run OCR');
 
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
@@ -422,7 +421,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     }
     else {
-      error_log("missing arguments for OCR");
+      // missing arguments for OCR. Not sure if to log this..
     }
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
@@ -438,7 +437,9 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     libxml_clear_errors();
     libxml_use_internal_errors($internalErrors);
     if (!$hocr) {
-      error_log('Could not convert HOCR to MiniOCR, sources is not valid XML');
+      $this->logger->warning('Sorry for @pageid we could not decode/extract HOCR as XML', [
+        '@pageid' => $pageid
+      ]);
       return NULL;
     }
     $miniocr = new \XMLWriter();
@@ -456,7 +457,9 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       }
       if ($pagetitle == NULL) {
         $miniocr->flush();
-        error_log('Could not convert HOCR to MiniOCR, no valid page dimensions found');
+        $this->logger->warning('Could not convert HOCR to MiniOCR for @pageid, no valid page dimensions found', [
+          '@pageid' => $pageid
+        ]);
         return NULL;
       }
       $coos = explode(" ", $pagetitle);
@@ -562,7 +565,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     }
     else {
-      error_log("missing arguments for PDF2DJVU");
+      //"missing arguments for PDF2DJVU"
     }
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
@@ -620,7 +623,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     }
     else {
-      error_log("missing arguments for djvu 2 OCR");
+     //"missing arguments for djvu 2 OCR");
     }
 
     return $command;
