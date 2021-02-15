@@ -22,6 +22,7 @@ use Drupal\file\FileInterface;
 use Drupal\search_api\Query\QueryInterface;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberryfield\Semantic\ActivityStream;
+use Drupal\Core\File\Exception\FileException;
 use Exception;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
@@ -224,10 +225,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
     }
 
-    //@TODO should we wrap this around a try catch?
+
     $filelocation = $this->ensureFileAvailability($file);
 
-    if ($filelocation === NULL) {
+    if ($filelocation === FALSE) {
       return;
     }
     // Means we could pass also a file directly anytime
@@ -411,7 +412,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    * @param \Drupal\file\FileInterface $file
    *   The File URI to look at.
    *
-   * @return array
+   * @return string|FALSE
    *   Output of processing chain for a particular file.
    */
   private function ensureFileAvailability(FileInterface $file) {
@@ -430,19 +431,27 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       );
     }
     else {
-      $templocation = $this->fileSystem->copy(
-        $uri,
-        'temporary://sbr_' . $cache_key . '_' . basename($uri),
-        FileSystemInterface::EXISTS_REPLACE
-      );
-      $templocation = $this->fileSystem->realpath(
-        $templocation
-      );
+      try {
+        $templocation = $this->fileSystem->copy(
+          $uri,
+          'temporary://sbr_' . $cache_key . '_' . basename($uri),
+          FileSystemInterface::EXISTS_REPLACE
+        );
+        $templocation = $this->fileSystem->realpath(
+          $templocation
+        );
+      }
+      catch (FileException $exception) {
+        // Means the file is not longer there
+        // This happens if a file was added and shortly after that removed and replace
+        // by a new one.
+        $templocation = FALSE;
+      }
     }
 
     if (!$templocation) {
       $this->logger->warning(
-        'Could not adquire a local accessible location for text extraction for file with URL @fileurl',
+        'Could not adquire a local accessible location for text extraction for file with URL @fileurl. File may no longer exist.',
         [
           '@fileurl' => $file->getFileUri(),
         ]
