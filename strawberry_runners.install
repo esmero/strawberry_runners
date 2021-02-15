@@ -1,14 +1,16 @@
 <?PHP
 use Drupal\Core\Config\Entity\ConfigEntityType;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\Core\Database\Database;
+
 /**
- * Implements hook_update_N().
+ * Update 8901
  *
  * Installs strawberry_runners_postprocessor config entity for saving post processor specs.
  *
  * @see 'https://www.drupal.org/node/3034742'
  */
-function strawberry_runners_update_8001() {
+function strawberry_runners_update_8901() {
   \Drupal::entityDefinitionUpdateManager()->installEntityType(new ConfigEntityType([
     'id' => 'strawberry_runners_postprocessor',
     'label' => new TranslatableMarkup('Strawberry Runners Post Processor Configuration'),
@@ -34,17 +36,33 @@ function strawberry_runners_update_8001() {
     ],
   ]));
 }
-/**
- * Update 8002 - Create AMI Set entity.
- */
-function strawberry_runners_update_8002() {
 
-  if(!db_table_exists('runneritem_entity')) {
+/**
+ * Update 8902 - Create runneritem_entity.
+ */
+function strawberry_runners_update_8902() {
+  $schema = Database::getConnection()->schema();
+  if (!$schema->tableExists('runneritem_entity')) {
     \Drupal::entityTypeManager()->clearCachedDefinitions();
     \Drupal::entityDefinitionUpdateManager()
       ->installEntityType(\Drupal::entityTypeManager()->getDefinition('runneritem_entity'));
   }
   else {
     return 'runner item entity already exists';
+  }
+}
+
+/**
+ * Update 8903 - Remove runneritem_entity.
+ */
+function strawberry_runners_update_8903() {
+  if (\Drupal::entityTypeManager()->getDefinition('runneritem_entity', FALSE)) {
+    \Drupal::entityTypeManager()->clearCachedDefinitions();
+    \Drupal::entityDefinitionUpdateManager()
+      ->uninstallEntityType(\Drupal::entityTypeManager()->getDefinition('runneritem_entity'));
+    return 'runner item entity removed. Not needed in 2021';
+  }
+  else {
+    return 'runner item entity was not present, so no need to uninstall';
   }
 }

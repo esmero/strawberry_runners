@@ -248,8 +248,10 @@ class StrawberryRunnersEventSavePostProcessingSubscriber extends Strawberryfield
                     //@TODO also split $config['ado_type'] so we can check
                     $valid_ado_type = [];
                     $valid_ado_type = explode(',', $config['ado_type']);
+                    $valid_ado_type = array_map('trim', $valid_ado_type);
                     if (empty($config['ado_type']) || count(array_intersect($valid_ado_type, $sbf_type)) > 0) {
                       $valid_mimes = explode(',', $config['mime_type']);
+                      $valid_mimes = array_map('trim', $valid_mimes);
                       if (
                         (!isset($asstructure['flv:' . $activePluginId]) || empty($asstructure['flv:' . $activePluginId])) &&
                         (
@@ -293,7 +295,7 @@ class StrawberryRunnersEventSavePostProcessingSubscriber extends Strawberryfield
                         // And really what defines is the type of worker we want
                         // But all at the end will eventually feed the ::run() method
                         // We want to make this a full blown service.
-                        \Drupal::queue('strawberryrunners_process_index')
+                        \Drupal::queue('strawberryrunners_process_index', TRUE)
                           ->createItem($data);
                       }
                     }
@@ -308,7 +310,7 @@ class StrawberryRunnersEventSavePostProcessingSubscriber extends Strawberryfield
     $current_class = get_called_class();
     $event->setProcessedBy($current_class, TRUE);
     if ($this->account->hasPermission('display strawberry messages')) {
-      $this->messenger->addStatus(t('Post processor was invoked'));
+      $this->messenger->addStatus($this->t('Post processor was invoked'));
     }
 
   }

@@ -30,7 +30,7 @@ use Drupal\search_api\ParseMode\ParseModePluginManager;
  *
  * @QueueWorker(
  *   id = "strawberryrunners_process_background",
- *   title = @Translation("Strawberry Runners Process to Index Queue Worker"),
+ *   title = @Translation("Strawberry Runners Process on Background Queue Worker"),
  * )
  */
 class backgroundPostProcessorQueueWorker extends AbstractPostProcessorQueueWorker {

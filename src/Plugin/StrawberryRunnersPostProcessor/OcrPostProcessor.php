@@ -143,7 +143,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('The system path to the pdf2djvu binary that will be executed by this processor.'),
       '#default_value' => $this->getConfiguration()['path_pdf2djvu'],
       '#description' => t('A full system path to the pdf2djvu binary present in the same environment your PHP runs, e.g  <em>/usr/bin/pdf2djvu</em>'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
     $element['arguments_pdf2djvu'] = [
@@ -151,7 +151,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('Any additional argument for your pdf2djvu binary.'),
       '#default_value' => !empty($this->getConfiguration()['arguments_pdf2djvu']) ? $this->getConfiguration()['arguments_pdf2djvu'] : '%file',
       '#description' => t('Any arguments your binary requires to run. Use %file as replacement for the file that is output by the pdf2djvu binary.'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
     $element['path_djvudump'] = [
@@ -159,7 +159,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('The system path to the djvudump binary that will be executed by this processor.'),
       '#default_value' => $this->getConfiguration()['path_djvudump'],
       '#description' => t('A full system path to the djvudump binary present in the same environment your PHP runs, e.g  <em>/usr/bin/djvudump</em>'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
     $element['arguments_djvudump'] = [
@@ -167,7 +167,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('Any additional argument for your djvudump binary.'),
       '#default_value' => !empty($this->getConfiguration()['arguments_djvudump']) ? $this->getConfiguration()['arguments_djvudump'] : '%file',
       '#description' => t('Any arguments your binary requires to run. Use %file as replacement for the file that is output by the djvudump binary.'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
     $element['path_djvu2hocr'] = [
@@ -175,7 +175,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('The system path to the djvu2hocr binary that will be executed by this processor.'),
       '#default_value' => $this->getConfiguration()['path_djvu2hocr'],
       '#description' => t('A full system path to the djvu2hocr binary present in the same environment your PHP runs, e.g  <em>/usr/bin/djvu2hocr</em>'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
     $element['arguments_djvu2hocr'] = [
@@ -183,7 +183,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('Any additional argument for your djvu2hocr binary.'),
       '#default_value' => !empty($this->getConfiguration()['arguments_djvu2hocr']) ? $this->getConfiguration()['arguments_djvu2hocr'] : '%file',
       '#description' => t('Any arguments your binary requires to run. Use %file as replacement for the file that is output by the djvu2hocr binary.'),
-      '#required' => TRUE,
+      '#required' => FALSE,
     ];
 
 
@@ -269,7 +269,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
     $config = $this->getConfiguration();
     $timeout = $config['timeout']; // in seconds
-    error_log('run OCR');
 
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
@@ -279,31 +278,30 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       //pdf2djvu -q --no-metadata -p 2 -j0 -o page2.djv some_file.pdf && djvudump page2.djv |grep TXTz |wc -l
       //
       setlocale(LC_CTYPE, 'en_US.UTF-8');
-      $execstring_checkSearchable = $this->buildExecutableCommand_checkSearchable($io);
-      error_log($execstring_checkSearchable);
-      if ($execstring_checkSearchable) {
+      $execstring_check_searchable = $this->buildExecutableCommand_checkSearchable($io);
+      // assume its not there/won't work.
+      $proc_output_check_searchable = 0;
+
+      if ($execstring_check_searchable) {
         $backup_locale = setlocale(LC_CTYPE, '0');
         setlocale(LC_CTYPE, $backup_locale);
         // Support UTF-8 commands.
         // @see http://www.php.net/manual/en/function.shell-exec.php#85095
         shell_exec("LANG=en_US.utf-8");
-        $proc_output_checkS = $this->proc_execute($execstring_checkSearchable, $timeout);
-        if (is_null($proc_output_checkS)) {
-          throw new \Exception("Could not execute {$execstring_checkSearchable} or timed out");
+        $proc_output_check_searchable = $this->proc_execute($execstring_check_searchable, $timeout);
+        if (is_null($proc_output_check_searchable)) {
+          throw new \Exception("Could not execute {$execstring_check_searchable} or timed out");
         }
-
-        error_log($proc_output_checkS);
 
       }
 
 
-      if ($proc_output_checkS == 1) {
+      if ($proc_output_check_searchable == 1) {
 
         //if searchable run djvu2hocr
         //
         setlocale(LC_CTYPE, 'en_US.UTF-8');
         $execstring_djvu2hocr = $this->buildExecutableCommand_djvu2hocr($io);
-        error_log($execstring_djvu2hocr);
         if ($execstring_djvu2hocr) {
           $backup_locale = setlocale(LC_CTYPE, '0');
           setlocale(LC_CTYPE, $backup_locale);
@@ -320,7 +318,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           $proc_output_mod = str_replace('ocrx_line', 'ocr_line', $proc_output);
 
           $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $page_number);
-          error_log($miniocr);
           $output = new \stdClass();
           $output->searchapi = $miniocr;
           $output->plugin = $miniocr;
@@ -335,7 +332,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         //
         setlocale(LC_CTYPE, 'en_US.UTF-8');
         $execstring = $this->buildExecutableCommand($io);
-        error_log($execstring);
         if ($execstring) {
           $backup_locale = setlocale(LC_CTYPE, '0');
           setlocale(LC_CTYPE, $backup_locale);
@@ -348,7 +344,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           }
 
           $miniocr = $this->hOCRtoMiniOCR($proc_output, $page_number);
-          error_log($miniocr);
           $output = new \stdClass();
           $output->searchapi = $miniocr;
           $output->plugin = $miniocr;
@@ -458,7 +453,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     }
     else {
-      error_log("missing arguments for OCR");
+      // missing arguments for OCR. Not sure if to log this..
     }
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
@@ -474,7 +469,9 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     libxml_clear_errors();
     libxml_use_internal_errors($internalErrors);
     if (!$hocr) {
-      error_log('Could not convert HOCR to MiniOCR, sources is not valid XML');
+      $this->logger->warning('Sorry for @pageid we could not decode/extract HOCR as XML', [
+        '@pageid' => $pageid
+      ]);
       return NULL;
     }
     $miniocr = new \XMLWriter();
@@ -492,7 +489,9 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       }
       if ($pagetitle == NULL) {
         $miniocr->flush();
-        error_log('Could not convert HOCR to MiniOCR, no valid page dimensions found');
+        $this->logger->warning('Could not convert HOCR to MiniOCR for @pageid, no valid page dimensions found', [
+          '@pageid' => $pageid
+        ]);
         return NULL;
       }
       $coos = explode(" ", $pagetitle);
@@ -598,7 +597,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     }
     else {
-      error_log("missing arguments for OCR");
+      //"missing arguments for PDF2DJVU"
     }
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
@@ -656,7 +655,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     }
     else {
-      error_log("missing arguments for OCR");
+     //"missing arguments for djvu 2 OCR");
     }
 
     return $command;
