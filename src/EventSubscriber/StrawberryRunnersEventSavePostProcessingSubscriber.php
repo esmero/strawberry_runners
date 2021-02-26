@@ -152,9 +152,10 @@ class StrawberryRunnersEventSavePostProcessingSubscriber extends Strawberryfield
   public function onEntitySave(StrawberryfieldCrudEvent $event) {
 
     /* @var $plugin_config_entities \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity[] */
-    $plugin_config_entities = $this->entityTypeManager->getListBuilder('strawberry_runners_postprocessor')->load();
+    $plugin_config_entities = $this->entityTypeManager->getListBuilder('strawberry_runners_postprocessor')
+      ->load();
     $active_plugins = [];
-    foreach($plugin_config_entities as $plugin_config_entity) {
+    foreach ($plugin_config_entities as $plugin_config_entity) {
       // Only get first level (no Parents) and Active ones.
       if ($plugin_config_entity->isActive() && $plugin_config_entity->getParent() == '') {
         $entity_id = $plugin_config_entity->id();
@@ -207,10 +208,10 @@ class StrawberryRunnersEventSavePostProcessingSubscriber extends Strawberryfield
    ]*/
 
     if (isset($active_plugins['entity:file'])) {
-      foreach($active_plugins['entity:file'] as $activePluginId => $config) {
+      foreach ($active_plugins['entity:file'] as $activePluginId => $config) {
         if ($config['source_type'] == 'asstructure') {
           $askeys = array_filter($config['jsonkey']);
-          foreach($askeys as $key => $value) {
+          foreach ($askeys as $key => $value) {
             $askeymap[$key][$activePluginId] = $config;
           }
         }
@@ -239,8 +240,7 @@ class StrawberryRunnersEventSavePostProcessingSubscriber extends Strawberryfield
                 if (isset($asstructure['dr:fid']) && is_numeric($asstructure['dr:fid'])) {
                   foreach ($activePlugins as $activePluginId => $config) {
                     // Never ever run a processor over its own creation
-                    if ($asstructure["dr:for"] == 'flv:'.$activePluginId) {
-                      error_log('skipping '. $asstructure['dr:fid']);
+                    if ($asstructure["dr:for"] == 'flv:' . $activePluginId) {
                       continue;
                     }
 
@@ -252,12 +252,8 @@ class StrawberryRunnersEventSavePostProcessingSubscriber extends Strawberryfield
                     if (empty($config['ado_type']) || count(array_intersect($valid_ado_type, $sbf_type)) > 0) {
                       $valid_mimes = explode(',', $config['mime_type']);
                       $valid_mimes = array_map('trim', $valid_mimes);
-                      if (
-                        (!isset($asstructure['flv:' . $activePluginId]) || empty($asstructure['flv:' . $activePluginId])) &&
-                        (
-                          empty($valid_mimes) ||
-                          (isset($asstructure["dr:mimetype"]) && in_array($asstructure["dr:mimetype"], $valid_mimes))
-                        )
+                      if (empty($asstructure['flv:' . $activePluginId]) &&
+                        (empty($valid_mimes) || (isset($asstructure["dr:mimetype"]) && in_array($asstructure["dr:mimetype"], $valid_mimes)))
                       ) {
                         $data = new \stdClass();
                         $data->fid = $asstructure['dr:fid'];
@@ -312,22 +308,6 @@ class StrawberryRunnersEventSavePostProcessingSubscriber extends Strawberryfield
     if ($this->account->hasPermission('display strawberry messages')) {
       $this->messenger->addStatus($this->t('Post processor was invoked'));
     }
-
   }
 
-  /**
-   * Make sure no HTML or Javascript will be passed around.
-   *
-   * @param string $string
-   *   A value returned by a processor
-   *
-   * @return string
-   *   The value sanitized.
-   */
-  private function sanitizeValue($string) {
-    if (!Unicode::validateUtf8($string)) {
-      $string = Html::escape(utf8_encode($string));
-    }
-    return $string;
-  }
 }
