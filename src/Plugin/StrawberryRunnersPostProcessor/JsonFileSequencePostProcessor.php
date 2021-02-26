@@ -37,7 +37,7 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
         'source_type' => 'asstructure',
         'mime_type' => ['application/pdf'],
         'output_type' => 'json',
-        'output_destination' => ['plugin' =>'plugin'],
+        'output_destination' => ['plugin' => 'plugin'],
       ] + parent::defaultConfiguration();
   }
 
@@ -82,7 +82,7 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
     // Settings for contains all the values
     $element['output_destination'] = [
       '#type' => 'value',
-      '#default_value' => $this->defaultConfiguration()['output_destination']
+      '#default_value' => $this->defaultConfiguration()['output_destination'],
     ];
 
     $element['mime_type'] = [
@@ -147,7 +147,8 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
         foreach ($io->input->metadata['flv:identify'] as $key => $sequence) {
           $page_number[] = $key;
         }
-      } elseif (isset($io->input->metadata['flv:pdfinfo']) && count($io->input->metadata['flv:pdfinfo']) > 0) {
+      }
+      elseif (isset($io->input->metadata['flv:pdfinfo']) && count($io->input->metadata['flv:pdfinfo']) > 0) {
         foreach ($io->input->metadata['flv:pdfinfo'] as $key => $sequence) {
           $page_number[] = $key;
         }
@@ -162,9 +163,10 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
       $io->output = $output;
     }
     else {
-      throw new \InvalidArgumentException(\sprintf("Invalid arguments passed to %s",$this->getPluginId()));
+      throw new \InvalidArgumentException(\sprintf("Invalid arguments passed to %s", $this->getPluginId()));
     }
   }
+
 }
 
 
