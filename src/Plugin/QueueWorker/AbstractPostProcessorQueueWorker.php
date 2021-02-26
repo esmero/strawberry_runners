@@ -634,7 +634,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         ];
         $this->logger->log(
           LogLevel::ERROR,
-          'Strawberry Runners Processing failed to update Node and add @newfile_path with message: @message File id @file_id at Node @entity_id.',
+          'Strawberry Runners Processing failed to update Node and add @newfile_path, message: @message for File ID @file_id at Node ID @entity_id.',
           $message_params
         );
       }
@@ -647,7 +647,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ];
       $this->logger->log(
         LogLevel::INFO,
-        'Strawberry Runners Processing decided to not update Node and add @newfile_path with because the source was marked already as processed. No action is required',
+        'Strawberry Runners Processing decided to not update Node and add @newfile_path because the source was marked already as processed. message: for File ID @file_id at Node  ID@entity_id. No action is required',
         $message_params
       );
       unlink($io->output->file);
