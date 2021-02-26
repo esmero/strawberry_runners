@@ -127,11 +127,20 @@ class StrawberryRunnersToolsForm extends FormBase {
     return $form;
   }
 
+  /**
+   * @param array                                $form
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-
     $form_state->setRebuild();
   }
 
+  /**
+   * @param array                                $form
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *
+   * @return \Drupal\Core\Ajax\AjaxResponse
+   */
   public function callJmesPathprocess(array &$form, FormStateInterface $form_state) {
     $response = new AjaxResponse();
     /** @var $itemfield \Drupal\strawberryfield\Plugin\Field\FieldType\StrawberryFieldItem */
