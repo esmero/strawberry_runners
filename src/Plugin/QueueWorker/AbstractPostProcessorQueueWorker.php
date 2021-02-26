@@ -593,9 +593,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       $field_content['ap:entitymapping']['entity:file'][] = 'flv:' . $data->plugin_config_entity_id;
     }
 
-    //$oldfiles = $this->entityTypeManager->getStorage('file')->loadByProperties(['uri' => $io->output->file]);
-    //$newfile = $this->entityTypeManager->getStorage('file')->delete($oldfiles);
-
+    /** @var $newfile \Drupal\file\FileInterface */
     $newfile = $this->entityTypeManager->getStorage('file')->create([
       'uri' => $io->output->file,
       'status' => 0,
@@ -612,7 +610,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       try {
         // Give it a simple but nice name.
         $uuid = !empty($field_content[$jsonkey][$uniqueid]['dr:uuid']) ? $field_content[$jsonkey][$uniqueid]['dr:uuid'] : str_replace("urn:uuid:", "", $uniqueid);
-        $newfile->name = $this->setNiceName($newfile->uri, $data->plugin_config_entity_id, $uuid);
+        $newfile->setFileName($this->setNiceName($newfile->getFileUri(), $data->plugin_config_entity_id, $uuid));
         $newfile->save();
         $newfile->id();
         $field_content['flv:' . $data->plugin_config_entity_id][]
