@@ -81,23 +81,29 @@ class StrawberryRunnersIndexProcessor extends ProcessorPluginBase implements Plu
   public function preprocessIndexItems(array $items) {
     // When adding SBF flavor data in Solr, ensure that the cache is
     // invalidated so all the related information can be served fresh.
-    $entities = [];
-    $node_storage = $this->entityTypeManager->getStorage('node');
+    $files = [];
+    $entity_storage = $this->entityTypeManager->getStorage('file');
     /** @var \Drupal\search_api\Item\ItemInterface[] $items */
     foreach ($items as $item) {
       // This only affects to the SBF datasource as it probably multiple per
       // entity.
       if ($item->getDatasourceId() == 'strawberryfield_flavor_datasource') {
         $data = $item->getOriginalObject()->getValue();
-        if (empty($entities[$data['target_id']])) {
-          $entities[$data['target_id']] = $node_storage->load($data['target_id']);
-        }
+        $files[$data['file_uuid']] = $data['file_uuid'];
       }
     }
 
     // There could be several different entities in a given batch.
-    foreach ($entities as $entity) {
-      Cache::invalidateTags($entity->getCacheTagsToInvalidate());
+    foreach ($files as $file_uuid) {
+      $entity = $entity_storage->loadByProperties(['uuid' => $file_uuid]);
+      if ($entity) {
+        // This will clear the cache more times than we actually want (one per
+        // batch iteration), but it's the best way at the moment as Search API
+        // doesn't provide an event when ALL elements are indexed. We don't want
+        // that event either because the index might not finish anyways.
+        $entity = reset($entity);
+        Cache::invalidateTags($entity->getCacheTagsToInvalidate());
+      }
     }
   }
 
