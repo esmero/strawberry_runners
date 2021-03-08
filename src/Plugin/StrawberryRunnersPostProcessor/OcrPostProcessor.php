@@ -70,7 +70,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       ],
       '#default_value' => $this->getConfiguration()['source_type'],
       '#description' => $this->t('Select from where the source file  this processor needs is fetched'),
-      '#required' => TRUE
+      '#required' => TRUE,
     ];
 
     $element['ado_type'] = [
@@ -203,7 +203,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t("Where and how the output will be used."),
       '#options' => [
         'plugin' => 'As Input for another processor Plugin',
-        'searchapi' => 'In a Search API Document using the Strawberryfield Flavor Data Source (e.g used for HOCR highlight)'
+        'searchapi' => 'In a Search API Document using the Strawberryfield Flavor Data Source (e.g used for HOCR highlight)',
       ],
       '#default_value' => (!empty($this->getConfiguration()['output_destination']) && is_array($this->getConfiguration()['output_destination'])) ? $this->getConfiguration()['output_destination'] : [],
       '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this ouput.'),
@@ -269,7 +269,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
     $config = $this->getConfiguration();
     $timeout = $config['timeout']; // in seconds
-    error_log('run OCR');
 
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
@@ -422,7 +421,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     }
     else {
-      error_log("missing arguments for OCR");
+      // missing arguments for OCR. Not sure if to log this..
     }
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
@@ -438,7 +437,9 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     libxml_clear_errors();
     libxml_use_internal_errors($internalErrors);
     if (!$hocr) {
-      error_log('Could not convert HOCR to MiniOCR, sources is not valid XML');
+      $this->logger->warning('Sorry for @pageid we could not decode/extract HOCR as XML', [
+        '@pageid' => $pageid,
+      ]);
       return NULL;
     }
     $miniocr = new \XMLWriter();
@@ -446,17 +447,19 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $miniocr->startDocument('1.0', 'UTF-8');
     $miniocr->startElement("ocr");
     foreach ($hocr->body->children() as $page) {
-      $titleparts =  explode(';', $page['title']);
+      $titleparts = explode(';', $page['title']);
       $pagetitle = NULL;
       foreach ($titleparts as $titlepart) {
         $titlepart = trim($titlepart);
-        if (strpos($titlepart, 'bbox') === 0 ) {
+        if (strpos($titlepart, 'bbox') === 0) {
           $pagetitle = substr($titlepart, 5);
         }
       }
       if ($pagetitle == NULL) {
         $miniocr->flush();
-        error_log('Could not convert HOCR to MiniOCR, no valid page dimensions found');
+        $this->logger->warning('Could not convert HOCR to MiniOCR for @pageid, no valid page dimensions found', [
+          '@pageid' => $pageid,
+        ]);
         return NULL;
       }
       $coos = explode(" ", $pagetitle);
@@ -466,7 +469,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       // NOTE: floats are in the form of .1 so we need to remove the first 0.
       if (count($coos)) {
         $miniocr->startElement("p");
-        $miniocr->writeAttribute("xml:id", 'sequence_'.$pageid);
+        $miniocr->writeAttribute("xml:id", 'sequence_' . $pageid);
         $miniocr->writeAttribute("wh", ltrim($pwidth, 0) . " " . ltrim($pheight, 0));
         $miniocr->startElement("b");
         $page->registerXPathNamespace('ns', 'http://www.w3.org/1999/xhtml');
@@ -562,7 +565,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     }
     else {
-      error_log("missing arguments for PDF2DJVU");
+      //"missing arguments for PDF2DJVU"
     }
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
@@ -620,7 +623,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     }
     else {
-      error_log("missing arguments for djvu 2 OCR");
+      //"missing arguments for djvu 2 OCR");
     }
 
     return $command;

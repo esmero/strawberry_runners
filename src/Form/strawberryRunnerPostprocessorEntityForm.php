@@ -14,7 +14,6 @@ use Drupal\Component\Utility\NestedArray;
  */
 class strawberryRunnerPostprocessorEntityForm extends EntityForm {
 
-
   /**
    * The StrawberryRunnersPostProcessor Plugin Manager.
    *

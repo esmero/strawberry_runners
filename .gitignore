@@ -7,3 +7,10 @@
 .idea/misc.xml
 .idea/codeStyles/codeStyleConfig.xml
 src/.DS_Store
+.idea/inspectionProfiles/Project_Default.xml
+test/.idea/codeStyles/codeStyleConfig.xml
+test/.idea/modules.xml
+test/.idea/test.iml
+test/.idea/vcs.xml
+test/.idea/workspace.xml
+.idea/codeStyles/Project.xml

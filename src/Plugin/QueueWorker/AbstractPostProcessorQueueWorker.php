@@ -22,6 +22,7 @@ use Drupal\file\FileInterface;
 use Drupal\search_api\Query\QueryInterface;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberryfield\Semantic\ActivityStream;
+use Drupal\Core\File\Exception\FileException;
 use Exception;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
@@ -39,11 +40,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    * @var \Drupal\Core\Entity\EntityTypeManager
    */
   protected $entityTypeManager;
-
-  /**
-   * @var \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager
-   */
-  private $strawberryRunnerProcessorPluginManager;
 
   /**
    * The file system service.
@@ -79,6 +75,11 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    * @var \Drupal\search_api\ParseMode\ParseModePluginManager
    */
   protected $parseModeManager;
+
+  /**
+   * @var \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager
+   */
+  private $strawberryRunnerProcessorPluginManager;
 
   /**
    * Constructor.
@@ -131,65 +132,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   }
 
   /**
-   * Get the extractor plugin.
-   *
-   * @return StrawberryRunnersPostProcessorPluginInterface|NULL
-   *   The plugin.
-   *
-   * @throws \Drupal\Component\Plugin\Exception\PluginException
-   */
-  protected function getProcessorPlugin($plugin_config_entity_id) {
-    // Get extractor configuration.
-    /* @var $plugin_config_entity \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntityInterface */
-    $plugin_config_entity = $this->entityTypeManager->getStorage(
-      'strawberry_runners_postprocessor'
-    )->load($plugin_config_entity_id);
-
-    if ($plugin_config_entity->isActive()) {
-      $entity_id = $plugin_config_entity->id();
-      $configuration_options = $plugin_config_entity->getPluginconfig();
-      $configuration_options['configEntity'] = $entity_id;
-      /* @var \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface $plugin_instance */
-      $plugin_instance = $this->strawberryRunnerProcessorPluginManager->createInstance(
-        $plugin_config_entity->getPluginid(),
-        $configuration_options
-      );
-      return $plugin_instance;
-    }
-    return NULL;
-  }
-
-
-  /**
-   * Gets all Children of the currently being processed Processor Plugin
-   *
-   * @param string $current_id
-   *
-   * @return array
-   */
-  private function getChildProcessorIds(string $plugin_config_entity_id): array {
-    /* @var $plugin_config_entities \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity[] */
-    $plugin_config_entities = $this->entityTypeManager->getListBuilder('strawberry_runners_postprocessor')
-      ->load();
-    $active_plugins = [];
-    // This kids should be cached;
-    // We basically want here what type of processor this is and its input_argument and input_options
-    $plugin_definitions = $this->strawberryRunnerProcessorPluginManager->getDefinitions();
-
-    error_log('getting child processors');
-    foreach ($plugin_config_entities as $plugin_config_entity) {
-      // Only get first level (no Parents) and Active ones.
-      if ($plugin_config_entity->isActive() && $plugin_config_entity->getParent() == $plugin_config_entity_id) {
-        $active_plugins[] = [
-          'config_entity' => $plugin_config_entity,
-          'plugin_definition' => $plugin_definitions[$plugin_config_entity->getPluginid()],
-        ];
-      }
-    }
-    return $active_plugins;
-  }
-
-  /**
    * {@inheritdoc}
    */
   public function processItem($data) {
@@ -207,7 +149,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $file = $this->entityTypeManager->getStorage('file')->load($data->fid);
     // 0 byte files have checksum, check what it is!
     if ($file === NULL || !isset($data->metadata['checksum'])) {
-      error_log('Sorry the file does not exist or has no checksum yet. We really need the checksum');
+      $this->logger->log(LogLevel::ERROR, 'Sorry the file ID @fileid does not exist or has no checksum yet. We really need the checksum', [
+        '@fileid' => $data->fid,
+      ]);
       return;
     }
 
@@ -216,13 +160,15 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ->load($data->nid);
 
     if (!$entity) {
-      error_log('Sorry the Node ID passed to this processor does not exist.');
+      $this->logger->log(LogLevel::ERROR, 'Sorry the Node ID @nodeid passed to this processor does not exist.', [
+        '@nodeid' => $data->nid,
+      ]);
+
     }
 
-    //@TODO should we wrap this around a try catch?
     $filelocation = $this->ensureFileAvailability($file);
 
-    if ($filelocation === NULL) {
+    if ($filelocation === FALSE) {
       return;
     }
     // Means we could pass also a file directly anytime
@@ -280,7 +226,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
         // Check if we already have this entry in Solr
         if ($inindex !== 0) {
-          error_log('Already in search index, skipping');
+          $this->logger->log(LogLevel::INFO, 'Already in index so skipping.');
         }
         $inkeystore = TRUE;
         // Skip file if element for every language is found in key_value collection.
@@ -311,9 +257,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             // Eventually we will want to have different outputs per language?
             // But maybe not for HOCR. since the doc will be the same.
             foreach ($item_ids as $item_id) {
-              error_log('processing just run');
-              error_log('writing to keyvalue');
-              error_log($item_id);
               $this->keyValue->get($keyvalue_collection)
                 ->set($item_id, $toindex);
             }
@@ -332,7 +275,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         }
         if ($data->extract_attempts < 3) {
           $data->extract_attempts++;
-          Drupal::queue('strawberryrunners_process_index', TRUE)->createItem($data);
+          Drupal::queue('strawberryrunners_process_index', TRUE)
+            ->createItem($data);
         }
         else {
           $message_params = [
@@ -346,16 +290,13 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     else {
       // This will not
       $io = $this->invokeProcessor($processor_instance, $data);
-      error_log('we do not need to index this');
     }
     // Means we got a file back from the processor
     if ($tobeupdated && isset($io->output->file) && !empty($io->output->file)) {
-      $this->updateNode($entity, $data, $io);
-      error_log('we got a file');
+      $this->updateNodeWithFile($entity, $data, $io);
     }
     // Chains a new Processor into the QUEUE, if there are any children
     if ($tobechained && isset($io->output->plugin) && !empty($io->output->plugin)) {
-      error_log('Time to check on children');
       $childprocessors = $this->getChildProcessorIds($data->plugin_config_entity_id);
       foreach ($childprocessors as $plugin_info) {
         $childdata = clone $data; // So we do not touch original data
@@ -374,12 +315,15 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // - May be overriden by the $io->output, e.g when a processor generates a file that is not part of any node
         $input_property_value = isset($io->output->plugin) && isset($io->output->plugin[$input_property]) ? $io->output->plugin[$input_property] : NULL;
         if ($input_property_value == NULL) {
-          error_log($input_property_value);
           $input_property_value = isset($data->{$input_property}) ? $data->{$input_property} : NULL;
         }
         // If still null means the child is incompatible with the parent. We abort.
         if ($input_property_value == NULL) {
-          error_log("{$childdata->plugin_config_entity_id} is incompatible with {$data->plugin_config_entity_id}, skipping");
+          $this->logger->log(LogLevel::WARNING, 'Sorry @childplugin is  incompatible with @parentplugin, skipping.', [
+            '@parentplugin' => $data->plugin_config_entity_id,
+            '@childplugin' => $childdata->plugin_config_entity_id,
+
+          ]);
           continue;
         }
         // Warning Diego. This may lead to a null
@@ -393,7 +337,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             // Input Properties matching always need to be one
             if (!is_array($value)) {
               $childdata->{$input_argument} = $value;
-              error_log("should add to queue {$childdata->plugin_config_entity_id}");
               Drupal::queue('strawberryrunners_process_background', TRUE)
                 ->createItem($childdata);
             }
@@ -404,12 +347,45 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   }
 
   /**
+   * Get the extractor plugin.
+   *
+   * @param $plugin_config_entity_id
+   *
+   * @return StrawberryRunnersPostProcessorPluginInterface|NULL
+   *   The plugin.
+   *
+   * @throws \Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException
+   * @throws \Drupal\Component\Plugin\Exception\PluginException
+   * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
+   */
+  protected function getProcessorPlugin($plugin_config_entity_id) {
+    // Get extractor configuration.
+    /* @var $plugin_config_entity \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntityInterface */
+    $plugin_config_entity = $this->entityTypeManager->getStorage(
+      'strawberry_runners_postprocessor'
+    )->load($plugin_config_entity_id);
+
+    if ($plugin_config_entity->isActive()) {
+      $entity_id = $plugin_config_entity->id();
+      $configuration_options = $plugin_config_entity->getPluginconfig();
+      $configuration_options['configEntity'] = $entity_id;
+      /* @var \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface $plugin_instance */
+      $plugin_instance = $this->strawberryRunnerProcessorPluginManager->createInstance(
+        $plugin_config_entity->getPluginid(),
+        $configuration_options
+      );
+      return $plugin_instance;
+    }
+    return NULL;
+  }
+
+  /**
    * Move file to local to if needed process.
    *
    * @param \Drupal\file\FileInterface $file
    *   The File URI to look at.
    *
-   * @return array
+   * @return string|FALSE
    *   Output of processing chain for a particular file.
    */
   private function ensureFileAvailability(FileInterface $file) {
@@ -428,19 +404,26 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       );
     }
     else {
-      $templocation = $this->fileSystem->copy(
-        $uri,
-        'temporary://sbr_' . $cache_key . '_' . basename($uri),
-        FileSystemInterface::EXISTS_REPLACE
-      );
-      $templocation = $this->fileSystem->realpath(
-        $templocation
-      );
+      try {
+        $templocation = $this->fileSystem->copy(
+          $uri,
+          'temporary://sbr_' . $cache_key . '_' . basename($uri),
+          FileSystemInterface::EXISTS_REPLACE
+        );
+        $templocation = $this->fileSystem->realpath(
+          $templocation
+        );
+      } catch (FileException $exception) {
+        // Means the file is not longer there
+        // This happens if a file was added and shortly after that removed and replace
+        // by a new one.
+        $templocation = FALSE;
+      }
     }
 
     if (!$templocation) {
-      $this->loggerFactory->get('strawberry_runners')->warning(
-        'Could not adquire a local accessible location for text extraction for file with URL @fileurl',
+      $this->logger->warning(
+        'Could not adquire a local accessible location for text extraction for file with URL @fileurl. File may no longer exist.',
         [
           '@fileurl' => $file->getFileUri(),
         ]
@@ -453,65 +436,14 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   }
 
   /**
-   * Helper method to get the real path from an uri.
-   *
-   * @param string $uri
-   *   The URI of the file, e.g. public://directory/file.jpg.
-   *
-   * @return mixed
-   *   The real path to the file if it is a local file. An URL otherwise.
-   */
-  public function getRealpath($uri) {
-    $wrapper = $this->streamWrapperManager->getViaUri($uri);
-    $scheme = $this->streamWrapperManager->getScheme($uri);
-    $local_wrappers = $this->streamWrapperManager->getWrappers(StreamWrapperInterface::LOCAL);
-    if (in_array($scheme, array_keys($local_wrappers))) {
-      return $wrapper->realpath();
-    }
-    else {
-      return $wrapper->getExternalUrl();
-    }
-  }
-
-  /**
-   * This method actually invokes the processor.
-   *
-   * @param StrawberryRunnersPostProcessorPluginInterface $processor_instance
-   * @param \stdClass $data
-   *
-   * @return \stdClass
-   */
-  private function invokeProcessor(StrawberryRunnersPostProcessorPluginInterface $processor_instance, stdClass $data): stdClass {
-
-    $input_property = $processor_instance->getPluginDefinition()['input_property'];
-    $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
-
-    $io = new stdClass();
-    $input = new stdClass();
-
-    // @NOTE: this is the only place where we just pass filelocation fixed instead of the
-    // actual property named $input_property. Which may be weird?
-    $input->{$input_property} = $data->filepath;
-    $input->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
-    // The Node UUID
-    $input->nuuid = $data->nuuid;
-    // All the rest of the associated Metadata in an as:structure
-    $input->metadata = $data->metadata;
-    $io->input = $input;
-    $io->output = NULL;
-    //@TODO implement the TEST and BENCHMARK logic here
-    // RUN should return exit codes so we can know if something failed
-    // And totally discard indexing.
-    $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
-    return $io;
-  }
-
-  /**
    * Checks Search API indexes for an Document ID and Checksum Match
    *
    * @param string $key
    * @param string $checksum
    * @param array $indexes
+   *
+   * @return int
+   *  The number of Solr Documents found.
    *
    * @throws \Drupal\Component\Plugin\Exception\PluginException
    * @throws \Drupal\search_api\SearchApiException
@@ -574,8 +506,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     // reprocessing is needed
     // But if not, then i return 1, which means we have them all
     // FUTURE thinking is the best.
-    $return = ($count == count($indexes)) ? 1 : 0;
-    return $return;
+    return ($count == count($indexes)) ? 1 : 0;
     // Keys we need in the Search API
     // - ss_search_api_id == $key
     // A checksum field == Should be configurable?
@@ -585,16 +516,74 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   }
 
   /**
-   * Updates a node with data passed from a processors io and original data
+   * This method actually invokes the processor.
+   *
+   * @param StrawberryRunnersPostProcessorPluginInterface $processor_instance
+   * @param \stdClass $data
+   *
+   * @return \stdClass
+   */
+  private function invokeProcessor(StrawberryRunnersPostProcessorPluginInterface $processor_instance, stdClass $data): stdClass {
+
+    $input_property = $processor_instance->getPluginDefinition()['input_property'];
+    $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
+
+    $io = new stdClass();
+    $input = new stdClass();
+
+    // @NOTE: this is the only place where we just pass filelocation fixed instead of the
+    // actual property named $input_property. Which may be weird?
+    $input->{$input_property} = $data->filepath;
+    $input->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
+    // The Node UUID
+    $input->nuuid = $data->nuuid;
+    // All the rest of the associated Metadata in an as:structure
+    $input->metadata = $data->metadata;
+    $io->input = $input;
+    $io->output = NULL;
+    //@TODO implement the TEST and BENCHMARK logic here
+    // RUN should return exit codes so we can know if something failed
+    // And totally discard indexing.
+    try {
+      $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
+    } catch (\Exception $exception) {
+      $this->logger->error('@plugin id threw an exception while trying to call ::run for Node UUID @nodeuuid with message: @msg', [
+          '@msg' => $exception->getMessage(),
+          '@plugin' => $processor_instance->getPluginId(),
+          '@nodeuuid' => $input->nuuid,
+        ]
+      );
+    }
+    return $io;
+  }
+
+  /**
+   *  Updates a node with data passed from a processors io and original data
    *
    * @param \Drupal\Core\Entity\ContentEntityInterface $entity
    * @param \stdClass $data
    * @param \stdClass $io
    *
+   * @throws \Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException
+   * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
    * @throws \Drupal\Core\TypedData\Exception\MissingDataException
    */
-  public function updateNode(ContentEntityInterface $entity, stdClass $data, stdClass $io) {
+  public function updateNodeWithFile(ContentEntityInterface $entity, stdClass $data, stdClass $io) {
 
+    // If the file went missing there is nothing we can do.
+    if (!file_exists($io->output->file)) {
+      $message_params = [
+        '@file_id' => $data->fid,
+        '@entity_id' => $data->nid,
+        '@newfile_path' => $io->output->file,
+      ];
+      $this->logger->log(
+        LogLevel::ERROR,
+        'Strawberry Runners Processing failed to update Node because expected @newfile_path was not found! message: @message File id @file_id at Node @entity_id.',
+        $message_params
+      );
+      return;
+    }
     /** @var $itemfield \Drupal\strawberryfield\Plugin\Field\FieldType\StrawberryFieldItem */
 
     $itemfield = $entity->get($data->field_name)->get($data->field_delta);
@@ -604,33 +593,64 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       $field_content['ap:entitymapping']['entity:file'][] = 'flv:' . $data->plugin_config_entity_id;
     }
 
-    //$oldfiles = $this->entityTypeManager->getStorage('file')->loadByProperties(['uri' => $io->output->file]);
-    //$newfile = $this->entityTypeManager->getStorage('file')->delete($oldfiles);
-
+    /** @var $newfile \Drupal\file\FileInterface */
     $newfile = $this->entityTypeManager->getStorage('file')->create([
       'uri' => $io->output->file,
       'status' => 0,
     ]);
     $uniqueid = $data->asstructure_uniqueid;
     $jsonkey = $data->asstructure_key;
-    try {
-      $newfile->save();
-      $newfile->id();
-      $field_content['flv:' . $data->plugin_config_entity_id][] = (int) $newfile->id();
-      $field_content['flv:' . $data->plugin_config_entity_id] = array_unique($field_content['flv:' . $data->plugin_config_entity_id]);
-      $field_content[$jsonkey][$uniqueid]['flv:' . $data->plugin_config_entity_id] = $this->addActivityStream($data->plugin_config_entity_id);
-      $itemfield->setMainValueFromArray($field_content);
-      // Should we check decide on this? Safer is a new revision, but also an overhead
-      // $entity->setNewRevision(FALSE);
-      $entity->save();
-    } catch (Exception $exception) {
+
+    // check 'flv:' . $data->plugin_config_entity_id for empty
+    // If there means this was enqueued many times and we do not need to add it again
+    // We can not stop the actual runner to execute but we can at least avoid
+    // creating multiple temporal anomalies
+    // The same processor will not create more than a single file per source.
+    if (empty($field_content[$jsonkey][$uniqueid]['flv:' . $data->plugin_config_entity_id])) {
+      try {
+        // Give it a simple but nice name.
+        $uuid = !empty($field_content[$jsonkey][$uniqueid]['dr:uuid']) ? $field_content[$jsonkey][$uniqueid]['dr:uuid'] : str_replace("urn:uuid:", "", $uniqueid);
+        $newfile->setFileName($this->setNiceName($newfile->getFileUri(), $data->plugin_config_entity_id, $uuid));
+        $newfile->save();
+        $newfile->id();
+        $field_content['flv:' . $data->plugin_config_entity_id][]
+          = (int) $newfile->id();
+        $field_content['flv:' . $data->plugin_config_entity_id] = array_unique(
+          $field_content['flv:' . $data->plugin_config_entity_id]
+        );
+        $field_content[$jsonkey][$uniqueid]['flv:'
+        . $data->plugin_config_entity_id]
+          = $this->addActivityStream($data->plugin_config_entity_id);
+        $itemfield->setMainValueFromArray($field_content);
+        // Should we check decide on this? Safer is a new revision, but also an overhead
+        // $entity->setNewRevision(FALSE);
+        $entity->save();
+      } catch (Exception $exception) {
+        $message_params = [
+          '@file_id' => $data->fid,
+          '@entity_id' => $data->nid,
+          '@newfile_path' => $io->output->file,
+          '@message' => $exception->getMessage(),
+        ];
+        $this->logger->log(
+          LogLevel::ERROR,
+          'Strawberry Runners Processing failed to update Node and add @newfile_path, message: @message for File ID @file_id at Node ID @entity_id.',
+          $message_params
+        );
+      }
+    }
+    else {
       $message_params = [
         '@file_id' => $data->fid,
         '@entity_id' => $data->nid,
         '@newfile_path' => $io->output->file,
-        '@message' => $exception->getMessage(),
       ];
-      $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed to update Node and add @newfile_path with message: @message File id @file_id at Node @entity_id.', $message_params);
+      $this->logger->log(
+        LogLevel::INFO,
+        'Strawberry Runners Processing decided to not update Node and add @newfile_path because the source was marked already as processed. message: for File ID @file_id at Node  ID@entity_id. No action is required',
+        $message_params
+      );
+      unlink($io->output->file);
     }
 
   }
@@ -653,6 +673,91 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $activitystream->addActor(ActivityStream::ACTORTYPES['Service'], $actor_properties);
     return $activitystream->getAsBody() ?: [];
 
+  }
+
+  /**
+   * Gets all Children of the currently being processed Processor Plugin
+   *
+   * @param string $plugin_config_entity_id
+   *
+   * @return array
+   */
+  private function getChildProcessorIds(string $plugin_config_entity_id): array {
+    /* @var $plugin_config_entities \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity[] */
+    $plugin_config_entities = $this->entityTypeManager->getListBuilder('strawberry_runners_postprocessor')
+      ->load();
+    $active_plugins = [];
+    // This kids should be cached;
+    // We basically want here what type of processor this is and its input_argument and input_options
+    $plugin_definitions = $this->strawberryRunnerProcessorPluginManager->getDefinitions();
+    foreach ($plugin_config_entities as $plugin_config_entity) {
+      // Only get first level (no Parents) and Active ones.
+      if ($plugin_config_entity->isActive() && $plugin_config_entity->getParent() == $plugin_config_entity_id) {
+        $active_plugins[] = [
+          'config_entity' => $plugin_config_entity,
+          'plugin_definition' => $plugin_definitions[$plugin_config_entity->getPluginid()],
+        ];
+      }
+    }
+    return $active_plugins;
+  }
+
+  /**
+   * Helper method to get the real path from an uri.
+   *
+   * @param string $uri
+   *   The URI of the file, e.g. public://directory/file.jpg.
+   *
+   * @return mixed
+   *   The real path to the file if it is a local file. An URL otherwise.
+   */
+  public function getRealpath(string $uri) {
+    $wrapper = $this->streamWrapperManager->getViaUri($uri);
+    $scheme = $this->streamWrapperManager->getScheme($uri);
+    $local_wrappers = $this->streamWrapperManager->getWrappers(StreamWrapperInterface::LOCAL);
+    if (in_array($scheme, array_keys($local_wrappers))) {
+      return $wrapper->realpath();
+    }
+    else {
+      return $wrapper->getExternalUrl();
+    }
+  }
+
+  /**
+   * @param $current_uri
+   * @param $pluginid
+   * @param $uuid
+   *
+   * @return string
+   */
+  private function setNiceName($current_uri, $pluginid, $uuid) {
+    $file_parts['destination_filename'] = pathinfo(
+      $current_uri,
+      PATHINFO_FILENAME
+    );
+
+    $file_parts['destination_extension'] = pathinfo(
+      $current_uri,
+      PATHINFO_EXTENSION
+    );
+    // Check if the file may have a secondary extension
+
+    $file_parts['destination_extension_secondary'] = pathinfo(
+      $file_parts['destination_filename'],
+      PATHINFO_EXTENSION
+    );
+    // Deal with 2 part extension problem.
+    if (!empty($file_parts['destination_extension_secondary']) &&
+      strlen($file_parts['destination_extension_secondary']) <= 4 &&
+      strlen($file_parts['destination_extension_secondary']) > 0
+    ) {
+      $file_parts['destination_extension'] = $file_parts['destination_extension_secondary'] . '.' . $file_parts['destination_extension'];
+    }
+    $destination_extension = mb_strtolower(
+      $file_parts['destination_extension']
+    );
+
+    return $pluginid . '_from_' . $uuid . '.' . $destination_extension;
   }
 
 

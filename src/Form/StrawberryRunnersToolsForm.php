@@ -53,14 +53,14 @@ class StrawberryRunnersToolsForm extends FormBase {
   }
 
   public function buildForm(array $form, FormStateInterface $form_state, NodeInterface $node = NULL) {
-    
+
     // For code Mirror
     // @TODO make this module dependant
     $settings['mode'] = 'application/ld+json';
     $settings['readOnly'] = TRUE;
     $settings['toolbar'] = FALSE;
     $settings['lineNumbers'] = TRUE;
-    error_log('ups i created a form');
+
     if ($sbf_fields = \Drupal::service('strawberryfield.utility')->bearsStrawberryfield($node)) {
       foreach ($sbf_fields as $field_name) {
         /* @var $field \Drupal\Core\Field\FieldItemInterface */
@@ -127,11 +127,20 @@ class StrawberryRunnersToolsForm extends FormBase {
     return $form;
   }
 
+  /**
+   * @param array                                $form
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   */
   public function submitForm(array &$form, FormStateInterface $form_state) {
-    error_log('running Submit');
     $form_state->setRebuild();
   }
 
+  /**
+   * @param array                                $form
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *
+   * @return \Drupal\Core\Ajax\AjaxResponse
+   */
   public function callJmesPathprocess(array &$form, FormStateInterface $form_state) {
     $response = new AjaxResponse();
     /** @var $itemfield \Drupal\strawberryfield\Plugin\Field\FieldType\StrawberryFieldItem */
@@ -142,8 +151,7 @@ class StrawberryRunnersToolsForm extends FormBase {
     catch (\Exception $exception) {
       $result = $exception->getMessage();
     }
-    error_log($form_state->getValue('test_jmespath'));
-    error_log(var_export($result,true));
+
     $response->addCommand(new \Drupal\strawberry_runners\Ajax\UpdateCodeMirrorCommand('#jmespathoutput', json_encode($result,JSON_PRETTY_PRINT)));
 
     return $response;

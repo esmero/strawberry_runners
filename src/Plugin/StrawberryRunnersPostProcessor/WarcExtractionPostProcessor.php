@@ -157,7 +157,6 @@ class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBa
     // In this case it will contain an absolute Path to a File.
     // Needed since this executes locally on the server via SHELL.
     $input_property =  $this->pluginDefinition['input_property'];
-    error_log('run warc');
     if (isset($io->input->{$input_property})) {
        $warc_reader = new WarcReader($io->input->{$input_property});
        $output = NULL;
