@@ -203,7 +203,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
    * @param  string  $subject
    * @return string
    */
-  public function str_replace_last(string $search, string $replace, string $subject) {
+  public function strReplaceLast(string $search, string $replace, string $subject) {
     $position = strrpos($subject, $search);
     if ($position !== false) {
       return substr_replace($subject, $replace, $position, strlen($search));
@@ -221,7 +221,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
    * @param  string  $subject
    * @return string
    */
-   public function str_replace_first(string $search, string $replace, string $subject) {
+   public function strReplaceFirst(string $search, string $replace, string $subject) {
     if ($search === '') {
       return $subject;
     }

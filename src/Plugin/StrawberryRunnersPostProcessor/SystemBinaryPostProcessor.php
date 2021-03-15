@@ -282,8 +282,8 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
         ->verifyCommand($execpath) && (strpos($arguments, '%file') !== FALSE)) {
 
       $arguments = str_replace('%s', '', $arguments);
-      $arguments = $this->str_replace_first('%file', '%s', $arguments);
-      $arguments = $this->str_replace_first('%outfile', '%s', $arguments);
+      $arguments = $this->strReplaceFirst('%file', '%s', $arguments);
+      $arguments = $this->strReplaceFirst('%outfile', '%s', $arguments);
       if ($out_file_path) {
         // WE need the original one without extension here.
         $arguments = sprintf($arguments, $file_path, $out_file_path);
