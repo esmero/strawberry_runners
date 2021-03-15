@@ -9,10 +9,8 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Render\RendererInterface;
 use Drupal\node\NodeInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\Core\Session\AccountInterface;
-use Drupal\Core\Access\AccessResult;
 use Drupal\Core\Ajax\AjaxResponse;
-use Drupal\Core\Ajax\InsertCommand;
+use Drupal\strawberry_runners\Ajax\UpdateCodeMirrorCommand;
 
 /**
  * Returns responses for Node routes.
@@ -152,37 +150,8 @@ class StrawberryRunnersToolsForm extends FormBase {
       $result = $exception->getMessage();
     }
 
-    $response->addCommand(new \Drupal\strawberry_runners\Ajax\UpdateCodeMirrorCommand('#jmespathoutput', json_encode($result,JSON_PRETTY_PRINT)));
+    $response->addCommand(new UpdateCodeMirrorCommand('#jmespathoutput', json_encode($result,JSON_PRETTY_PRINT)));
 
     return $response;
   }
-
-  /**
-   * Limit access to the Tools according to their restricted state.
-   *
-   * @param \Drupal\Core\Session\AccountInterface $account
-   *   The account object.
-   * @param int $node
-   *   The node id.
-   */
-  public function accessTools(AccountInterface $account, $node) {
-    $node_storage = $this->entityTypeManager()->getStorage('node');
-    $node = $node_storage->load($node);
-    $type = $node->getType();
-    // @TODO for now...
-    if ($sbf_fields = \Drupal::service('strawberryfield.utility')->bearsStrawberryfield($node)) {
-      $access = AccessResult::allowedIfHasPermission($account, 'edit any ' . $type . ' content');
-      if (!$access->isAllowed() && $account->hasPermission('edit own ' . $type . ' content')) {
-        $access = $access->orIf(AccessResult::allowedIf($account->id() == $node->getOwnerId())->cachePerUser()->addCacheableDependency($node));
-      }
-    } else {
-      $access = AccessResult::forbidden();
-    }
-
-    $access->addCacheableDependency($node);
-    return AccessResult::allowedIf($access)->cachePerPermissions();
-
-
-  }
-
 }
