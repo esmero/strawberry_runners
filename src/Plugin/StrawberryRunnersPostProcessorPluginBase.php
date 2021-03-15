@@ -195,24 +195,6 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
   }
 
   /**
-   * Replace the last occurrence of a given value in the string.
-   * @see https://github.com/phannaly/laravel-helpers/blob/v1.0.3/src/String.php#L331
-   *
-   * @param  string  $search
-   * @param  string  $replace
-   * @param  string  $subject
-   * @return string
-   */
-  public function strReplaceLast(string $search, string $replace, string $subject) {
-    $position = strrpos($subject, $search);
-    if ($position !== false) {
-      return substr_replace($subject, $replace, $position, strlen($search));
-    }
-
-    return $subject;
-  }
-
-  /**
    * Replace the first occurrence of a given value in the string.
    * @see https://github.com/phannaly/laravel-helpers/blob/v1.0.3/src/String.php#L308
    *
