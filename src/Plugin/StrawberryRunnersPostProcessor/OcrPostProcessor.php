@@ -407,11 +407,11 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       (strpos($arguments_tesseract, '%file') !== FALSE)) {
       $arguments_gs = "-dBATCH -dNOPAUSE -r300 -dUseCropBox -dQUIET -sDEVICE=pnggray -dFirstPage={$page_number} -dLastPage={$page_number} -sOutputFile=$gs_destination_filename " . $arguments_gs;
       $arguments_gs = str_replace('%s', '', $arguments_gs);
-      $arguments_gs = str_replace_first('%file', '%s', $arguments_gs);
+      $arguments_gs = $this->str_replace_first('%file', '%s', $arguments_gs);
       $arguments_gs = sprintf($arguments_gs, $file_path);
 
       $arguments_tesseract = str_replace('%s', '', $arguments_tesseract);
-      $arguments_tesseract = str_replace_first('%file', '%s', $arguments_tesseract);
+      $arguments_tesseract = $this->str_replace_first('%file', '%s', $arguments_tesseract);
       $arguments_tesseract = sprintf($arguments_tesseract, $gs_destination_filename);
 
       $command_gs = escapeshellcmd($execpath_gs . ' ' . $arguments_gs);
@@ -551,11 +551,11 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       (strpos($arguments_djvudump, '%file') !== FALSE)) {
       $arguments_pdf2djvu = "-q --no-metadata -j0 -p {$page_number} -o $pdf2djvu_destination_filename " . $arguments_pdf2djvu;
       $arguments_pdf2djvu = str_replace('%s', '', $arguments_pdf2djvu);
-      $arguments_pdf2djvu = str_replace_first('%file', '%s', $arguments_pdf2djvu);
+      $arguments_pdf2djvu = $this->str_replace_first('%file', '%s', $arguments_pdf2djvu);
       $arguments_pdf2djvu = sprintf($arguments_pdf2djvu, $file_path);
 
       $arguments_djvudump = str_replace('%s', '', $arguments_djvudump);
-      $arguments_djvudump = str_replace_first('%file', '%s', $arguments_djvudump);
+      $arguments_djvudump = $this->str_replace_first('%file', '%s', $arguments_djvudump);
       $arguments_djvudump = sprintf($arguments_djvudump, $pdf2djvu_destination_filename);
 
       $command_pdf2djvu = escapeshellcmd($execpath_pdf2djvu . ' ' . $arguments_pdf2djvu);
@@ -614,7 +614,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       (strpos($arguments_djvu2hocr, '%file') !== FALSE)) {
 
       $arguments_djvu2hocr = str_replace('%s', '', $arguments_djvu2hocr);
-      $arguments_djvu2hocr = str_replace_first('%file', '%s', $arguments_djvu2hocr);
+      $arguments_djvu2hocr = $this->str_replace_first('%file', '%s', $arguments_djvu2hocr);
       $arguments_djvu2hocr = sprintf($arguments_djvu2hocr, $pdf2djvu_destination_filename);
 
       $command_djvu2hocr = escapeshellcmd($execpath_djvu2hocr . ' ' . $arguments_djvu2hocr);
