@@ -138,28 +138,31 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
     $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
     $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
     $config = $this->getConfiguration();
-    $page_number = [];
+    $sequence_number = [];
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
       $io->output = $io->input;
       // Now check if there is an "flv:identify" and iterate over each one.
       if (isset($io->input->metadata['flv:identify']) && count($io->input->metadata['flv:identify']) > 0) {
         foreach ($io->input->metadata['flv:identify'] as $key => $sequence) {
-          $page_number[] = $key;
+          $sequence_number[] = $key;
         }
       }
       elseif (isset($io->input->metadata['flv:pdfinfo']) && count($io->input->metadata['flv:pdfinfo']) > 0) {
         foreach ($io->input->metadata['flv:pdfinfo'] as $key => $sequence) {
-          $page_number[] = $key;
+          $sequence_number[] = $key;
         }
       }
       // At least give it one page. (Should we?)
-      if (empty($page_number)) {
-        $page_number[] = 1;
+      if (empty($sequence_number)) {
+        $sequence_number[] = 1;
       }
 
       $output = new \stdClass();
-      $output->plugin = ['page_number' => $page_number];
+      $output->plugin = [
+        'sequence_number' => $sequence_number,
+        'sequence_total' => count($sequence_number),
+      ];
       $io->output = $output;
     }
     else {

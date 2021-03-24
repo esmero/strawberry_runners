@@ -248,7 +248,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
           // Check if $io->output exists?
           $toindex = new stdClass();
-          $toindex->fulltext = $io->output->searchapi;
+          $toindex->fulltext = $io->output->searchapi['fulltext'];
+          $toindex->plaintext = $io->output->searchapi['plaintext'];
+          $toindex->sequence_total = $io->output->sequence_total;
           $toindex->checksum = $data->metadata['checksum'];
 
           $datasource_id = 'strawberryfield_flavor_datasource';
