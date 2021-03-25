@@ -24,7 +24,7 @@ use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterfa
  *    label = @Translation("Post processor that Runs OCR/HORC against files"),
  *    input_type = "entity:file",
  *    input_property = "filepath",
- *    input_argument = "page_number"
+ *    input_argument = "sequence_number"
  * )
  */
 class OcrPostProcessor extends SystemBinaryPostProcessor {
@@ -272,7 +272,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
-      $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+      $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
 
       //check if PDF is searchable: has DJVU file the layer TXTz?
       //pdf2djvu -q --no-metadata -p 2 -j0 -o page2.djv some_file.pdf && djvudump page2.djv |grep TXTz |wc -l
@@ -292,7 +292,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         if (is_null($proc_output_check_searchable)) {
           throw new \Exception("Could not execute {$execstring_check_searchable} or timed out");
         }
-
       }
 
 
@@ -317,16 +316,14 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           //
           $proc_output_mod = str_replace('ocrx_line', 'ocr_line', $proc_output);
 
-          $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $page_number);
+          $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $sequence_number);
           $output = new \stdClass();
-          $output->searchapi = $miniocr;
+          $output->searchapi['fulltext'] = $miniocr;
           $output->plugin = $miniocr;
           $io->output = $output;
-
         }
 
         //Do we have to remove djvu file?
-
       }
       else {
 
@@ -345,18 +342,21 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
             throw new \Exception("Could not execute {$execstring} or timed out");
           }
 
-          $miniocr = $this->hOCRtoMiniOCR($proc_output, $page_number);
+          $miniocr = $this->hOCRtoMiniOCR($proc_output, $sequence_number);
           $output = new \stdClass();
-          $output->searchapi = $miniocr;
+          $output->searchapi['fulltext'] = $miniocr;
           $output->plugin = $miniocr;
           $io->output = $output;
-
         }
-
       }
-
+      // Lastly pass back to output the sequence_total property
+      $sequence_total = isset($io->input->sequence_total) ? $io->input->sequence_total : $sequence_number;
+      $io->output->sequence_total  = $sequence_total;
+      $io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
     }
     else {
+      $query = \Drupal::entityTypeManager()->getStorage('node')->getQuery();
+
       \throwException(new \InvalidArgumentException);
     }
   }
@@ -377,7 +377,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $input_argument = $this->pluginDefinition['input_argument'];
     // Sets the default page to 1 if not passed.
     $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
-    $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+    $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
     $config = $this->getConfiguration();
     $execpath_gs = $config['path'];
     $arguments_gs = $config['arguments'];
@@ -400,12 +400,12 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $filename = pathinfo($file_path, PATHINFO_FILENAME);
     $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
     $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
-    $gs_destination_filename = "{$sourcefolder}{$filename}_{$page_number}.png";
+    $gs_destination_filename = "{$sourcefolder}{$filename}_{$sequence_number}.png";
     if ($can_run_gs &&
       $can_run_tesseract &&
       (strpos($arguments_gs, '%file') !== FALSE) &&
       (strpos($arguments_tesseract, '%file') !== FALSE)) {
-      $arguments_gs = "-dBATCH -dNOPAUSE -r300 -dUseCropBox -dQUIET -sDEVICE=pnggray -dFirstPage={$page_number} -dLastPage={$page_number} -sOutputFile=$gs_destination_filename " . $arguments_gs;
+      $arguments_gs = "-dBATCH -dNOPAUSE -r300 -dUseCropBox -dQUIET -sDEVICE=pnggray -dFirstPage={$sequence_number} -dLastPage={$sequence_number} -sOutputFile=$gs_destination_filename " . $arguments_gs;
       $arguments_gs = str_replace('%s', '', $arguments_gs);
       $arguments_gs = $this->strReplaceFirst('%file', '%s', $arguments_gs);
       $arguments_gs = sprintf($arguments_gs, $file_path);
@@ -526,7 +526,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $input_argument = $this->pluginDefinition['input_argument'];
     // Sets the default page to 1 if not passed.
     $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
-    $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+    $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
     $config = $this->getConfiguration();
     $execpath_pdf2djvu = $config['path_pdf2djvu'];
     $arguments_pdf2djvu = $config['arguments_pdf2djvu'];
@@ -549,12 +549,12 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $filename = pathinfo($file_path, PATHINFO_FILENAME);
     $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
     $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
-    $pdf2djvu_destination_filename = "{$sourcefolder}{$filename}_{$page_number}.djv";
+    $pdf2djvu_destination_filename = "{$sourcefolder}{$filename}_{$sequence_number}.djv";
     if ($can_run_pdf2djvu &&
       $can_run_djvudump &&
       (strpos($arguments_pdf2djvu, '%file') !== FALSE) &&
       (strpos($arguments_djvudump, '%file') !== FALSE)) {
-      $arguments_pdf2djvu = "-q --no-metadata -j0 -p {$page_number} -o $pdf2djvu_destination_filename " . $arguments_pdf2djvu;
+      $arguments_pdf2djvu = "-q --no-metadata -j0 -p {$sequence_number} -o $pdf2djvu_destination_filename " . $arguments_pdf2djvu;
       $arguments_pdf2djvu = str_replace('%s', '', $arguments_pdf2djvu);
       $arguments_pdf2djvu = $this->strReplaceFirst('%file', '%s', $arguments_pdf2djvu);
       $arguments_pdf2djvu = sprintf($arguments_pdf2djvu, $file_path);
@@ -596,7 +596,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $input_argument = $this->pluginDefinition['input_argument'];
     // Sets the default page to 1 if not passed.
     $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
-    $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+    $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
     $config = $this->getConfiguration();
     $execpath_djvu2hocr = $config['path_djvu2hocr'];
     $arguments_djvu2hocr = $config['arguments_djvu2hocr'];
@@ -614,7 +614,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $filename = pathinfo($file_path, PATHINFO_FILENAME);
     $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
     $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
-    $pdf2djvu_destination_filename = "{$sourcefolder}{$filename}_{$page_number}.djv";
+    $pdf2djvu_destination_filename = "{$sourcefolder}{$filename}_{$sequence_number}.djv";
     if ($can_run_djvu2hocr &&
       (strpos($arguments_djvu2hocr, '%file') !== FALSE)) {
 
