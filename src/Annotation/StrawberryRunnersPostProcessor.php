@@ -57,10 +57,10 @@ class StrawberryRunnersPostProcessor extends Plugin {
   /**
    * The Object property that contains the additional data needed by the Processor ::run method
    *
-   * @var string $input_arguments;
+   * @var string|NULL $input_argument;
    *
    */
-  public $input_arguments;
+  public $input_argument;
 
   /**
    * Processing stage: can be Entity PreSave or PostSave

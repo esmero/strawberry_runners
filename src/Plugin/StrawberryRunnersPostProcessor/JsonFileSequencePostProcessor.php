@@ -161,7 +161,6 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
       $output = new \stdClass();
       $output->plugin = [
         'sequence_number' => $sequence_number,
-        'sequence_total' => count($sequence_number),
       ];
       $io->output = $output;
     }
