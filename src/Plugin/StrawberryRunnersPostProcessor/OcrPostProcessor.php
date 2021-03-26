@@ -349,9 +349,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           $io->output = $output;
         }
       }
-      // Lastly pass back to output the sequence_total property
-      $sequence_total = isset($io->input->sequence_total) ? $io->input->sequence_total : $sequence_number;
-      $io->output->sequence_total  = $sequence_total;
+      // Lastly plain text version of the XML.
       $io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
     }
     else {
