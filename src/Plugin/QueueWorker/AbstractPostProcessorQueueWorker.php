@@ -204,7 +204,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       try {
         // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
         $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
-        $keyvalue_collection = 'Strawberryfield_flavor_datasource_temp';
+        $keyvalue_collection = StrawberryfieldFlavorDatasource::SBFL_KEY_COLLECTION;
         $item_ids = [];
         $inindex = 1;
         $input_property = $processor_instance->getPluginDefinition()['input_property'];
