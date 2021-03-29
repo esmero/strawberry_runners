@@ -204,15 +204,15 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       try {
         // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
         $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
-        $keyvalue_collection = 'Strawberryfield_flavor_datasource_temp';
+        $keyvalue_collection = StrawberryfieldFlavorDatasource::SBFL_KEY_COLLECTION;
         $item_ids = [];
         $inindex = 1;
         $input_property = $processor_instance->getPluginDefinition()['input_property'];
         $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
 
-        // @TODO If argument is not here, do we return??
+        // If argument is not there we will assume there is a mistake and its
+        // a single one.
         $data->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
-
         if (is_a($entity, TranslatableInterface::class)) {
           $translations = $entity->getTranslationLanguages();
           foreach ($translations as $translation_id => $translation) {
@@ -248,7 +248,11 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
           // Check if $io->output exists?
           $toindex = new stdClass();
-          $toindex->fulltext = $io->output->searchapi;
+          $toindex->fulltext = $io->output->searchapi['fulltext'];
+          $toindex->plaintext = $io->output->searchapi['plaintext'];
+          // $siblings will be the amount of total children processors that were
+          // enqueued for a single Processor chain.
+          $toindex->sequence_total = !empty($data->siblings) ? $data->siblings : 1;
           $toindex->checksum = $data->metadata['checksum'];
 
           $datasource_id = 'strawberryfield_flavor_datasource';
@@ -288,7 +292,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       }
     }
     else {
-      // This will not
       $io = $this->invokeProcessor($processor_instance, $data);
     }
     // Means we got a file back from the processor
@@ -330,6 +333,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $childdata->{$input_property} = $input_property_value;
         $childdata->plugin_config_entity_id = $postprocessor_config_entity->id();
         $input_argument_value = isset($io->output->plugin) && isset($io->output->plugin[$input_argument]) ? $io->output->plugin[$input_argument] : $data->{$input_argument};
+        // This is a must: Solr indexing requires a list of sequences. A single one
+        // will not be enqueued.
         if (is_array($input_argument_value)) {
           foreach ($input_argument_value as $value) {
             // Here is the catch.
@@ -337,6 +342,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             // Input Properties matching always need to be one
             if (!is_array($value)) {
               $childdata->{$input_argument} = $value;
+              // The count will always be relative to this call
+              // Means count of how many children are being called.
+              $childdata->siblings = count($input_argument_value);
               Drupal::queue('strawberryrunners_process_background', TRUE)
                 ->createItem($childdata);
             }
@@ -361,9 +369,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   protected function getProcessorPlugin($plugin_config_entity_id) {
     // Get extractor configuration.
     /* @var $plugin_config_entity \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntityInterface */
-    $plugin_config_entity = $this->entityTypeManager->getStorage(
-      'strawberry_runners_postprocessor'
-    )->load($plugin_config_entity_id);
+    $plugin_config_entity = $this->entityTypeManager
+      ->getStorage('strawberry_runners_postprocessor')
+      ->load($plugin_config_entity_id);
 
     if ($plugin_config_entity->isActive()) {
       $entity_id = $plugin_config_entity->id();
@@ -468,17 +476,13 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         'saa_field_file_news',
         'saa_field_file_page'
       ]);*/
-      //$parse_mode = $this->parseModeManager->createInstance('direct');
       $parse_mode = $this->parseModeManager->createInstance('terms');
       $query->setParseMode($parse_mode);
-      // $parse_mode->setConjunction('OR');
-      // $query->keys($search);
       $query->sort('search_api_relevance', 'DESC');
 
       $query->addCondition('search_api_id', 'strawberryfield_flavor_datasource/' . $key)
         ->addCondition('search_api_datasource', 'strawberryfield_flavor_datasource')
         ->addCondition('checksum', $checksum);
-      //$query = $query->addCondition('ss_checksum', $checksum);
       // If we allow processing here Drupal adds Content Access Check
       // That does not match our Data Source \Drupal\search_api\Plugin\search_api\processor\ContentAccess
       // we get this filter (see 2nd)
@@ -618,14 +622,13 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $field_content['flv:' . $data->plugin_config_entity_id] = array_unique(
           $field_content['flv:' . $data->plugin_config_entity_id]
         );
-        $field_content[$jsonkey][$uniqueid]['flv:'
-        . $data->plugin_config_entity_id]
-          = $this->addActivityStream($data->plugin_config_entity_id);
+        $field_content[$jsonkey][$uniqueid]['flv:' . $data->plugin_config_entity_id] = $this->addActivityStream($data->plugin_config_entity_id);
         $itemfield->setMainValueFromArray($field_content);
         // Should we check decide on this? Safer is a new revision, but also an overhead
         // $entity->setNewRevision(FALSE);
         $entity->save();
-      } catch (Exception $exception) {
+      }
+      catch (Exception $exception) {
         $message_params = [
           '@file_id' => $data->fid,
           '@entity_id' => $data->nid,
@@ -652,7 +655,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       );
       unlink($io->output->file);
     }
-
   }
 
   protected function addActivityStream($name = NULL) {
