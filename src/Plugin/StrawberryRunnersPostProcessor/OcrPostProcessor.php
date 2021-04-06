@@ -13,6 +13,7 @@ use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\SystemBinary
 use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
+use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 
 
 /**
@@ -430,6 +431,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
   }
 
   protected function hOCRtoMiniOCR($output, $pageid) {
+
     $hocr = simplexml_load_string($output);
     $internalErrors = libxml_use_internal_errors(TRUE);
     libxml_clear_errors();
@@ -464,6 +466,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       // To avoid divisions by 0
       $pwidth = (float) $coos[2] ? (float) $coos[2] : 1;
       $pheight = (float) $coos[3] ? (float) $coos[3] : 1;
+      $atleastone_word = FALSE;
       // NOTE: floats are in the form of .1 so we need to remove the first 0.
       if (count($coos)) {
         $miniocr->startElement("p");
@@ -493,6 +496,9 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
               $miniocr->startElement("w");
               $miniocr->writeAttribute("x", ltrim($l, '0') . ' ' . ltrim($t, 0) . ' ' . ltrim($w, 0) . ' ' . ltrim($h, 0));
               $miniocr->text($text);
+              // Only assume we have at least one word for <w> tags
+              // Since lines? could end empty?
+              $atleastone_word = TRUE;
               $miniocr->endElement();
             }
           }
@@ -505,7 +511,12 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $miniocr->endElement();
     $miniocr->endDocument();
     unset($hocr);
-    return $miniocr->outputMemory(TRUE);
+    if ($atleastone_word) {
+      return $miniocr->outputMemory(TRUE);
+    }
+    else {
+      return StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
+    }
   }
 
   /**
