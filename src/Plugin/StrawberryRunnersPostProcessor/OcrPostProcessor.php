@@ -479,7 +479,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           $miniocr->startElement("l");
           foreach ($line->children() as $word) {
             $wcoos = explode(" ", $word['title']);
-            if (count($wcoos)) {
+            if (count($wcoos) == 5) {
               $x0 = (float) $wcoos[1];
               $y0 = (float) $wcoos[2];
               $x1 = (float) $wcoos[3];
