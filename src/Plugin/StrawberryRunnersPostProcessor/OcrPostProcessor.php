@@ -340,8 +340,35 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           $output->plugin = $miniocr;
           $io->output = $output;
         }
-
         //Do we have to remove djvu file?
+
+
+
+
+        setlocale(LC_CTYPE, 'en_US.UTF-8');
+        $execstring_pdfalto = $this->buildExecutableCommand_pdfalto($io);
+
+$this->logger->info('exec pdfalto: '  . $execstring_pdfalto);
+
+        if ($execstring_pdfalto) {
+          $backup_locale = setlocale(LC_CTYPE, '0');
+          setlocale(LC_CTYPE, $backup_locale);
+          // Support UTF-8 commands.
+          // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+          shell_exec("LANG=en_US.utf-8");
+          $proc_output = $this->proc_execute($execstring_pdfalto, $timeout);
+          if (is_null($proc_output)) {
+            throw new \Exception("Could not execute {$execstring_pdfalto} or timed out");
+          }
+          $this->logger->info('ALTO xml: '  . $proc_output);
+
+
+        }
+
+
+
+
+
       }
       else {
 
@@ -689,7 +716,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       }
 
       // This run function 1 step
-      // pdfalto -noLineNumbers -noImage -noImageInline -readingOrder -f 2 -l 2 %file
+      // pdfalto -noLineNumbers -noImage -noImageInline -readingOrder -f 2 -l 2 %file -
 
       $command = '';
       $can_run_pdfalto = \Drupal::service('strawberryfield.utility')
@@ -699,7 +726,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
       if ($can_run_pdfalto &&
         (strpos($arguments_pdfalto, '%file') !== FALSE)) {
-        $arguments_pdfalto = "-noLineNumbers -noImage -noImageInline -readingOrder -f {$sequence_number} -l {$sequence_number} " . $arguments_pdfalto;
+        $arguments_pdfalto = "-noLineNumbers -noImage -noImageInline -readingOrder -f {$sequence_number} -l {$sequence_number} " . $arguments_pdfalto . " - ";
         $arguments_pdfalto = str_replace('%s', '', $arguments_pdfalto);
         $arguments_pdfalto = $this->strReplaceFirst('%file', '%s', $arguments_pdfalto);
         $arguments_pdfalto = sprintf($arguments_pdfalto, $file_path);
