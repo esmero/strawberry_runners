@@ -348,7 +348,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         setlocale(LC_CTYPE, 'en_US.UTF-8');
         $execstring_pdfalto = $this->buildExecutableCommand_pdfalto($io);
 
-$this->logger->info('exec pdfalto: '  . $execstring_pdfalto);
+$this->logger->info('exec PDFALTO: '  . $execstring_pdfalto);
 
         if ($execstring_pdfalto) {
           $backup_locale = setlocale(LC_CTYPE, '0');
@@ -360,7 +360,13 @@ $this->logger->info('exec pdfalto: '  . $execstring_pdfalto);
           if (is_null($proc_output)) {
             throw new \Exception("Could not execute {$execstring_pdfalto} or timed out");
           }
-          $this->logger->info('ALTO xml: '  . $proc_output);
+
+          $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
+
+
+
+
+          $this->logger->info('MINIOCR: '  . $miniocr);
 
 
         }
@@ -562,6 +568,68 @@ $this->logger->info('exec pdfalto: '  . $execstring_pdfalto);
       return StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
     }
   }
+
+
+  protected function ALTOtoMiniOCR($output, $pageid) {
+
+    $alto = simplexml_load_string($output);
+    $internalErrors = libxml_use_internal_errors(TRUE);
+    libxml_clear_errors();
+    libxml_use_internal_errors($internalErrors);
+
+    $miniocr = new \XMLWriter();
+    $miniocr->openMemory();
+    $miniocr->startDocument('1.0', 'UTF-8');
+    $miniocr->startElement("ocr");
+
+
+
+    if (!$alto) {
+      $this->logger->warning('Sorry for @pageid we could not decode/extract ALTO as XML', [
+        '@pageid' => $pageid,
+      ]);
+      return NULL;
+    }
+    foreach ($alto->Layout->children() as $page) {
+
+      //$miniocr .= $page['ID'] . " " . $page['WIDTH'] . " " . $page['HEIGHT'] . " ";
+      $miniocr->startElement("p");
+      $miniocr->writeAttribute("xml:id", 'sequence_' . $pageid);
+      $miniocr->writeAttribute("wh", $page['WIDTH'] . " " . $page['HEIGHT']);
+
+      $page->registerXPathNamespace('ns', 'http://www.loc.gov/standards/alto/ns-v3#');
+      foreach ($page->xpath('.//ns:TextBlock') as $block) {
+        $miniocr->startElement("b");
+        foreach ($block->children() as $line) {
+          $miniocr->startElement("l");
+          foreach ($line->children() as $child_name=>$child_node) {
+            if ($child_name == 'SP') {
+              $miniocr->text(' ');
+            }
+            elseif ($child_name == 'String') {
+              $miniocr->startElement("w");
+              //$miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
+              $miniocr->text($child_node['CONTENT']);
+              $miniocr->endElement();
+            }
+          }
+          $miniocr->endElement();
+        }
+        $miniocr->endElement();
+      }
+      $miniocr->endElement();
+    }
+
+    $miniocr->endElement();
+    $miniocr->endDocument();
+    unset($alto);
+
+    return $miniocr->outputMemory(TRUE);
+
+  }
+
+
+
 
   /**
    * Builds a clean Command string using a File path.
