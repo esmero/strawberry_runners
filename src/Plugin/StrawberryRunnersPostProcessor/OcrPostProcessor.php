@@ -479,22 +479,22 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           $miniocr->startElement("l");
           foreach ($line->children() as $word) {
             $wcoos = explode(" ", $word['title']);
-            if (count($wcoos)) {
+            if (count($wcoos) == 5) {
               $x0 = (float) $wcoos[1];
               $y0 = (float) $wcoos[2];
               $x1 = (float) $wcoos[3];
               $y1 = (float) $wcoos[4];
-              $l = round(($x0 / $pwidth), 3);
-              $t = round(($y0 / $pheight), 3);
-              $w = round((($x1 - $x0) / $pwidth), 3);
-              $h = round((($y1 - $y0) / $pheight), 3);
+              $l = ltrim(sprintf('%.3f',($x0 / $pwidth)), 0);
+              $t = ltrim(sprintf('%.3f',($y0 / $pheight)), 0);
+              $w = ltrim(sprintf('%.3f',(($x1 - $x0) / $pwidth)), 0);
+              $h = ltrim(sprintf('%.3f',(($y1 - $y0) / $pheight)), 0);
               $text = (string) $word;
               if ($notFirstWord) {
                 $miniocr->text(' ');
               }
               $notFirstWord = TRUE;
               $miniocr->startElement("w");
-              $miniocr->writeAttribute("x", ltrim($l, '0') . ' ' . ltrim($t, 0) . ' ' . ltrim($w, 0) . ' ' . ltrim($h, 0));
+              $miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
               $miniocr->text($text);
               // Only assume we have at least one word for <w> tags
               // Since lines? could end empty?
