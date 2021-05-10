@@ -42,11 +42,13 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         'path_pdf2djvu' => '',
         'path_djvudump' => '',
         'path_djvu2hocr' => '',
+        'path_pdfalto' => '',
         'arguments' => '',
         'arguments_tesseract' => '',
         'arguments_pdf2djvu' => '',
         'arguments_djvudump' => '',
         'arguments_djvu2hocr' => '',
+        'arguments_pdfalto' => '',
         'output_type' => 'json',
         'output_destination' => 'searchapi',
         'processor_queue_type' => 'background',
@@ -187,6 +189,21 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#required' => FALSE,
     ];
 
+    $element['path_pdfalto'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('The system path to the pdfalto binary that will be executed by this processor.'),
+      '#default_value' => $this->getConfiguration()['path_pdfalto'],
+      '#description' => t('A full system path to the pdfalto binary present in the same environment your PHP runs, e.g  <em>/usr/local/bin/pdfalto</em>'),
+      '#required' => FALSE,
+    ];
+
+    $element['arguments_pdfalto'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Any additional argument for your pdfalto binary.'),
+      '#default_value' => !empty($this->getConfiguration()['arguments_pdfalto']) ? $this->getConfiguration()['arguments_pdfalto'] : '%file',
+      '#description' => t('Any arguments your binary requires to run. Use %file as replacement for the file that is output by the pdfalto binary.'),
+      '#required' => FALSE,
+    ];
 
     $element['output_type'] = [
       '#type' => 'select',
@@ -643,5 +660,65 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     return $command;
 
   }
+
+
+
+    /**
+     * Builds a clean Command string using a File path.
+     *
+     * @param \stdClass $io
+     *    $io->input needs to contain
+     *           \Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor::$input_property
+     *           \Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor::$input_arguments
+     *    $io->output will contain the result of the processor
+     *
+     * @return null|string
+     */
+    public function buildExecutableCommand_pdfalto(\stdClass $io) {
+      $input_property = $this->pluginDefinition['input_property'];
+      $input_argument = $this->pluginDefinition['input_argument'];
+      // Sets the default page to 1 if not passed.
+      $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+      $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+      $config = $this->getConfiguration();
+      $execpath_pdfalto = $config['path_pdfalto'];
+      $arguments_pdfalto = $config['arguments_pdfalto'];
+
+      if (empty($file_path)) {
+        return NULL;
+      }
+
+      // This run function 1 step
+      // pdfalto -noLineNumbers -noImage -noImageInline -readingOrder -f 2 -l 2 %file
+
+      $command = '';
+      $can_run_pdfalto = \Drupal::service('strawberryfield.utility')
+        ->verifyCommand($execpath_pdfalto);
+      $filename = pathinfo($file_path, PATHINFO_FILENAME);
+      $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
+      $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
+      if ($can_run_pdfalto &&
+        (strpos($arguments_pdfalto, '%file') !== FALSE)) {
+        $arguments_pdfalto = "-noLineNumbers -noImage -noImageInline -readingOrder -f {$sequence_number} -l {$sequence_number} " . $arguments_pdfalto;
+        $arguments_pdfalto = str_replace('%s', '', $arguments_pdfalto);
+        $arguments_pdfalto = $this->strReplaceFirst('%file', '%s', $arguments_pdfalto);
+        $arguments_pdfalto = sprintf($arguments_pdfalto, $file_path);
+
+        $command_pdfalto = escapeshellcmd($execpath_pdfalto . ' ' . $arguments_pdfalto);
+
+        $command = $command_pdfalto;
+
+      }
+      else {
+        //"missing arguments for PDFALTO"
+      }
+      // Only return $command if it contains the original filepath somewhere
+      if (strpos($command, $file_path) !== FALSE) {
+        return $command;
+      }
+      return '';
+
+    }
+
 
 }
