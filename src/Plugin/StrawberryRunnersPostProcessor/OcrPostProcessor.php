@@ -295,25 +295,53 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       //check if PDF is searchable: has DJVU file the layer TXTz?
       //pdf2djvu -q --no-metadata -p 2 -j0 -o page2.djv some_file.pdf && djvudump page2.djv |grep TXTz |wc -l
       //
-      setlocale(LC_CTYPE, 'en_US.UTF-8');
-      $execstring_check_searchable = $this->buildExecutableCommand_checkSearchable($io);
-      // assume its not there/won't work.
-      $proc_output_check_searchable = 0;
+      //Also with ALTO: PrintSpace element doesn't have children (ComposedBlock AND/OR TextBlock) if blank or not searchable
+      //pdfalto -noLineNumbers -noImage -noImageInline -readingOrder -f 1 -l 1 page1.pdf - |grep Block |wc -l (return 0 OR 1)
+      //
 
-      if ($execstring_check_searchable) {
-        $backup_locale = setlocale(LC_CTYPE, '0');
-        setlocale(LC_CTYPE, $backup_locale);
-        // Support UTF-8 commands.
-        // @see http://www.php.net/manual/en/function.shell-exec.php#85095
-        shell_exec("LANG=en_US.utf-8");
-        $proc_output_check_searchable = $this->proc_execute($execstring_check_searchable, $timeout);
-        if (is_null($proc_output_check_searchable)) {
-          throw new \Exception("Could not execute {$execstring_check_searchable} or timed out");
+      //To test switch from hOCR to ALTO
+      $formatocr = 'ALTO';
+
+      if ($formatocr == 'HOCR') {
+        setlocale(LC_CTYPE, 'en_US.UTF-8');
+        $execstring_check_searchable = $this->buildExecutableCommand_checkSearchable($io);
+        // assume its not there/won't work.
+        $proc_output_check_searchable = 0;
+
+        if ($execstring_check_searchable) {
+          $backup_locale = setlocale(LC_CTYPE, '0');
+          setlocale(LC_CTYPE, $backup_locale);
+          // Support UTF-8 commands.
+          // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+          shell_exec("LANG=en_US.utf-8");
+          $proc_output_check_searchable = $this->proc_execute($execstring_check_searchable, $timeout);
+          if (is_null($proc_output_check_searchable)) {
+            throw new \Exception("Could not execute {$execstring_check_searchable} or timed out");
+          }
+        }
+      }
+      else {
+        setlocale(LC_CTYPE, 'en_US.UTF-8');
+        $execstring_check_searchable = $this->buildExecutableCommand_pdfalto($io) . "|grep Block |wc -l";
+        // assume its not there/won't work.
+        $proc_output_check_searchable = 0;
+
+        if ($execstring_check_searchable) {
+          $backup_locale = setlocale(LC_CTYPE, '0');
+          setlocale(LC_CTYPE, $backup_locale);
+          // Support UTF-8 commands.
+          // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+          shell_exec("LANG=en_US.utf-8");
+          $proc_output_check_searchable = $this->proc_execute($execstring_check_searchable, $timeout);
+          if (is_null($proc_output_check_searchable)) {
+            throw new \Exception("Could not execute {$execstring_check_searchable} or timed out");
+          }
         }
       }
 
 
-      if ($proc_output_check_searchable == 1) {
+
+      if ($proc_output_check_searchable > 0) {
 
         //To test switch from hOCR to ALTO
         $formatocr = 'ALTO';
@@ -584,6 +612,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       $pageWidthPts = (float) $page['WIDTH'];
       $pageHeightPts = (float) $page['HEIGHT'];
       // To check if conversion is ok px = pts / 72 * 300 (dpi)
+      //It seems that pdfalto output is in points while tesseract alto is in pixel
       $pageWidthPx = sprintf('%.0f', $pageWidthPts * 300 / 72);
       $pageHeightPx = sprintf('%.0f', $pageHeightPts * 300 / 72);
       $miniocr->startElement("p");
