@@ -315,66 +315,59 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
       if ($proc_output_check_searchable == 1) {
 
-        //if searchable run djvu2hocr
-        //
-        setlocale(LC_CTYPE, 'en_US.UTF-8');
-        $execstring_djvu2hocr = $this->buildExecutableCommand_djvu2hocr($io);
-        if ($execstring_djvu2hocr) {
-          $backup_locale = setlocale(LC_CTYPE, '0');
-          setlocale(LC_CTYPE, $backup_locale);
-          // Support UTF-8 commands.
-          // @see http://www.php.net/manual/en/function.shell-exec.php#85095
-          shell_exec("LANG=en_US.utf-8");
-          $proc_output = $this->proc_execute($execstring_djvu2hocr, $timeout);
-          if (is_null($proc_output)) {
-            throw new \Exception("Could not execute {$execstring_djvu2hocr} or timed out");
-          }
+        //To test switch from hOCR to ALTO
+        $formatocr = 'ALTO';
 
-          //djvu2hocr output uses ocrx_line while tesseract uses ocr_line
+
+        if ($formatocr == 'HOCR') {
+          //if searchable run djvu2hocr
           //
-          $proc_output_mod = str_replace('ocrx_line', 'ocr_line', $proc_output);
+          setlocale(LC_CTYPE, 'en_US.UTF-8');
+          $execstring_djvu2hocr = $this->buildExecutableCommand_djvu2hocr($io);
+          if ($execstring_djvu2hocr) {
+            $backup_locale = setlocale(LC_CTYPE, '0');
+            setlocale(LC_CTYPE, $backup_locale);
+            // Support UTF-8 commands.
+            // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+            shell_exec("LANG=en_US.utf-8");
+            $proc_output = $this->proc_execute($execstring_djvu2hocr, $timeout);
+            if (is_null($proc_output)) {
+              throw new \Exception("Could not execute {$execstring_djvu2hocr} or timed out");
+            }
 
-          $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $sequence_number);
-          $output = new \stdClass();
-          $output->searchapi['fulltext'] = $miniocr;
-          $output->plugin = $miniocr;
-          $io->output = $output;
-        }
-        //Do we have to remove djvu file?
+            //djvu2hocr output uses ocrx_line while tesseract uses ocr_line
+            //
+            $proc_output_mod = str_replace('ocrx_line', 'ocr_line', $proc_output);
 
-
-
-
-        setlocale(LC_CTYPE, 'en_US.UTF-8');
-        $execstring_pdfalto = $this->buildExecutableCommand_pdfalto($io);
-
-$this->logger->info('exec PDFALTO: '  . $execstring_pdfalto);
-
-        if ($execstring_pdfalto) {
-          $backup_locale = setlocale(LC_CTYPE, '0');
-          setlocale(LC_CTYPE, $backup_locale);
-          // Support UTF-8 commands.
-          // @see http://www.php.net/manual/en/function.shell-exec.php#85095
-          shell_exec("LANG=en_US.utf-8");
-          $proc_output = $this->proc_execute($execstring_pdfalto, $timeout);
-          if (is_null($proc_output)) {
-            throw new \Exception("Could not execute {$execstring_pdfalto} or timed out");
+            $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $sequence_number);
+            $output = new \stdClass();
+            $output->searchapi['fulltext'] = $miniocr;
+            $output->plugin = $miniocr;
+            $io->output = $output;
           }
-
-          $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
-
-
-
-
-          $this->logger->info('MINIOCR: '  . $miniocr);
-
-
+          //Do we have to remove djvu file?
         }
+        else {
 
-
-
-
-
+          setlocale(LC_CTYPE, 'en_US.UTF-8');
+          $execstring_pdfalto = $this->buildExecutableCommand_pdfalto($io);
+          if ($execstring_pdfalto) {
+            $backup_locale = setlocale(LC_CTYPE, '0');
+            setlocale(LC_CTYPE, $backup_locale);
+            // Support UTF-8 commands.
+            // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+            shell_exec("LANG=en_US.utf-8");
+            $proc_output = $this->proc_execute($execstring_pdfalto, $timeout);
+            if (is_null($proc_output)) {
+              throw new \Exception("Could not execute {$execstring_pdfalto} or timed out");
+            }
+            $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
+            $output = new \stdClass();
+            $output->searchapi['fulltext'] = $miniocr;
+            $output->plugin = $miniocr;
+            $io->output = $output;
+          }
+        }
       }
       else {
 
@@ -607,7 +600,6 @@ $this->logger->info('exec PDFALTO: '  . $execstring_pdfalto);
               $miniocr->text(' ');
             }
             elseif ($child_name == 'String') {
-              $miniocr->startElement("w");
               // ALTO <String ID="p1_w1" CONTENT="Senato" HPOS="74.6078" VPOS="58.3326" WIDTH="31.9943" HEIGHT="10.0627" STYLEREFS="font0" />
               //$miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
               $hpos_rel = (float) $child_node['HPOS'] / $pageWidthPts;
