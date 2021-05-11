@@ -571,7 +571,6 @@ $this->logger->info('exec PDFALTO: '  . $execstring_pdfalto);
 
 
   protected function ALTOtoMiniOCR($output, $pageid) {
-
     $alto = simplexml_load_string($output);
     $internalErrors = libxml_use_internal_errors(TRUE);
     libxml_clear_errors();
@@ -582,8 +581,6 @@ $this->logger->info('exec PDFALTO: '  . $execstring_pdfalto);
     $miniocr->startDocument('1.0', 'UTF-8');
     $miniocr->startElement("ocr");
 
-
-
     if (!$alto) {
       $this->logger->warning('Sorry for @pageid we could not decode/extract ALTO as XML', [
         '@pageid' => $pageid,
@@ -591,11 +588,14 @@ $this->logger->info('exec PDFALTO: '  . $execstring_pdfalto);
       return NULL;
     }
     foreach ($alto->Layout->children() as $page) {
-
-      //$miniocr .= $page['ID'] . " " . $page['WIDTH'] . " " . $page['HEIGHT'] . " ";
+      $pageWidthPts = (float) $page['WIDTH'];
+      $pageHeightPts = (float) $page['HEIGHT'];
+      // To check if conversion is ok px = pts / 72 * 300 (dpi)
+      $pageWidthPx = sprintf('%.0f', $pageWidthPts * 300 / 72);
+      $pageHeightPx = sprintf('%.0f', $pageHeightPts * 300 / 72);
       $miniocr->startElement("p");
       $miniocr->writeAttribute("xml:id", 'sequence_' . $pageid);
-      $miniocr->writeAttribute("wh", $page['WIDTH'] . " " . $page['HEIGHT']);
+      $miniocr->writeAttribute("wh", $pageWidthPx . " " . $pageHeightPx);
 
       $page->registerXPathNamespace('ns', 'http://www.loc.gov/standards/alto/ns-v3#');
       foreach ($page->xpath('.//ns:TextBlock') as $block) {
@@ -608,7 +608,20 @@ $this->logger->info('exec PDFALTO: '  . $execstring_pdfalto);
             }
             elseif ($child_name == 'String') {
               $miniocr->startElement("w");
+              // ALTO <String ID="p1_w1" CONTENT="Senato" HPOS="74.6078" VPOS="58.3326" WIDTH="31.9943" HEIGHT="10.0627" STYLEREFS="font0" />
               //$miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
+              $hpos_rel = (float) $child_node['HPOS'] / $pageWidthPts;
+              $vpos_rel = (float) $child_node['VPOS'] / $pageHeightPts;
+              $width_rel = (float) $child_node['WIDTH'] / $pageWidthPts;
+              $height_rel = (float) $child_node['HEIGHT'] / $pageHeightPts;
+
+              $l = ltrim(sprintf('%.3f',$hpos_rel), 0);
+              $t = ltrim(sprintf('%.3f',$vpos_rel), 0);
+              $w = ltrim(sprintf('%.3f',$width_rel), 0);
+              $h = ltrim(sprintf('%.3f',$height_rel), 0);
+
+              $miniocr->startElement("w");
+              $miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
               $miniocr->text($child_node['CONTENT']);
               $miniocr->endElement();
             }
@@ -619,13 +632,10 @@ $this->logger->info('exec PDFALTO: '  . $execstring_pdfalto);
       }
       $miniocr->endElement();
     }
-
     $miniocr->endElement();
     $miniocr->endDocument();
     unset($alto);
-
     return $miniocr->outputMemory(TRUE);
-
   }
 
 
