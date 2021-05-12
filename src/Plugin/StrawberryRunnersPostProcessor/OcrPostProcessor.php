@@ -414,7 +414,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
             throw new \Exception("Could not execute {$execstring} or timed out");
           }
 
-          $miniocr = $this->hOCRtoMiniOCR($proc_output, $sequence_number);
+          $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
           $output = new \stdClass();
           $output->searchapi['fulltext'] = $miniocr;
           $output->plugin = $miniocr;
