@@ -391,8 +391,13 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
             }
             $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
             $output = new \stdClass();
-            $output->searchapi['fulltext'] = $miniocr;
-            $output->plugin = $miniocr;
+
+            //$output->searchapi['fulltext'] = $miniocr;
+            $output->searchapi['fulltext'] = $proc_output;
+
+            //$output->plugin = $miniocr;
+            $output->plugin = $proc_output;
+
             $io->output = $output;
           }
         }
@@ -416,13 +421,21 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
           $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
           $output = new \stdClass();
-          $output->searchapi['fulltext'] = $miniocr;
-          $output->plugin = $miniocr;
+
+          //$output->searchapi['fulltext'] = $miniocr;
+          $output->searchapi['fulltext'] = $proc_output;
+
+          //$output->plugin = $miniocr;
+          $output->plugin = $proc_output;
+
           $io->output = $output;
         }
       }
       // Lastly plain text version of the XML.
-      $io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
+      //If ALTO we need to make this in different way
+      //$io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
+      $io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? $this->ALTOtoText($output->searchapi['fulltext'], $sequence_number) : '';
+
     }
     else {
       $query = \Drupal::entityTypeManager()->getStorage('node')->getQuery();
@@ -659,6 +672,40 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     return $miniocr->outputMemory(TRUE);
   }
 
+
+  protected function ALTOtoText($output, $pageid) {
+    $alto = simplexml_load_string($output);
+    $internalErrors = libxml_use_internal_errors(TRUE);
+    libxml_clear_errors();
+    libxml_use_internal_errors($internalErrors);
+
+    $fulltext = '';
+
+    if (!$alto) {
+      $this->logger->warning('Sorry for @pageid we could not decode/extract ALTO as TEXT', [
+        '@pageid' => $pageid,
+      ]);
+      return NULL;
+    }
+    foreach ($alto->Layout->children() as $page) {
+      $page->registerXPathNamespace('ns', 'http://www.loc.gov/standards/alto/ns-v3#');
+      foreach ($page->xpath('.//ns:TextBlock') as $block) {
+        foreach ($block->children() as $line) {
+          foreach ($line->children() as $child_name=>$child_node) {
+            if ($child_name == 'SP') {
+              $fulltext .= ' ';
+            }
+            elseif ($child_name == 'String') {
+              $fulltext .= $child_node['CONTENT'];
+            }
+          }
+          $fulltext .= PHP_EOL;
+        }
+      }
+    }
+    unset($alto);
+    return $fulltext;
+  }
 
 
 
