@@ -689,21 +689,29 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     }
     foreach ($alto->Layout->children() as $page) {
       $page->registerXPathNamespace('ns', 'http://www.loc.gov/standards/alto/ns-v3#');
-      foreach ($page->xpath('.//ns:TextBlock') as $block) {
-        foreach ($block->children() as $line) {
-          foreach ($line->children() as $child_name=>$child_node) {
-            if ($child_name == 'SP') {
-              $fulltext .= ' ';
+      if (count($page->xpath('.//ns:TextBlock')) > 0) {
+        foreach ($page->xpath('.//ns:TextBlock') as $block) {
+          foreach ($block->children() as $line) {
+            foreach ($line->children() as $child_name=>$child_node) {
+              if ($child_name == 'SP') {
+                $fulltext .= ' ';
+              }
+              elseif ($child_name == 'String') {
+                $fulltext .= $child_node['CONTENT'];
+              }
             }
-            elseif ($child_name == 'String') {
-              $fulltext .= $child_node['CONTENT'];
-            }
+            $fulltext .= PHP_EOL;
           }
-          $fulltext .= PHP_EOL;
         }
+      }
+      else {
+        //ToDO: if fulltext is empty then original xml is indexed, why?
+        //So for now if empty I put BLANK string
+        $fulltext = 'BLANK';
       }
     }
     unset($alto);
+    $this->logger->info("FULLTEXT: "  . $fulltext);
     return $fulltext;
   }
 
