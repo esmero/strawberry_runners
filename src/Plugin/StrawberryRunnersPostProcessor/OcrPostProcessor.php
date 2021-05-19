@@ -227,8 +227,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#title' => $this->t('Timeout in seconds for this process.'),
       '#default_value' => $this->getConfiguration()['timeout'],
       '#description' => $this->t('If the process runs out of time it can still be processed again.'),
-      '#size' => 2,
-      '#maxlength' => 2,
+      '#size' => 3,
+      '#maxlength' => 3,
       '#min' => 1,
     ];
     $element['weight'] = [
@@ -290,9 +290,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         // @see http://www.php.net/manual/en/function.shell-exec.php#85095
         shell_exec("LANG=en_US.utf-8");
         $proc_output_check_searchable = $this->proc_execute($execstring_check_searchable, $timeout);
-        if (is_null($proc_output_check_searchable)) {
-          throw new \Exception("Could not execute {$execstring_check_searchable} or timed out");
-        }
       }
 
 
@@ -310,6 +307,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           shell_exec("LANG=en_US.utf-8");
           $proc_output = $this->proc_execute($execstring_djvu2hocr, $timeout);
           if (is_null($proc_output)) {
+            $this->logger->warning("DJVU processing via {$execstring_djvu2hocr} timed out");
             throw new \Exception("Could not execute {$execstring_djvu2hocr} or timed out");
           }
 
@@ -340,6 +338,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           shell_exec("LANG=en_US.utf-8");
           $proc_output = $this->proc_execute($execstring, $timeout);
           if (is_null($proc_output)) {
+            $this->logger->warning("HOCR processing via {$execstring} timed out");
             throw new \Exception("Could not execute {$execstring} or timed out");
           }
 
@@ -446,6 +445,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $miniocr->openMemory();
     $miniocr->startDocument('1.0', 'UTF-8');
     $miniocr->startElement("ocr");
+    $atleastone_word = FALSE;
     foreach ($hocr->body->children() as $page) {
       $titleparts = explode(';', $page['title']);
       $pagetitle = NULL;
@@ -466,7 +466,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       // To avoid divisions by 0
       $pwidth = (float) $coos[2] ? (float) $coos[2] : 1;
       $pheight = (float) $coos[3] ? (float) $coos[3] : 1;
-      $atleastone_word = FALSE;
       // NOTE: floats are in the form of .1 so we need to remove the first 0.
       if (count($coos)) {
         $miniocr->startElement("p");
@@ -479,7 +478,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           $miniocr->startElement("l");
           foreach ($line->children() as $word) {
             $wcoos = explode(" ", $word['title']);
-            if (count($wcoos) == 5) {
+            if (count($wcoos) >= 5) {
               $x0 = (float) $wcoos[1];
               $y0 = (float) $wcoos[2];
               $x1 = (float) $wcoos[3];
