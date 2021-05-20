@@ -160,10 +160,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ->load($data->nid);
 
     if (!$entity) {
-      $this->logger->log(LogLevel::ERROR, 'Sorry the Node ID @nodeid passed to this processor does not exist.', [
+      $this->logger->log(LogLevel::ERROR, 'Sorry the Node ID @nodeid passed to the Strawberry Runners processor does not (longer?) exist. Skipping.', [
         '@nodeid' => $data->nid,
       ]);
-
+      return;
     }
 
     $filelocation = $this->ensureFileAvailability($file);
