@@ -42,11 +42,13 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         'path_pdf2djvu' => '',
         'path_djvudump' => '',
         'path_djvu2hocr' => '',
+        'path_pdfalto' => '',
         'arguments' => '',
         'arguments_tesseract' => '',
         'arguments_pdf2djvu' => '',
         'arguments_djvudump' => '',
         'arguments_djvu2hocr' => '',
+        'arguments_pdfalto' => '',
         'output_type' => 'json',
         'output_destination' => 'searchapi',
         'processor_queue_type' => 'background',
@@ -187,6 +189,21 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#required' => FALSE,
     ];
 
+    $element['path_pdfalto'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('The system path to the pdfalto binary that will be executed by this processor.'),
+      '#default_value' => $this->getConfiguration()['path_pdfalto'],
+      '#description' => t('A full system path to the pdfalto binary present in the same environment your PHP runs, e.g  <em>/usr/local/bin/pdfalto</em>'),
+      '#required' => FALSE,
+    ];
+
+    $element['arguments_pdfalto'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Any additional argument for your pdfalto binary.'),
+      '#default_value' => !empty($this->getConfiguration()['arguments_pdfalto']) ? $this->getConfiguration()['arguments_pdfalto'] : '%file',
+      '#description' => t('Any arguments your binary requires to run. Use %file as replacement for the file that is output by the pdfalto binary.'),
+      '#required' => FALSE,
+    ];
 
     $element['output_type'] = [
       '#type' => 'select',
@@ -278,51 +295,108 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       //check if PDF is searchable: has DJVU file the layer TXTz?
       //pdf2djvu -q --no-metadata -p 2 -j0 -o page2.djv some_file.pdf && djvudump page2.djv |grep TXTz |wc -l
       //
-      setlocale(LC_CTYPE, 'en_US.UTF-8');
-      $execstring_check_searchable = $this->buildExecutableCommand_checkSearchable($io);
-      // assume its not there/won't work.
-      $proc_output_check_searchable = 0;
+      //Also with ALTO: PrintSpace element doesn't have children (ComposedBlock AND/OR TextBlock) if blank or not searchable
+      //pdfalto -noLineNumbers -noImage -noImageInline -readingOrder -f 1 -l 1 page1.pdf - |grep Block |wc -l (return 0 OR 1)
+      //
 
-      if ($execstring_check_searchable) {
-        $backup_locale = setlocale(LC_CTYPE, '0');
-        setlocale(LC_CTYPE, $backup_locale);
-        // Support UTF-8 commands.
-        // @see http://www.php.net/manual/en/function.shell-exec.php#85095
-        shell_exec("LANG=en_US.utf-8");
-        $proc_output_check_searchable = $this->proc_execute($execstring_check_searchable, $timeout);
-      }
+      //To test switch from hOCR to ALTO
+      $formatocr = 'ALTO';
 
-
-      if ($proc_output_check_searchable == 1) {
-
-        //if searchable run djvu2hocr
-        //
+      if ($formatocr == 'HOCR') {
         setlocale(LC_CTYPE, 'en_US.UTF-8');
-        $execstring_djvu2hocr = $this->buildExecutableCommand_djvu2hocr($io);
-        if ($execstring_djvu2hocr) {
+        $execstring_check_searchable = $this->buildExecutableCommand_checkSearchable($io);
+        // assume its not there/won't work.
+        $proc_output_check_searchable = 0;
+
+        if ($execstring_check_searchable) {
           $backup_locale = setlocale(LC_CTYPE, '0');
           setlocale(LC_CTYPE, $backup_locale);
           // Support UTF-8 commands.
           // @see http://www.php.net/manual/en/function.shell-exec.php#85095
           shell_exec("LANG=en_US.utf-8");
-          $proc_output = $this->proc_execute($execstring_djvu2hocr, $timeout);
-          if (is_null($proc_output)) {
-            $this->logger->warning("DJVU processing via {$execstring_djvu2hocr} timed out");
-            throw new \Exception("Could not execute {$execstring_djvu2hocr} or timed out");
-          }
-
-          //djvu2hocr output uses ocrx_line while tesseract uses ocr_line
-          //
-          $proc_output_mod = str_replace('ocrx_line', 'ocr_line', $proc_output);
-
-          $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $sequence_number);
-          $output = new \stdClass();
-          $output->searchapi['fulltext'] = $miniocr;
-          $output->plugin = $miniocr;
-          $io->output = $output;
+          $proc_output_check_searchable = $this->proc_execute($execstring_check_searchable, $timeout);
         }
+      }
+      else {
+        setlocale(LC_CTYPE, 'en_US.UTF-8');
+        $execstring_check_searchable = $this->buildExecutableCommand_pdfalto($io) . "|grep Block |wc -l";
+        // assume its not there/won't work.
+        $proc_output_check_searchable = 0;
 
-        //Do we have to remove djvu file?
+        if ($execstring_check_searchable) {
+          $backup_locale = setlocale(LC_CTYPE, '0');
+          setlocale(LC_CTYPE, $backup_locale);
+          // Support UTF-8 commands.
+          // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+          shell_exec("LANG=en_US.utf-8");
+          $proc_output_check_searchable = $this->proc_execute($execstring_check_searchable, $timeout);
+        }
+      }
+
+
+
+      if ($proc_output_check_searchable > 0) {
+
+        //To test switch from hOCR to ALTO
+        $formatocr = 'ALTO';
+
+
+        if ($formatocr == 'HOCR') {
+          //if searchable run djvu2hocr
+          //
+          setlocale(LC_CTYPE, 'en_US.UTF-8');
+          $execstring_djvu2hocr = $this->buildExecutableCommand_djvu2hocr($io);
+          if ($execstring_djvu2hocr) {
+            $backup_locale = setlocale(LC_CTYPE, '0');
+            setlocale(LC_CTYPE, $backup_locale);
+            // Support UTF-8 commands.
+            // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+            shell_exec("LANG=en_US.utf-8");
+            $proc_output = $this->proc_execute($execstring_djvu2hocr, $timeout);
+            if (is_null($proc_output)) {
+              $this->logger->warning("DJVU processing via {$execstring_djvu2hocr} timed out");
+              throw new \Exception("Could not execute {$execstring_djvu2hocr} or timed out");
+            }
+
+            //djvu2hocr output uses ocrx_line while tesseract uses ocr_line
+            //
+            $proc_output_mod = str_replace('ocrx_line', 'ocr_line', $proc_output);
+
+            $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $sequence_number);
+            $output = new \stdClass();
+            $output->searchapi['fulltext'] = $miniocr;
+            $output->plugin = $miniocr;
+            $io->output = $output;
+          }
+          //Do we have to remove djvu file?
+        }
+        else {
+
+          setlocale(LC_CTYPE, 'en_US.UTF-8');
+          $execstring_pdfalto = $this->buildExecutableCommand_pdfalto($io);
+          if ($execstring_pdfalto) {
+            $backup_locale = setlocale(LC_CTYPE, '0');
+            setlocale(LC_CTYPE, $backup_locale);
+            // Support UTF-8 commands.
+            // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+            shell_exec("LANG=en_US.utf-8");
+            $proc_output = $this->proc_execute($execstring_pdfalto, $timeout);
+            if (is_null($proc_output)) {
+              $this->logger->warning("PDFALTO processing via {$execstring_pdfalto} timed out");
+              throw new \Exception("Could not execute {$execstring_pdfalto} or timed out");
+            }
+            $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
+            $output = new \stdClass();
+
+            //$output->searchapi['fulltext'] = $miniocr;
+            $output->searchapi['fulltext'] = $proc_output;
+
+            //$output->plugin = $miniocr;
+            $output->plugin = $proc_output;
+
+            $io->output = $output;
+          }
+        }
       }
       else {
 
@@ -342,15 +416,23 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
             throw new \Exception("Could not execute {$execstring} or timed out");
           }
 
-          $miniocr = $this->hOCRtoMiniOCR($proc_output, $sequence_number);
+          $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
           $output = new \stdClass();
-          $output->searchapi['fulltext'] = $miniocr;
-          $output->plugin = $miniocr;
+
+          //$output->searchapi['fulltext'] = $miniocr;
+          $output->searchapi['fulltext'] = $proc_output;
+
+          //$output->plugin = $miniocr;
+          $output->plugin = $proc_output;
+
           $io->output = $output;
         }
       }
       // Lastly plain text version of the XML.
-      $io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
+      //If ALTO we need to make this in different way
+      //$io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
+      $io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? $this->ALTOtoText($output->searchapi['fulltext'], $sequence_number) : '';
+
     }
     else {
       $query = \Drupal::entityTypeManager()->getStorage('node')->getQuery();
@@ -518,6 +600,120 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     }
   }
 
+
+  protected function ALTOtoMiniOCR($output, $pageid) {
+    $alto = simplexml_load_string($output);
+    $internalErrors = libxml_use_internal_errors(TRUE);
+    libxml_clear_errors();
+    libxml_use_internal_errors($internalErrors);
+
+    $miniocr = new \XMLWriter();
+    $miniocr->openMemory();
+    $miniocr->startDocument('1.0', 'UTF-8');
+    $miniocr->startElement("ocr");
+
+    if (!$alto) {
+      $this->logger->warning('Sorry for @pageid we could not decode/extract ALTO as XML', [
+        '@pageid' => $pageid,
+      ]);
+      return NULL;
+    }
+    foreach ($alto->Layout->children() as $page) {
+      $pageWidthPts = (float) $page['WIDTH'];
+      $pageHeightPts = (float) $page['HEIGHT'];
+      // To check if conversion is ok px = pts / 72 * 300 (dpi)
+      //It seems that pdfalto output is in points while tesseract alto is in pixel
+      $pageWidthPx = sprintf('%.0f', $pageWidthPts * 300 / 72);
+      $pageHeightPx = sprintf('%.0f', $pageHeightPts * 300 / 72);
+      $miniocr->startElement("p");
+      $miniocr->writeAttribute("xml:id", 'sequence_' . $pageid);
+      $miniocr->writeAttribute("wh", $pageWidthPx . " " . $pageHeightPx);
+
+      $page->registerXPathNamespace('ns', 'http://www.loc.gov/standards/alto/ns-v3#');
+      foreach ($page->xpath('.//ns:TextBlock') as $block) {
+        $miniocr->startElement("b");
+        foreach ($block->children() as $line) {
+          $miniocr->startElement("l");
+          foreach ($line->children() as $child_name=>$child_node) {
+            if ($child_name == 'SP') {
+              $miniocr->text(' ');
+            }
+            elseif ($child_name == 'String') {
+              // ALTO <String ID="p1_w1" CONTENT="Senato" HPOS="74.6078" VPOS="58.3326" WIDTH="31.9943" HEIGHT="10.0627" STYLEREFS="font0" />
+              //$miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
+              $hpos_rel = (float) $child_node['HPOS'] / $pageWidthPts;
+              $vpos_rel = (float) $child_node['VPOS'] / $pageHeightPts;
+              $width_rel = (float) $child_node['WIDTH'] / $pageWidthPts;
+              $height_rel = (float) $child_node['HEIGHT'] / $pageHeightPts;
+
+              $l = ltrim(sprintf('%.3f',$hpos_rel), 0);
+              $t = ltrim(sprintf('%.3f',$vpos_rel), 0);
+              $w = ltrim(sprintf('%.3f',$width_rel), 0);
+              $h = ltrim(sprintf('%.3f',$height_rel), 0);
+
+              $miniocr->startElement("w");
+              $miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
+              $miniocr->text($child_node['CONTENT']);
+              $miniocr->endElement();
+            }
+          }
+          $miniocr->endElement();
+        }
+        $miniocr->endElement();
+      }
+      $miniocr->endElement();
+    }
+    $miniocr->endElement();
+    $miniocr->endDocument();
+    unset($alto);
+    return $miniocr->outputMemory(TRUE);
+  }
+
+
+  protected function ALTOtoText($output, $pageid) {
+    $alto = simplexml_load_string($output);
+    $internalErrors = libxml_use_internal_errors(TRUE);
+    libxml_clear_errors();
+    libxml_use_internal_errors($internalErrors);
+
+    $fulltext = '';
+
+    if (!$alto) {
+      $this->logger->warning('Sorry for @pageid we could not decode/extract ALTO as TEXT', [
+        '@pageid' => $pageid,
+      ]);
+      return NULL;
+    }
+    foreach ($alto->Layout->children() as $page) {
+      $page->registerXPathNamespace('ns', 'http://www.loc.gov/standards/alto/ns-v3#');
+      if (count($page->xpath('.//ns:TextBlock')) > 0) {
+        foreach ($page->xpath('.//ns:TextBlock') as $block) {
+          foreach ($block->children() as $line) {
+            foreach ($line->children() as $child_name=>$child_node) {
+              if ($child_name == 'SP') {
+                $fulltext .= ' ';
+              }
+              elseif ($child_name == 'String') {
+                $fulltext .= $child_node['CONTENT'];
+              }
+            }
+            $fulltext .= PHP_EOL;
+          }
+        }
+      }
+      else {
+        //ToDO: if fulltext is empty then original xml is indexed, why?
+        //So for now if empty I put BLANK string
+        $fulltext = 'BLANK';
+      }
+    }
+    unset($alto);
+    $this->logger->info("FULLTEXT: "  . $fulltext);
+    return $fulltext;
+  }
+
+
+
   /**
    * Builds a clean Command string using a File path.
    *
@@ -642,5 +838,65 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     return $command;
 
   }
+
+
+
+    /**
+     * Builds a clean Command string using a File path.
+     *
+     * @param \stdClass $io
+     *    $io->input needs to contain
+     *           \Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor::$input_property
+     *           \Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor::$input_arguments
+     *    $io->output will contain the result of the processor
+     *
+     * @return null|string
+     */
+    public function buildExecutableCommand_pdfalto(\stdClass $io) {
+      $input_property = $this->pluginDefinition['input_property'];
+      $input_argument = $this->pluginDefinition['input_argument'];
+      // Sets the default page to 1 if not passed.
+      $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+      $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+      $config = $this->getConfiguration();
+      $execpath_pdfalto = $config['path_pdfalto'];
+      $arguments_pdfalto = $config['arguments_pdfalto'];
+
+      if (empty($file_path)) {
+        return NULL;
+      }
+
+      // This run function 1 step
+      // pdfalto -noLineNumbers -noImage -noImageInline -readingOrder -f 2 -l 2 %file -
+
+      $command = '';
+      $can_run_pdfalto = \Drupal::service('strawberryfield.utility')
+        ->verifyCommand($execpath_pdfalto);
+      $filename = pathinfo($file_path, PATHINFO_FILENAME);
+      $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
+      $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
+      if ($can_run_pdfalto &&
+        (strpos($arguments_pdfalto, '%file') !== FALSE)) {
+        $arguments_pdfalto = "-noLineNumbers -noImage -noImageInline -readingOrder -f {$sequence_number} -l {$sequence_number} " . $arguments_pdfalto . " - ";
+        $arguments_pdfalto = str_replace('%s', '', $arguments_pdfalto);
+        $arguments_pdfalto = $this->strReplaceFirst('%file', '%s', $arguments_pdfalto);
+        $arguments_pdfalto = sprintf($arguments_pdfalto, $file_path);
+
+        $command_pdfalto = escapeshellcmd($execpath_pdfalto . ' ' . $arguments_pdfalto);
+
+        $command = $command_pdfalto;
+
+      }
+      else {
+        //"missing arguments for PDFALTO"
+      }
+      // Only return $command if it contains the original filepath somewhere
+      if (strpos($command, $file_path) !== FALSE) {
+        return $command;
+      }
+      return '';
+
+    }
+
 
 }
