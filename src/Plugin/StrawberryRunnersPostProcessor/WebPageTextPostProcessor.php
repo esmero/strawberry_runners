@@ -143,12 +143,14 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
         $page_title = $page_info['title'] ?? NULL;
         $page_url = $page_info['url'] ?? '';
         $page_title = $page_title ?? $page_url;
-        $page_text = $page_text['text'] ?? '';
+        $page_text = $page_info['text'] ?? '';
         $nlp = new NlpClient('http://esmero-nlp:6400');
         if ($nlp) {
           $polyglot = $nlp->polyglot_entities($page_text, 'en');
           $entities_all = $polyglot->getEntities();
-          error_log(var_export($entities_all, TRUE));
+          if (!empty($entities_all) and is_array($entities_all)) {
+            $output->searchapi['metadata'] = $entities_all;
+          }
         }
         $output->searchapi['plaintext'] = $page_url . ' , '. $page_title . ' , ' . $page_text;
         $output->searchapi['label'] = $page_title;
