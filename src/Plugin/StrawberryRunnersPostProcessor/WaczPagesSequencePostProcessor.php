@@ -155,7 +155,6 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
     $config = $this->getConfiguration();
     $output = new \stdClass();
     $io->output = $io->input;
-    $output->searchapi['fulltext'] = '';
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
       $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
@@ -165,7 +164,7 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
       $newname = $info['dirname'].'/'.$info['filename'] . '.' . 'zip';
       $sequence_data = [];
       $sequence_number = [];
-      $this->fileSystem->move($file_path, $newname, FileSystemInterface::EXISTS_REPLACE);
+      $newname = $this->fileSystem->move($file_path, $newname, FileSystemInterface::EXISTS_REPLACE);
       $z = new \ZipArchive();
       $contents = NULL;
       if ($z->open($newname)) {
@@ -193,17 +192,17 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
         }
       }
 
-      $output = new \stdClass();
+
       $output->plugin = [
         'sequence_number' => $sequence_number,
         'plugin_metadata' => $sequence_data,
       ];
-      $io->output = $output;
-      error_log(var_export($io, true));
+
     }
     else {
       throw new \InvalidArgumentException(\sprintf("Invalid arguments passed to %s", $this->getPluginId()));
     }
+    $io->output = $output;
   }
 
 }
