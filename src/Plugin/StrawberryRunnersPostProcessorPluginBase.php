@@ -88,7 +88,6 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     $this->fileSystem = $file_system;
     $this->temporary_directory = $this->fileSystem->getTempDirectory();
     $this->logger = $logger;
-
   }
 
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
