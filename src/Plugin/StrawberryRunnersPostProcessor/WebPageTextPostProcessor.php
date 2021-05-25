@@ -137,6 +137,7 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
     $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
     $output = new \stdClass();
     $output->searchapi['fulltext'] = StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
+    $output->searchapi['metadata'] = [];
     if (isset($io->input->{$input_property}) && $node_uuid) {
         $page_info = json_decode($io->input->{$input_property}, true, 3);
       if (json_last_error() == JSON_ERROR_NONE) {
@@ -144,9 +145,14 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
         $page_url = $page_info['url'] ?? '';
         $page_title = $page_title ?? $page_url;
         $page_text = $page_info['text'] ?? '';
+        $page_ts = $page_info['ts'] ?? date("c");
         $nlp = new NlpClient('http://esmero-nlp:6400');
         if ($nlp) {
           $polyglot = $nlp->polyglot_entities($page_text, 'en');
+          $output->searchapi['where']= $polyglot->getLocations();
+          $output->searchapi['who'] = array_unique(array_merge($polyglot->getOrganizations() , $polyglot->getPersons()));
+          $output->searchapi['sentiment'] = $polyglot->getSentiment();
+          $output->searchapi['uri'] = $page_url;
           $entities_all = $polyglot->getEntities();
           if (!empty($entities_all) and is_array($entities_all)) {
             $output->searchapi['metadata'] = $entities_all;
@@ -155,9 +161,9 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
         $output->searchapi['plaintext'] = $page_url . ' , '. $page_title . ' , ' . $page_text;
         $output->searchapi['label'] = $page_title;
         $output->searchapi['metadata'][] = $page_url;
-        if (!empty($page_info['ts'])) {
-          $output->searchapi['metadata'][] = $page_info['ts'];
-        }
+
+        $output->searchapi['ts'] = $page_ts;
+
         $output->plugin = $output->searchapi;
       } else {
         throw new \Exception("WebPage Text was not a valid JSON");
