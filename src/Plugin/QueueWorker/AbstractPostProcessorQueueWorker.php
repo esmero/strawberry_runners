@@ -262,7 +262,13 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           $toindex->fulltext = $io->output->searchapi['fulltext'] ?? '';
           $toindex->plaintext = $io->output->searchapi['plaintext'] ?? '';
           $toindex->metadata = $io->output->searchapi['metadata'] ?? [];
+          $toindex->who = $io->output->searchapi['who'] ?? [];
+          $toindex->where = $io->output->searchapi['where'] ?? [];
+          $toindex->when = $io->output->searchapi['when'] ?? [];
+          $toindex->ts = $io->output->searchapi['ts'] ?? NULL;
+          $toindex->uri = $io->output->searchapi['uri'] ?? NULL;
           $toindex->label = $io->output->searchapi['label'] ?? NULL;
+          $toindex->sentiment = $io->output->searchapi['sentiment'] ?? 0;
 
           // $siblings will be the amount of total children processors that were
           // enqueued for a single Processor chain.
