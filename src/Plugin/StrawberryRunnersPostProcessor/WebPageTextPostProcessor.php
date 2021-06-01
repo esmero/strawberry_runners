@@ -150,7 +150,7 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
         if ($nlp) {
           $polyglot = $nlp->polyglot_entities($page_text, 'en');
           $output->searchapi['where']= $polyglot->getLocations();
-          $output->searchapi['who'] = array_unique(array_merge($polyglot->getOrganizations() , $polyglot->getPersons()));
+          $output->searchapi['who'] = array_unique(array_merge((array) $polyglot->getOrganizations() , (array) $polyglot->getPersons()));
           $output->searchapi['sentiment'] = $polyglot->getSentiment();
           $output->searchapi['uri'] = $page_url;
           $entities_all = $polyglot->getEntities();
