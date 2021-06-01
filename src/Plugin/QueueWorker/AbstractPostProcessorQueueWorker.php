@@ -347,10 +347,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // If still null means the child is incompatible with the parent. We abort.
         if ($input_property_value == NULL) {
           $this->logger->log(LogLevel::WARNING,
-            'Sorry @childplugin is  incompatible with @parentplugin, skipping.',
+            'Sorry @childplugin is incompatible with @parentplugin or its output or the later is empty, skipping.',
             [
               '@parentplugin' => $data->plugin_config_entity_id,
-              '@childplugin' => $childdata->plugin_config_entity_id,
+              '@childplugin' => $postprocessor_config_entity->id(),
             ]);
           continue;
         }
