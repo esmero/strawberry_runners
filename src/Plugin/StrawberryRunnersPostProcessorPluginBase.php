@@ -173,7 +173,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     $handle = proc_open($command, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipe);
     $startTime = microtime(true);
     $read = NULL;
-    /* Read the command output and kill it if the proccess surpassed the timeout */
+    /* Read the command output and kill it if the process surpassed the timeout */
     while(!feof($pipe[1])) {
       $read .= fread($pipe[1], 8192);
       if($startTime + $timeout < microtime(true)) {
@@ -190,7 +190,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
 
   /* The proc_terminate() function doesn't end proccess properly on Windows */
   protected function kill($pid) {
-    return strstr(PHP_OS, 'WIN') ? exec("taskkill /F /T /PID $pid") : exec("kill -9 $pid");
+    return strstr(PHP_OS, 'WIN') ? exec("taskkill /F /T /PID $pid") : posix_kill($pid, SIGKILL);
   }
 
   /**
