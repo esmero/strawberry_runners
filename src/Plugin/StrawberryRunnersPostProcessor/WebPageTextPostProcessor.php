@@ -32,6 +32,9 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
         'output_destination' => 'searchapi',
         'processor_queue_type' => 'background',
         'time_out' => '300',
+        'nlp' => TRUE,
+        'nlp_url' => 'http://esmero-nlp:6400',
+        'nlp_method' => 'polyglot',
       ] + parent::defaultConfiguration();
   }
 
@@ -95,6 +98,40 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
       '#description' => $this->t('The primary queue will be execute in realtime while the Secondary will be execute in background'),
     ];
 
+    $element['nlp'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Use NLP to extract entities from Text"),
+      '#default_value' => $this->getConfiguration()['nlp'] ?? TRUE,
+      '#description' => t('If checked Full text will be processed for Natural language Entity extraction using Polyglot'),
+    ];
+    $element['nlp_url'] = [
+      '#type' => 'url',
+      '#title' => $this->t("The URL location of your NLP64 server."),
+      '#default_value' => $this->getConfiguration()['nlp_url'] ?? 'http://esmero-nlp:6400',
+      '#description' => t('Defaults to http://esmero-nlp:6400'),
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[nlp]"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
+    $element['nlp_method'] = [
+      '#type' => 'radios',
+      '#title' => $this->t('Which method(NER) to use'),
+      '#options' => [
+        'spacy' => 'spaCy (more accurate)',
+        'polyglot' => 'Polyglot (faster)',
+      ],
+      '#default_value' => $this->getConfiguration()['nlp_method'],
+      '#description' => $this->t('The NER NLP method to use to extract Agents, Places and Sentiment'),
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[nlp]"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
     $element['timeout'] = [
       '#type' => 'number',
       '#title' => $this->t('Timeout in seconds for this process.'),
@@ -104,6 +141,7 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
       '#maxlength' => 3,
       '#min' => 1,
     ];
+
     $element['weight'] = [
       '#type' => 'number',
       '#title' => $this->t('Order or execution in the global chain.'),
@@ -138,37 +176,77 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
     $output = new \stdClass();
     $output->searchapi['fulltext'] = StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
     $output->searchapi['metadata'] = [];
+    $config = $this->getConfiguration();
     if (isset($io->input->{$input_property}) && $node_uuid) {
-        $page_info = json_decode($io->input->{$input_property}, true, 3);
+      $page_info = json_decode($io->input->{$input_property}, true, 3);
       if (json_last_error() == JSON_ERROR_NONE) {
         $page_title = $page_info['title'] ?? NULL;
         $page_url = $page_info['url'] ?? '';
         $page_title = $page_title ?? $page_url;
         $page_text = $page_info['text'] ?? '';
+        $page_text = preg_replace('/[\x0D]/', '', $page_text);
         $page_ts = $page_info['ts'] ?? date("c");
-        $nlp = new NlpClient('http://esmero-nlp:6400');
-        if ($nlp) {
-          $polyglot = $nlp->polyglot_entities($page_text, 'en');
-          $output->searchapi['where']= $polyglot->getLocations();
-          $output->searchapi['who'] = array_unique(array_merge((array) $polyglot->getOrganizations() , (array) $polyglot->getPersons()));
-          $output->searchapi['sentiment'] = $polyglot->getSentiment();
-          $output->searchapi['uri'] = $page_url;
-          $entities_all = $polyglot->getEntities();
-          if (!empty($entities_all) and is_array($entities_all)) {
-            $output->searchapi['metadata'] = $entities_all;
+        // Check if NPL processing is enabled and if so do it.
+        if ($config['nlp'] && !empty($config['nlp_url']) && strlen(trim($page_text)) > 0 ) {
+          $nlp = new NlpClient($config['nlp_url']);
+          if ($nlp) {
+            if ($config['nlp_method'] == 'spacy') {
+              /*
+              PERSON:      People, including fictional.
+              NORP:        Nationalities or religious or political groups.
+              FAC:         Buildings, airports, highways, bridges, etc.
+              ORG:         Companies, agencies, institutions, etc.
+              GPE:         Countries, cities, states.
+              LOC:         Non-GPE locations, mountain ranges, bodies of water.
+              PRODUCT:     Objects, vehicles, foods, etc. (Not services.)
+              EVENT:       Named hurricanes, battles, wars, sports events, etc.
+              WORK_OF_ART: Titles of books, songs, etc.
+              LAW:         Named documents made into laws.
+              LANGUAGE:    Any named language.
+              DATE:        Absolute or relative dates or periods.
+              TIME:        Times smaller than a day.
+              PERCENT:     Percentage, including ”%“.
+              MONEY:       Monetary values, including unit.
+              QUANTITY:    Measurements, as of weight or distance.
+              ORDINAL:     “first”, “second”, etc.
+              CARDINAL:    Numerals that do not fall under another type.
+               */
+              $spacy = $nlp->spacy_entities($page_text,'en');
+              $output->searchapi['sentiment'] = $nlp->sentiment($page_text, 'en');
+              $output->searchapi['sentiment'] = is_scalar($output->searchapi['sentiment']) ? $output->searchapi['sentiment'] : NULL;
+              $output->searchapi['where'] = array_unique(($spacy['GPE'] ?? []) + ($spacy['FAC'] ?? []));
+              $output->searchapi['who'] = array_unique(($spacy['PERSON'] ?? []) + ($spacy['ORG'] ?? []));
+              $output->searchapi['metadata'] = array_unique(($spacy['WORK_OF_ART'] ?? []) + ($spacy['EVENT'] ?? []));
+            }
+            elseif ($config['nlp_method'] == 'polyglot') {
+              $polyglot = $nlp->polyglot_entities($page_text, 'en');
+              $output->searchapi['where'] = $polyglot->getLocations();
+              $output->searchapi['who'] = array_unique(array_merge((array) $polyglot->getOrganizations(),
+                (array) $polyglot->getPersons()));
+              $output->searchapi['sentiment'] = $polyglot->getSentiment();
+              $entities_all = $polyglot->getEntities();
+              if (!empty($entities_all) and is_array($entities_all)) {
+                $output->searchapi['metadata'] = $entities_all;
+              }
+            }
+          }
+          else {
+            $this->logger->warning('NLP64 server @nlp_url could not be queried. Skipping NLP.',
+              [
+                '@nlp_url' => $config['nlp_url'],
+              ]);
           }
         }
-        $output->searchapi['plaintext'] = $page_url . ' , '. $page_title . ' , ' . $page_text;
+        $output->searchapi['uri'] = $page_url;
+        $output->searchapi['plaintext'] = $page_title . '\n' . $page_text;
         $output->searchapi['label'] = $page_title;
-        $output->searchapi['metadata'][] = $page_url;
-
         $output->searchapi['ts'] = $page_ts;
-
         $output->plugin = $output->searchapi;
-      } else {
+      }
+      else {
         throw new \Exception("WebPage Text was not a valid JSON");
       }
     }
-      $io->output = $output;
+    $io->output = $output;
   }
 }

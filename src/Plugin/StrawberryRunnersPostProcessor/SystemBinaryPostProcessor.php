@@ -46,6 +46,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
         'arguments' => '',
         'output_type' => 'json',
         'output_destination' => 'subkey',
+        'timeout' => 300,
       ] + parent::defaultConfiguration();
   }
 
