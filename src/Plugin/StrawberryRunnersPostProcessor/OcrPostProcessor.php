@@ -14,6 +14,7 @@ use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
+use Web64\Nlp\NlpClient;
 
 
 /**
@@ -50,6 +51,10 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         'output_type' => 'json',
         'output_destination' => 'searchapi',
         'processor_queue_type' => 'background',
+        'timeout' => 300,
+        'nlp' => TRUE,
+        'nlp_url' => 'http://esmero-nlp:6400',
+        'nlp_method' => 'polyglot',
       ] + parent::defaultConfiguration();
   }
 
@@ -222,6 +227,40 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#description' => $this->t('The primary queue will be execute in realtime while the Secondary will be execute in background'),
     ];
 
+    $element['nlp'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Use NLP to extract entities from Text"),
+      '#default_value' => $this->getConfiguration()['nlp'] ?? TRUE,
+      '#description' => t('If checked Full text will be processed for Natural language Entity extraction using Polyglot'),
+    ];
+    $element['nlp_url'] = [
+      '#type' => 'url',
+      '#title' => $this->t("The URL location of your NLP64 server."),
+      '#default_value' => $this->getConfiguration()['nlp_url'] ?? 'http://esmero-nlp:6400',
+      '#description' => t('Defaults to http://esmero-nlp:6400'),
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[nlp]"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
+    $element['nlp_method'] = [
+      '#type' => 'radios',
+      '#title' => $this->t('Which method(NER) to use'),
+      '#options' => [
+        'spacy' => 'spaCy (more accurate)',
+        'polyglot' => 'Polyglot (faster)',
+      ],
+      '#default_value' => $this->getConfiguration()['nlp_method'],
+      '#description' => $this->t('The NER NLP method to use to extract Agents, Places and Sentiment'),
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[nlp]"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
     $element['timeout'] = [
       '#type' => 'number',
       '#title' => $this->t('Timeout in seconds for this process.'),
@@ -272,6 +311,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $timeout = $config['timeout']; // in seconds
 
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
+      $output = new \stdClass();
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
       $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
 
@@ -282,7 +322,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       $execstring_check_searchable = $this->buildExecutableCommand_checkSearchable($io);
       // assume its not there/won't work.
       $proc_output_check_searchable = 0;
-
       if ($execstring_check_searchable) {
         $backup_locale = setlocale(LC_CTYPE, '0');
         setlocale(LC_CTYPE, $backup_locale);
@@ -316,18 +355,14 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           $proc_output_mod = str_replace('ocrx_line', 'ocr_line', $proc_output);
 
           $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $sequence_number);
-          $output = new \stdClass();
+
           $output->searchapi['fulltext'] = $miniocr;
           $output->plugin = $miniocr;
           $io->output = $output;
         }
-
-        //Do we have to remove djvu file?
       }
       else {
-
         //if not searchable run tesseract
-        //
         setlocale(LC_CTYPE, 'en_US.UTF-8');
         $execstring = $this->buildExecutableCommand($io);
         if ($execstring) {
@@ -343,19 +378,65 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           }
 
           $miniocr = $this->hOCRtoMiniOCR($proc_output, $sequence_number);
-          $output = new \stdClass();
           $output->searchapi['fulltext'] = $miniocr;
           $output->plugin = $miniocr;
-          $io->output = $output;
         }
       }
-      // Lastly plain text version of the XML.
-      $io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
+      // Lastly plain text version of the XML
+      $page_text = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
+      $output->searchapi['metadata'] = [];
+      // Check if NPL processing is enabled and if so do it.
+      if ($config['nlp'] && !empty($config['nlp_url']) && strlen(trim($page_text)) > 0 ) {
+        $nlp = new NlpClient($config['nlp_url']);
+        if ($nlp) {
+          if ($config['nlp_method'] == 'spacy') {
+            /*
+            PERSON:      People, including fictional.
+            NORP:        Nationalities or religious or political groups.
+            FAC:         Buildings, airports, highways, bridges, etc.
+            ORG:         Companies, agencies, institutions, etc.
+            GPE:         Countries, cities, states.
+            LOC:         Non-GPE locations, mountain ranges, bodies of water.
+            PRODUCT:     Objects, vehicles, foods, etc. (Not services.)
+            EVENT:       Named hurricanes, battles, wars, sports events, etc.
+            WORK_OF_ART: Titles of books, songs, etc.
+            LAW:         Named documents made into laws.
+            LANGUAGE:    Any named language.
+            DATE:        Absolute or relative dates or periods.
+            TIME:        Times smaller than a day.
+            PERCENT:     Percentage, including ”%“.
+            MONEY:       Monetary values, including unit.
+            QUANTITY:    Measurements, as of weight or distance.
+            ORDINAL:     “first”, “second”, etc.
+            CARDINAL:    Numerals that do not fall under another type.
+             */
+            $spacy = $nlp->spacy_entities($page_text ,'en');
+            $output->searchapi['sentiment'] = $nlp->sentiment($page_text , 'en');
+            $output->searchapi['sentiment'] = is_scalar($output->searchapi['sentiment']) ? $output->searchapi['sentiment'] : NULL;
+            $output->searchapi['where'] = array_unique(($spacy['GPE'] ?? []) + ($spacy['FAC'] ?? []));
+            $output->searchapi['who'] = array_unique(($spacy['PERSON'] ?? []) + ($spacy['ORG'] ?? []));
+            $output->searchapi['metadata'] = array_unique(($spacy['WORK_OF_ART'] ?? []) + ($spacy['EVENT'] ?? []));
+          }
+          elseif ($config['nlp_method'] == 'polyglot') {
+            $polyglot = $nlp->polyglot_entities($page_text, 'en');
+            $output->searchapi['where'] = $polyglot->getLocations();
+            $output->searchapi['who'] = array_unique(array_merge((array) $polyglot->getOrganizations(),
+              (array) $polyglot->getPersons()));
+            $output->searchapi['sentiment'] = $polyglot->getSentiment();
+            $entities_all = $polyglot->getEntities();
+            if (!empty($entities_all) and is_array($entities_all)) {
+              $output->searchapi['metadata'] = $entities_all;
+            }
+          }
+        }
+      }
+      $output->searchapi['plaintext'] = $page_text;
+      $output->searchapi['ts'] = date("c");
+      $output->searchapi['label'] = $this->t("Sequence"). ' '. $sequence_number;
+      $io->output = $output;
     }
     else {
-      $query = \Drupal::entityTypeManager()->getStorage('node')->getQuery();
-
-      \throwException(new \InvalidArgumentException);
+      throw new \Exception("Invalid argument for OCR processor");
     }
   }
 
@@ -615,7 +696,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     // This run function executes a 1 step function
     // First djvu2hocr some_output_file.djv
-
     $command = '';
     $can_run_djvu2hocr = \Drupal::service('strawberryfield.utility')
       ->verifyCommand($execpath_djvu2hocr);
@@ -638,9 +718,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     else {
       //"missing arguments for djvu 2 OCR");
     }
-
     return $command;
-
   }
 
 }
