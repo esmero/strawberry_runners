@@ -298,7 +298,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       //Also with ALTO: PrintSpace element doesn't have children (ComposedBlock AND/OR TextBlock) if blank or not searchable
       //pdfalto -noLineNumbers -noImage -noImageInline -readingOrder -f 1 -l 1 page1.pdf - |grep Block |wc -l (return 0 OR 1)
       //
-
       //To test switch from hOCR to ALTO
       $formatocr = 'ALTO';
 
@@ -333,14 +332,10 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         }
       }
 
-
-
       if ($proc_output_check_searchable > 0) {
 
         //To test switch from hOCR to ALTO
         $formatocr = 'ALTO';
-
-
         if ($formatocr == 'HOCR') {
           //if searchable run djvu2hocr
           //
