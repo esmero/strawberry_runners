@@ -190,7 +190,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
 
   /* The proc_terminate() function doesn't end proccess properly on Windows */
   protected function kill($pid) {
-    return strstr(PHP_OS, 'WIN') ? exec("taskkill /F /T /PID $pid") : posix_kill($pid, SIGKILL);
+    return strstr(PHP_OS, 'WIN') ? exec("taskkill /F /T /PID $pid") : posix_kill($pid, 9);
   }
 
   /**
