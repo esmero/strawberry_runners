@@ -171,7 +171,7 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
         $fp = $z->getStream('pages/pages.jsonl');
         if ($fp) {
           $i = 0;
-          while (($buffer = fgets($fp, 4096)) !== FALSE) {
+          while (($buffer = fgets($fp, 32767)) !== FALSE) {
             // First row in a jsonl will be the headers, we do not need this one.
             if ($i == 0) {
               $i++;
@@ -188,7 +188,7 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
         }
         else {
           // Opening the ZIP file failed.
-          error_log('NO Pages found to extract');
+          error_log('No Pages found to extract');
         }
       }
 
