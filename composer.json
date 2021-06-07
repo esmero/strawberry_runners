@@ -23,7 +23,7 @@
         "ml/json-ld": "^1.0",
         "drupal/search_api_solr": "~4.1",
         "mtdowling/jmespath.php": "^2.4",
-        "strawberryfield/strawberryfield": "dev-1.0.0-RC2",
+        "strawberryfield/strawberryfield": "dev-1.0.0-RC3",
         "react/event-loop": "^1.1",
         "react/child-process": "^0.6",
         "react/stream": "^1.1",
