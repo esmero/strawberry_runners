@@ -412,13 +412,14 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           }
 
           $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
+          $alto_with_pageid = $this->addPageIdToALTO($proc_output, $sequence_number);
           $output = new \stdClass();
 
           //$output->searchapi['fulltext'] = $miniocr;
-          $output->searchapi['fulltext'] = $proc_output;
+          $output->searchapi['fulltext'] = $alto_with_pageid;
 
           //$output->plugin = $miniocr;
-          $output->plugin = $proc_output;
+          $output->plugin = $alto_with_pageid;
 
           $io->output = $output;
         }
@@ -707,6 +708,17 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     return $fulltext;
   }
 
+  protected function addPageIdToALTO($output, $pageid) {
+    $document = new \DOMDocument();
+    $document->loadXml($output);
+    $pageNodes = $document->getElementsByTagName( "Page" );
+    foreach ($pageNodes as $pageNode) {
+      $pageNode->setAttribute("ID", "Page".$pageid);
+    }
+    $newalto = $document->saveXml();
+    unset($document);
+    return $newalto;
+  }
 
 
   /**
