@@ -102,6 +102,9 @@ strawberryfield_runners.strawberry_runners_postprocessor.ocr:
     arguments_djvu2hocr:
       type: string
       label: 'Any additional argument your executable binary requires'
+    arguments_pdfalto:
+      type: string
+      label: 'Any additional argument your executable binary requires'
     path:
       type: string
       label: 'The path for he binary to execute'
@@ -115,6 +118,9 @@ strawberryfield_runners.strawberry_runners_postprocessor.ocr:
       type: string
       label: 'The path for he binary to execute'
     path_djvu2hocr:
+      type: string
+      label: 'The path for he binary to execute'
+    path_pdfalto:
       type: string
       label: 'The path for he binary to execute'
     output_type:
