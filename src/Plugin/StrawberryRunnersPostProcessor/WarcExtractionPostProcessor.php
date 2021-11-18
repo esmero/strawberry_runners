@@ -121,8 +121,8 @@ class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBa
        '#title' => $this->t('Timeout in seconds for this process.'),
        '#default_value' => $this->getConfiguration()['timeout'],
        '#description' => $this->t('If the process runs out of time it can still be processed again.'),
-       '#size' => 2,
-       '#maxlength' => 2,
+       '#size' => 3,
+       '#maxlength' => 3,
        '#min' => 1,
      ];
     $element['weight'] = [

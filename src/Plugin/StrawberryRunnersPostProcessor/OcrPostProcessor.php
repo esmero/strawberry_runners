@@ -13,6 +13,8 @@ use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\SystemBinary
 use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
+use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
+use Web64\Nlp\NlpClient;
 
 
 /**
@@ -24,7 +26,7 @@ use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterfa
  *    label = @Translation("Post processor that Runs OCR/HORC against files"),
  *    input_type = "entity:file",
  *    input_property = "filepath",
- *    input_argument = "page_number"
+ *    input_argument = "sequence_number"
  * )
  */
 class OcrPostProcessor extends SystemBinaryPostProcessor {
@@ -49,6 +51,10 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         'output_type' => 'json',
         'output_destination' => 'searchapi',
         'processor_queue_type' => 'background',
+        'timeout' => 300,
+        'nlp' => TRUE,
+        'nlp_url' => 'http://esmero-nlp:6400',
+        'nlp_method' => 'polyglot',
       ] + parent::defaultConfiguration();
   }
 
@@ -221,13 +227,47 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#description' => $this->t('The primary queue will be execute in realtime while the Secondary will be execute in background'),
     ];
 
+    $element['nlp'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("Use NLP to extract entities from Text"),
+      '#default_value' => $this->getConfiguration()['nlp'] ?? TRUE,
+      '#description' => t('If checked Full text will be processed for Natural language Entity extraction using Polyglot'),
+    ];
+    $element['nlp_url'] = [
+      '#type' => 'url',
+      '#title' => $this->t("The URL location of your NLP64 server."),
+      '#default_value' => $this->getConfiguration()['nlp_url'] ?? 'http://esmero-nlp:6400',
+      '#description' => t('Defaults to http://esmero-nlp:6400'),
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[nlp]"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
+    $element['nlp_method'] = [
+      '#type' => 'radios',
+      '#title' => $this->t('Which method(NER) to use'),
+      '#options' => [
+        'spacy' => 'spaCy (more accurate)',
+        'polyglot' => 'Polyglot (faster)',
+      ],
+      '#default_value' => $this->getConfiguration()['nlp_method'],
+      '#description' => $this->t('The NER NLP method to use to extract Agents, Places and Sentiment'),
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[nlp]"]' => ['checked' => TRUE],
+        ],
+      ],
+    ];
+
     $element['timeout'] = [
       '#type' => 'number',
       '#title' => $this->t('Timeout in seconds for this process.'),
       '#default_value' => $this->getConfiguration()['timeout'],
       '#description' => $this->t('If the process runs out of time it can still be processed again.'),
-      '#size' => 2,
-      '#maxlength' => 2,
+      '#size' => 3,
+      '#maxlength' => 3,
       '#min' => 1,
     ];
     $element['weight'] = [
@@ -271,8 +311,9 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $timeout = $config['timeout']; // in seconds
 
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
+      $output = new \stdClass();
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
-      $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+      $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
 
       //check if PDF is searchable: has DJVU file the layer TXTz?
       //pdf2djvu -q --no-metadata -p 2 -j0 -o page2.djv some_file.pdf && djvudump page2.djv |grep TXTz |wc -l
@@ -281,7 +322,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       $execstring_check_searchable = $this->buildExecutableCommand_checkSearchable($io);
       // assume its not there/won't work.
       $proc_output_check_searchable = 0;
-
       if ($execstring_check_searchable) {
         $backup_locale = setlocale(LC_CTYPE, '0');
         setlocale(LC_CTYPE, $backup_locale);
@@ -289,10 +329,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         // @see http://www.php.net/manual/en/function.shell-exec.php#85095
         shell_exec("LANG=en_US.utf-8");
         $proc_output_check_searchable = $this->proc_execute($execstring_check_searchable, $timeout);
-        if (is_null($proc_output_check_searchable)) {
-          throw new \Exception("Could not execute {$execstring_check_searchable} or timed out");
-        }
-
       }
 
 
@@ -310,6 +346,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           shell_exec("LANG=en_US.utf-8");
           $proc_output = $this->proc_execute($execstring_djvu2hocr, $timeout);
           if (is_null($proc_output)) {
+            $this->logger->warning("DJVU processing via {$execstring_djvu2hocr} timed out");
             throw new \Exception("Could not execute {$execstring_djvu2hocr} or timed out");
           }
 
@@ -317,21 +354,15 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           //
           $proc_output_mod = str_replace('ocrx_line', 'ocr_line', $proc_output);
 
-          $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $page_number);
-          $output = new \stdClass();
-          $output->searchapi = $miniocr;
+          $miniocr = $this->hOCRtoMiniOCR($proc_output_mod, $sequence_number);
+
+          $output->searchapi['fulltext'] = $miniocr;
           $output->plugin = $miniocr;
           $io->output = $output;
-
         }
-
-        //Do we have to remove djvu file?
-
       }
       else {
-
         //if not searchable run tesseract
-        //
         setlocale(LC_CTYPE, 'en_US.UTF-8');
         $execstring = $this->buildExecutableCommand($io);
         if ($execstring) {
@@ -342,22 +373,70 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           shell_exec("LANG=en_US.utf-8");
           $proc_output = $this->proc_execute($execstring, $timeout);
           if (is_null($proc_output)) {
+            $this->logger->warning("HOCR processing via {$execstring} timed out");
             throw new \Exception("Could not execute {$execstring} or timed out");
           }
 
-          $miniocr = $this->hOCRtoMiniOCR($proc_output, $page_number);
-          $output = new \stdClass();
-          $output->searchapi = $miniocr;
+          $miniocr = $this->hOCRtoMiniOCR($proc_output, $sequence_number);
+          $output->searchapi['fulltext'] = $miniocr;
           $output->plugin = $miniocr;
-          $io->output = $output;
-
         }
-
       }
-
+      // Lastly plain text version of the XML
+      $page_text = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
+      $output->searchapi['metadata'] = [];
+      // Check if NPL processing is enabled and if so do it.
+      if ($config['nlp'] && !empty($config['nlp_url']) && strlen(trim($page_text)) > 0 ) {
+        $nlp = new NlpClient($config['nlp_url']);
+        if ($nlp) {
+          if ($config['nlp_method'] == 'spacy') {
+            /*
+            PERSON:      People, including fictional.
+            NORP:        Nationalities or religious or political groups.
+            FAC:         Buildings, airports, highways, bridges, etc.
+            ORG:         Companies, agencies, institutions, etc.
+            GPE:         Countries, cities, states.
+            LOC:         Non-GPE locations, mountain ranges, bodies of water.
+            PRODUCT:     Objects, vehicles, foods, etc. (Not services.)
+            EVENT:       Named hurricanes, battles, wars, sports events, etc.
+            WORK_OF_ART: Titles of books, songs, etc.
+            LAW:         Named documents made into laws.
+            LANGUAGE:    Any named language.
+            DATE:        Absolute or relative dates or periods.
+            TIME:        Times smaller than a day.
+            PERCENT:     Percentage, including ”%“.
+            MONEY:       Monetary values, including unit.
+            QUANTITY:    Measurements, as of weight or distance.
+            ORDINAL:     “first”, “second”, etc.
+            CARDINAL:    Numerals that do not fall under another type.
+             */
+            $spacy = $nlp->spacy_entities($page_text ,'en');
+            $output->searchapi['sentiment'] = $nlp->sentiment($page_text , 'en');
+            $output->searchapi['sentiment'] = is_scalar($output->searchapi['sentiment']) ? $output->searchapi['sentiment'] : NULL;
+            $output->searchapi['where'] = array_unique(($spacy['GPE'] ?? []) + ($spacy['FAC'] ?? []));
+            $output->searchapi['who'] = array_unique(($spacy['PERSON'] ?? []) + ($spacy['ORG'] ?? []));
+            $output->searchapi['metadata'] = array_unique(($spacy['WORK_OF_ART'] ?? []) + ($spacy['EVENT'] ?? []));
+          }
+          elseif ($config['nlp_method'] == 'polyglot') {
+            $polyglot = $nlp->polyglot_entities($page_text, 'en');
+            $output->searchapi['where'] = $polyglot->getLocations();
+            $output->searchapi['who'] = array_unique(array_merge((array) $polyglot->getOrganizations(),
+              (array) $polyglot->getPersons()));
+            $output->searchapi['sentiment'] = $polyglot->getSentiment();
+            $entities_all = $polyglot->getEntities();
+            if (!empty($entities_all) and is_array($entities_all)) {
+              $output->searchapi['metadata'] = $entities_all;
+            }
+          }
+        }
+      }
+      $output->searchapi['plaintext'] = $page_text;
+      $output->searchapi['ts'] = date("c");
+      $output->searchapi['label'] = $this->t("Sequence"). ' '. $sequence_number;
+      $io->output = $output;
     }
     else {
-      \throwException(new \InvalidArgumentException);
+      throw new \Exception("Invalid argument for OCR processor");
     }
   }
 
@@ -377,7 +456,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $input_argument = $this->pluginDefinition['input_argument'];
     // Sets the default page to 1 if not passed.
     $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
-    $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+    $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
     $config = $this->getConfiguration();
     $execpath_gs = $config['path'];
     $arguments_gs = $config['arguments'];
@@ -400,18 +479,18 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $filename = pathinfo($file_path, PATHINFO_FILENAME);
     $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
     $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
-    $gs_destination_filename = "{$sourcefolder}{$filename}_{$page_number}.png";
+    $gs_destination_filename = "{$sourcefolder}{$filename}_{$sequence_number}.png";
     if ($can_run_gs &&
       $can_run_tesseract &&
       (strpos($arguments_gs, '%file') !== FALSE) &&
       (strpos($arguments_tesseract, '%file') !== FALSE)) {
-      $arguments_gs = "-dBATCH -dNOPAUSE -r300 -dUseCropBox -dQUIET -sDEVICE=pnggray -dFirstPage={$page_number} -dLastPage={$page_number} -sOutputFile=$gs_destination_filename " . $arguments_gs;
+      $arguments_gs = "-dBATCH -dNOPAUSE -r300 -dUseCropBox -dQUIET -sDEVICE=pnggray -dFirstPage={$sequence_number} -dLastPage={$sequence_number} -sOutputFile=$gs_destination_filename " . $arguments_gs;
       $arguments_gs = str_replace('%s', '', $arguments_gs);
-      $arguments_gs = str_replace_first('%file', '%s', $arguments_gs);
+      $arguments_gs = $this->strReplaceFirst('%file', '%s', $arguments_gs);
       $arguments_gs = sprintf($arguments_gs, $file_path);
 
       $arguments_tesseract = str_replace('%s', '', $arguments_tesseract);
-      $arguments_tesseract = str_replace_first('%file', '%s', $arguments_tesseract);
+      $arguments_tesseract = $this->strReplaceFirst('%file', '%s', $arguments_tesseract);
       $arguments_tesseract = sprintf($arguments_tesseract, $gs_destination_filename);
 
       $command_gs = escapeshellcmd($execpath_gs . ' ' . $arguments_gs);
@@ -432,6 +511,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
   }
 
   protected function hOCRtoMiniOCR($output, $pageid) {
+
     $hocr = simplexml_load_string($output);
     $internalErrors = libxml_use_internal_errors(TRUE);
     libxml_clear_errors();
@@ -446,6 +526,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $miniocr->openMemory();
     $miniocr->startDocument('1.0', 'UTF-8');
     $miniocr->startElement("ocr");
+    $atleastone_word = FALSE;
     foreach ($hocr->body->children() as $page) {
       $titleparts = explode(';', $page['title']);
       $pagetitle = NULL;
@@ -474,22 +555,30 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         $miniocr->startElement("b");
         $page->registerXPathNamespace('ns', 'http://www.w3.org/1999/xhtml');
         foreach ($page->xpath('.//ns:span[@class="ocr_line"]') as $line) {
+          $notFirstWord = FALSE;
           $miniocr->startElement("l");
           foreach ($line->children() as $word) {
             $wcoos = explode(" ", $word['title']);
-            if (count($wcoos)) {
+            if (count($wcoos) >= 5) {
               $x0 = (float) $wcoos[1];
               $y0 = (float) $wcoos[2];
               $x1 = (float) $wcoos[3];
               $y1 = (float) $wcoos[4];
-              $l = round(($x0 / $pwidth), 3);
-              $t = round(($y0 / $pheight), 3);
-              $w = round((($x1 - $x0) / $pwidth), 3);
-              $h = round((($y1 - $y0) / $pheight), 3);
+              $l = ltrim(sprintf('%.3f',($x0 / $pwidth)), 0);
+              $t = ltrim(sprintf('%.3f',($y0 / $pheight)), 0);
+              $w = ltrim(sprintf('%.3f',(($x1 - $x0) / $pwidth)), 0);
+              $h = ltrim(sprintf('%.3f',(($y1 - $y0) / $pheight)), 0);
               $text = (string) $word;
+              if ($notFirstWord) {
+                $miniocr->text(' ');
+              }
+              $notFirstWord = TRUE;
               $miniocr->startElement("w");
-              $miniocr->writeAttribute("x", ltrim($l, '0') . ' ' . ltrim($t, 0) . ' ' . ltrim($w, 0) . ' ' . ltrim($h, 0));
+              $miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
               $miniocr->text($text);
+              // Only assume we have at least one word for <w> tags
+              // Since lines? could end empty?
+              $atleastone_word = TRUE;
               $miniocr->endElement();
             }
           }
@@ -502,7 +591,12 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $miniocr->endElement();
     $miniocr->endDocument();
     unset($hocr);
-    return $miniocr->outputMemory(TRUE);
+    if ($atleastone_word) {
+      return $miniocr->outputMemory(TRUE);
+    }
+    else {
+      return StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
+    }
   }
 
   /**
@@ -521,7 +615,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $input_argument = $this->pluginDefinition['input_argument'];
     // Sets the default page to 1 if not passed.
     $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
-    $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+    $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
     $config = $this->getConfiguration();
     $execpath_pdf2djvu = $config['path_pdf2djvu'];
     $arguments_pdf2djvu = $config['arguments_pdf2djvu'];
@@ -544,18 +638,18 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $filename = pathinfo($file_path, PATHINFO_FILENAME);
     $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
     $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
-    $pdf2djvu_destination_filename = "{$sourcefolder}{$filename}_{$page_number}.djv";
+    $pdf2djvu_destination_filename = "{$sourcefolder}{$filename}_{$sequence_number}.djv";
     if ($can_run_pdf2djvu &&
       $can_run_djvudump &&
       (strpos($arguments_pdf2djvu, '%file') !== FALSE) &&
       (strpos($arguments_djvudump, '%file') !== FALSE)) {
-      $arguments_pdf2djvu = "-q --no-metadata -j0 -p {$page_number} -o $pdf2djvu_destination_filename " . $arguments_pdf2djvu;
+      $arguments_pdf2djvu = "-q --no-metadata -j0 -p {$sequence_number} -o $pdf2djvu_destination_filename " . $arguments_pdf2djvu;
       $arguments_pdf2djvu = str_replace('%s', '', $arguments_pdf2djvu);
-      $arguments_pdf2djvu = str_replace_first('%file', '%s', $arguments_pdf2djvu);
+      $arguments_pdf2djvu = $this->strReplaceFirst('%file', '%s', $arguments_pdf2djvu);
       $arguments_pdf2djvu = sprintf($arguments_pdf2djvu, $file_path);
 
       $arguments_djvudump = str_replace('%s', '', $arguments_djvudump);
-      $arguments_djvudump = str_replace_first('%file', '%s', $arguments_djvudump);
+      $arguments_djvudump = $this->strReplaceFirst('%file', '%s', $arguments_djvudump);
       $arguments_djvudump = sprintf($arguments_djvudump, $pdf2djvu_destination_filename);
 
       $command_pdf2djvu = escapeshellcmd($execpath_pdf2djvu . ' ' . $arguments_pdf2djvu);
@@ -591,7 +685,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $input_argument = $this->pluginDefinition['input_argument'];
     // Sets the default page to 1 if not passed.
     $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
-    $page_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
+    $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
     $config = $this->getConfiguration();
     $execpath_djvu2hocr = $config['path_djvu2hocr'];
     $arguments_djvu2hocr = $config['arguments_djvu2hocr'];
@@ -602,19 +696,18 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     // This run function executes a 1 step function
     // First djvu2hocr some_output_file.djv
-
     $command = '';
     $can_run_djvu2hocr = \Drupal::service('strawberryfield.utility')
       ->verifyCommand($execpath_djvu2hocr);
     $filename = pathinfo($file_path, PATHINFO_FILENAME);
     $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
     $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
-    $pdf2djvu_destination_filename = "{$sourcefolder}{$filename}_{$page_number}.djv";
+    $pdf2djvu_destination_filename = "{$sourcefolder}{$filename}_{$sequence_number}.djv";
     if ($can_run_djvu2hocr &&
       (strpos($arguments_djvu2hocr, '%file') !== FALSE)) {
 
       $arguments_djvu2hocr = str_replace('%s', '', $arguments_djvu2hocr);
-      $arguments_djvu2hocr = str_replace_first('%file', '%s', $arguments_djvu2hocr);
+      $arguments_djvu2hocr = $this->strReplaceFirst('%file', '%s', $arguments_djvu2hocr);
       $arguments_djvu2hocr = sprintf($arguments_djvu2hocr, $pdf2djvu_destination_filename);
 
       $command_djvu2hocr = escapeshellcmd($execpath_djvu2hocr . ' ' . $arguments_djvu2hocr);
@@ -625,9 +718,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     else {
       //"missing arguments for djvu 2 OCR");
     }
-
     return $command;
-
   }
 
 }

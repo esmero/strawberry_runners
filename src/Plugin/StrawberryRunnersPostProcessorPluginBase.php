@@ -88,7 +88,6 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     $this->fileSystem = $file_system;
     $this->temporary_directory = $this->fileSystem->getTempDirectory();
     $this->logger = $logger;
-
   }
 
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
@@ -174,7 +173,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     $handle = proc_open($command, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipe);
     $startTime = microtime(true);
     $read = NULL;
-    /* Read the command output and kill it if the proccess surpassed the timeout */
+    /* Read the command output and kill it if the process surpassed the timeout */
     while(!feof($pipe[1])) {
       $read .= fread($pipe[1], 8192);
       if($startTime + $timeout < microtime(true)) {
@@ -191,9 +190,28 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
 
   /* The proc_terminate() function doesn't end proccess properly on Windows */
   protected function kill($pid) {
-    return strstr(PHP_OS, 'WIN') ? exec("taskkill /F /T /PID $pid") : exec("kill -9 $pid");
+    return strstr(PHP_OS, 'WIN') ? exec("taskkill /F /T /PID $pid") : posix_kill($pid, 9);
   }
 
+  /**
+   * Replace the first occurrence of a given value in the string.
+   * @see https://github.com/phannaly/laravel-helpers/blob/v1.0.3/src/String.php#L308
+   *
+   * @param  string  $search
+   * @param  string  $replace
+   * @param  string  $subject
+   * @return string
+   */
+   public function strReplaceFirst(string $search, string $replace, string $subject) {
+    if ($search === '') {
+      return $subject;
+    }
+    $position = strpos($subject, $search);
+    if ($position !== false) {
+      return substr_replace($subject, $replace, $position, strlen($search));
+    }
 
+    return $subject;
+  }
 
 }

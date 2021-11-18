@@ -160,10 +160,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ->load($data->nid);
 
     if (!$entity) {
-      $this->logger->log(LogLevel::ERROR, 'Sorry the Node ID @nodeid passed to this processor does not exist.', [
+      $this->logger->log(LogLevel::ERROR, 'Sorry the Node ID @nodeid passed to the Strawberry Runners processor does not (longer?) exist. Skipping.', [
         '@nodeid' => $data->nid,
       ]);
-
+      return;
     }
 
     $filelocation = $this->ensureFileAvailability($file);
@@ -204,20 +204,31 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       try {
         // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
         $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
-        $keyvalue_collection = 'Strawberryfield_flavor_datasource_temp';
+        $keyvalue_collection = StrawberryfieldFlavorDatasource::SBFL_KEY_COLLECTION;
         $item_ids = [];
         $inindex = 1;
         $input_property = $processor_instance->getPluginDefinition()['input_property'];
         $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
 
-        // @TODO If argument is not here, do we return??
+        // If argument is not there we will assume there is a mistake and its
+        // a single one.
         $data->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
+
+        // In case $data->{$input_argument} is an array/data we will use the key as "sequence"
+        // Each processor needs to be sure it passes a single item and with a unique key
+
+        if (is_array($data->{$input_argument})) {
+          $sequence_key = array_key_first($data->{$input_argument});
+        }
+        else {
+          $sequence_key = (int) $data->{$input_argument};
+        }
 
         if (is_a($entity, TranslatableInterface::class)) {
           $translations = $entity->getTranslationLanguages();
           foreach ($translations as $translation_id => $translation) {
             //@TODO here, the number 1 needs to come from the sequence.
-            $item_id = $entity->id() . ':' . $data->{$input_argument} . ':' . $translation_id . ':' . $file->uuid() . ':' . $data->plugin_config_entity_id;
+            $item_id = $entity->id() . ':' . $sequence_key . ':' . $translation_id . ':' . $file->uuid() . ':' . $data->plugin_config_entity_id;
             // a single 0 as return will force us to reindex.
             $inindex = $inindex * $this->flavorInSolrIndex($item_id, $data->metadata['checksum'], $indexes);
             $item_ids[] = $item_id;
@@ -239,7 +250,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             $inkeystore = $inkeystore && FALSE;
           }
         }
-        //@TODO allow a force in case of corrupted key value? Partial output
+        // Allows a force in case of corrupted key value? Partial output
         // Extragenoxus weird data?
         if (($inindex === 0 || $inkeystore === FALSE) ||
           $data->force == TRUE) {
@@ -248,7 +259,20 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
           // Check if $io->output exists?
           $toindex = new stdClass();
-          $toindex->fulltext = $io->output->searchapi;
+          $toindex->fulltext = $io->output->searchapi['fulltext'] ?? '';
+          $toindex->plaintext = $io->output->searchapi['plaintext'] ?? '';
+          $toindex->metadata = $io->output->searchapi['metadata'] ?? [];
+          $toindex->who = $io->output->searchapi['who'] ?? [];
+          $toindex->where = $io->output->searchapi['where'] ?? [];
+          $toindex->when = $io->output->searchapi['when'] ?? [];
+          $toindex->ts = $io->output->searchapi['ts'] ?? NULL;
+          $toindex->uri = $io->output->searchapi['uri'] ?? NULL;
+          $toindex->label = $io->output->searchapi['label'] ?? NULL;
+          $toindex->sentiment = $io->output->searchapi['sentiment'] ?? 0;
+
+          // $siblings will be the amount of total children processors that were
+          // enqueued for a single Processor chain.
+          $toindex->sequence_total = !empty($data->siblings) ? $data->siblings : 1;
           $toindex->checksum = $data->metadata['checksum'];
 
           $datasource_id = 'strawberryfield_flavor_datasource';
@@ -288,7 +312,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       }
     }
     else {
-      // This will not
       $io = $this->invokeProcessor($processor_instance, $data);
     }
     // Means we got a file back from the processor
@@ -313,23 +336,31 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // Possible input properties:
         // - Can come from the original Data (most likely)
         // - May be overriden by the $io->output, e.g when a processor generates a file that is not part of any node
+        $input_property_value_from_plugin = TRUE;
         $input_property_value = isset($io->output->plugin) && isset($io->output->plugin[$input_property]) ? $io->output->plugin[$input_property] : NULL;
+        // If was not defined by the previous processor try from the main data.
         if ($input_property_value == NULL) {
+          $input_property_value_from_plugin = FALSE;
           $input_property_value = isset($data->{$input_property}) ? $data->{$input_property} : NULL;
         }
+
         // If still null means the child is incompatible with the parent. We abort.
         if ($input_property_value == NULL) {
-          $this->logger->log(LogLevel::WARNING, 'Sorry @childplugin is  incompatible with @parentplugin, skipping.', [
-            '@parentplugin' => $data->plugin_config_entity_id,
-            '@childplugin' => $childdata->plugin_config_entity_id,
-
-          ]);
+          $this->logger->log(LogLevel::WARNING,
+            'Sorry @childplugin is incompatible with @parentplugin or its output or the later is empty, skipping.',
+            [
+              '@parentplugin' => $data->plugin_config_entity_id,
+              '@childplugin' => $postprocessor_config_entity->id(),
+            ]);
           continue;
         }
         // Warning Diego. This may lead to a null
         $childdata->{$input_property} = $input_property_value;
         $childdata->plugin_config_entity_id = $postprocessor_config_entity->id();
-        $input_argument_value = isset($io->output->plugin) && isset($io->output->plugin[$input_argument]) ? $io->output->plugin[$input_argument] : $data->{$input_argument};
+        $input_argument_value = isset($io->output->plugin) && isset($io->output->plugin[$input_argument]) ?
+          $io->output->plugin[$input_argument] : $data->{$input_argument};
+        // This is a must: Solr indexing requires a list of sequences. A single one
+        // will not be enqueued.
         if (is_array($input_argument_value)) {
           foreach ($input_argument_value as $value) {
             // Here is the catch.
@@ -337,6 +368,17 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             // Input Properties matching always need to be one
             if (!is_array($value)) {
               $childdata->{$input_argument} = $value;
+              // The count will always be relative to this call
+              // Means count of how many children are being called.
+              $childdata->siblings = count($input_argument_value);
+              // In case the $input_property_value is an array coming from a plugin we may want to if has the same amount of values of $input_argument_value
+              // If so its many to one and we only need the corresponding entry to this sequence
+              if ($input_property_value_from_plugin &&
+                is_array($input_property_value) &&
+                count($input_property_value) == $childdata->siblings &&
+                isset($input_property_value[$value])) {
+                $childdata->{$input_property} = $input_property_value[$value];
+              }
               Drupal::queue('strawberryrunners_process_background', TRUE)
                 ->createItem($childdata);
             }
@@ -361,9 +403,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   protected function getProcessorPlugin($plugin_config_entity_id) {
     // Get extractor configuration.
     /* @var $plugin_config_entity \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntityInterface */
-    $plugin_config_entity = $this->entityTypeManager->getStorage(
-      'strawberry_runners_postprocessor'
-    )->load($plugin_config_entity_id);
+    $plugin_config_entity = $this->entityTypeManager
+      ->getStorage('strawberry_runners_postprocessor')
+      ->load($plugin_config_entity_id);
 
     if ($plugin_config_entity->isActive()) {
       $entity_id = $plugin_config_entity->id();
@@ -468,17 +510,17 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         'saa_field_file_news',
         'saa_field_file_page'
       ]);*/
-      //$parse_mode = $this->parseModeManager->createInstance('direct');
       $parse_mode = $this->parseModeManager->createInstance('terms');
       $query->setParseMode($parse_mode);
-      // $parse_mode->setConjunction('OR');
-      // $query->keys($search);
       $query->sort('search_api_relevance', 'DESC');
+      $query->setOption('search_api_retrieved_field_values', ['id']);
+      // Query breaks if not because standard hl is enabled for all fields.
+      // and normal hl offsets on OCR HL specific ones.
+      $query->setOption('no_highlight', 'on');
 
       $query->addCondition('search_api_id', 'strawberryfield_flavor_datasource/' . $key)
         ->addCondition('search_api_datasource', 'strawberryfield_flavor_datasource')
         ->addCondition('checksum', $checksum);
-      //$query = $query->addCondition('ss_checksum', $checksum);
       // If we allow processing here Drupal adds Content Access Check
       // That does not match our Data Source \Drupal\search_api\Plugin\search_api\processor\ContentAccess
       // we get this filter (see 2nd)
@@ -531,9 +573,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $io = new stdClass();
     $input = new stdClass();
 
-    // @NOTE: this is the only place where we just pass filelocation fixed instead of the
-    // actual property named $input_property. Which may be weird?
-    $input->{$input_property} = $data->filepath;
+    $input->{$input_property} = $data->{$input_property};
     $input->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
     // The Node UUID
     $input->nuuid = $data->nuuid;
@@ -618,14 +658,13 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $field_content['flv:' . $data->plugin_config_entity_id] = array_unique(
           $field_content['flv:' . $data->plugin_config_entity_id]
         );
-        $field_content[$jsonkey][$uniqueid]['flv:'
-        . $data->plugin_config_entity_id]
-          = $this->addActivityStream($data->plugin_config_entity_id);
+        $field_content[$jsonkey][$uniqueid]['flv:' . $data->plugin_config_entity_id] = $this->addActivityStream($data->plugin_config_entity_id);
         $itemfield->setMainValueFromArray($field_content);
         // Should we check decide on this? Safer is a new revision, but also an overhead
         // $entity->setNewRevision(FALSE);
         $entity->save();
-      } catch (Exception $exception) {
+      }
+      catch (Exception $exception) {
         $message_params = [
           '@file_id' => $data->fid,
           '@entity_id' => $data->nid,
@@ -652,7 +691,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       );
       unlink($io->output->file);
     }
-
   }
 
   protected function addActivityStream($name = NULL) {
