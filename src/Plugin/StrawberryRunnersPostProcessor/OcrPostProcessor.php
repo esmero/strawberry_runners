@@ -573,13 +573,16 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
                 $miniocr->text(' ');
               }
               $notFirstWord = TRUE;
-              $miniocr->startElement("w");
-              $miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
-              $miniocr->text($text);
-              // Only assume we have at least one word for <w> tags
-              // Since lines? could end empty?
-              $atleastone_word = TRUE;
-              $miniocr->endElement();
+              // New OCR Highlight does not like empty <w> tags at all
+              if (strlen(trim($text)) > 0) {
+                $miniocr->startElement("w");
+                $miniocr->writeAttribute("x", $l . ' ' . $t . ' ' . $w . ' ' . $h);
+                $miniocr->text($text);
+                // Only assume we have at least one word for <w> tags
+                // Since lines? could end empty?
+                $atleastone_word = TRUE;
+                $miniocr->endElement();
+              }
             }
           }
           $miniocr->endElement();
