@@ -127,7 +127,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#type' => 'textfield',
       '#title' => $this->t('Mimetypes(s) to limit this Processor to.'),
       '#default_value' => $this->getConfiguration()['mime_type'],
-      '#description' => $this->t('A single Mimetype type or a coma separed list of mimetypes that qualify to be Processed. Leave empty to apply any file'),
+      '#description' => $this->t('A single Mimetype type or a comma separated list of mimetypes that qualify to be Processed. Leave empty to apply any file'),
     ];
     $element['path'] = [
       '#type' => 'textfield',
