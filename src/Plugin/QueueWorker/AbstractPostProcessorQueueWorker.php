@@ -574,7 +574,22 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $input = new stdClass();
 
     $input->{$input_property} = $data->{$input_property};
-    $input->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
+
+    // By default, the input_argument value for a StrawberryRunnersPostProcessorPlugin::run() method is determined from the class annotation.
+    // E.g. "sequence_number" for the OcrPostProcessor class. Here we provide a mechanism for overriding that value.
+    // If in its configuration the plugin provides a "configured_input_argument", then this identifies the configuration field name that the user
+    // has edited to indicate which file metadata field contains the value of the input argument to pass into the processor's run method.
+    // For example, in the OcrPostProcessor, 'configured_input_argument' is configured as 'sequence_key'. In the settings form, the 'sequence_key' element
+    // is a text field where the user can enter the file metadata field name that contains the sequence number for the file on the object. This sequence number
+    // is fetched here and used in the run() method for the OcrPostProcessor.
+    // If no configured_input_argument is defined, then the input argument field defined in the plugin definition prevails.
+    $configured_input_argument = $processor_instance->getConfiguration()[$processor_instance->getConfiguration()['configured_input_argument']] ?? NULL;
+    if($configured_input_argument && isset($data->{$configured_input_argument})) {
+      $input->{$input_argument} = $data->{$configured_input_argument};
+    }
+    else {
+      $input->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
+    }
     // The Node UUID
     $input->nuuid = $data->nuuid;
     // All the rest of the associated Metadata in an as:structure
