@@ -31,6 +31,8 @@ use Web64\Nlp\NlpClient;
  */
 class OcrPostProcessor extends SystemBinaryPostProcessor {
 
+  public $pluginDefinition;
+
   /**
    * {@inheritdoc}
    */
@@ -38,6 +40,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     return [
         'source_type' => 'asstructure',
         'mime_type' => ['application/pdf'],
+        'configured_input_argument' => 'sequence_key',
         'path' => '',
         'path_tesseract' => '',
         'path_pdf2djvu' => '',
@@ -101,6 +104,20 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#states' => [
         'visible' => [
           ':input[name="pluginconfig[source_type]"]' => ['value' => 'asstructure'],
+        ],
+      ],
+      '#required' => TRUE,
+    ];
+
+    $element['sequence_key'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('Within the image file metadata, the field that contains the sequence number.'),
+      '#default_value' => (!empty($this->getConfiguration()['sequence_key'])) ? $this->getConfiguration()['sequence_key'] : 'sequence',
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[source_type]"]' => ['value' => 'asstructure'],
+          'and',
+          ':input[name="pluginconfig[jsonkey][as:image]"]' => ['checked' => TRUE],
         ],
       ],
       '#required' => TRUE,
@@ -467,40 +484,50 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       return NULL;
     }
 
-    // This run function executes a 2 step function
-    //-- with r300 == 300dpi, should be configurable, etc. All should be configurable
-    // First gs -dBATCH -dNOPAUSE -sDEVICE=pnggray -r300 -dUseCropBox -sOutputFile=somepage_pagenumber.png %file
-
     $command = '';
-    $can_run_gs = \Drupal::service('strawberryfield.utility')
-      ->verifyCommand($execpath_gs);
-    $can_run_tesseract = \Drupal::service('strawberryfield.utility')
-      ->verifyCommand($execpath_tesseract);
+    $can_run_gs = \Drupal::service('strawberryfield.utility')->verifyCommand($execpath_gs);
+    $can_run_tesseract = \Drupal::service('strawberryfield.utility')->verifyCommand($execpath_tesseract);
     $filename = pathinfo($file_path, PATHINFO_FILENAME);
     $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
     $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
-    $gs_destination_filename = "{$sourcefolder}{$filename}_{$sequence_number}.png";
-    if ($can_run_gs &&
-      $can_run_tesseract &&
-      (strpos($arguments_gs, '%file') !== FALSE) &&
-      (strpos($arguments_tesseract, '%file') !== FALSE)) {
-      $arguments_gs = "-dBATCH -dNOPAUSE -r300 -dUseCropBox -dQUIET -sDEVICE=pnggray -dFirstPage={$sequence_number} -dLastPage={$sequence_number} -sOutputFile=$gs_destination_filename " . $arguments_gs;
-      $arguments_gs = str_replace('%s', '', $arguments_gs);
-      $arguments_gs = $this->strReplaceFirst('%file', '%s', $arguments_gs);
-      $arguments_gs = sprintf($arguments_gs, $file_path);
+    $file_mime = $io->input->metadata["dr:mimetype"] ?? NULL;
 
-      $arguments_tesseract = str_replace('%s', '', $arguments_tesseract);
-      $arguments_tesseract = $this->strReplaceFirst('%file', '%s', $arguments_tesseract);
-      $arguments_tesseract = sprintf($arguments_tesseract, $gs_destination_filename);
+    // If we can't run tesseract, or have no mime type, we can't do anything.
+    if($file_mime && $can_run_tesseract) {
+      $commands = [];
+      // Check if this is a pdf. If so, attempt to convert to a png using ghostscript.
+      //-- with r300 == 300dpi, should be configurable, etc. All should be configurable
+      // E.g. gs -dBATCH -dNOPAUSE -sDEVICE=pnggray -r300 -dUseCropBox -sOutputFile=somepage_pagenumber.png %file
+      if($can_run_gs && $this->isGsMimeType($file_mime) && (strpos($arguments_gs, '%file') !== FALSE)) {
+          $tesseract_input_filename = "{$sourcefolder}{$filename}_{$sequence_number}.png";
+          $arguments_gs = "-dBATCH -dNOPAUSE -r300 -dUseCropBox -dQUIET -sDEVICE=pnggray -dFirstPage={$sequence_number} -dLastPage={$sequence_number} -sOutputFile=$tesseract_input_filename " . $arguments_gs;
+          $arguments_gs = str_replace('%s', '', $arguments_gs);
+          $arguments_gs = $this->strReplaceFirst('%file', '%s', $arguments_gs);
+          $arguments_gs = sprintf($arguments_gs, $file_path);
+          $commands[] = escapeshellcmd($execpath_gs . ' ' . $arguments_gs);
+      }
 
-      $command_gs = escapeshellcmd($execpath_gs . ' ' . $arguments_gs);
-      $command_tesseract = escapeshellcmd($execpath_tesseract . ' ' . $arguments_tesseract);
+      elseif($this->isTesseractMimeType($file_mime) && $can_run_tesseract && (strpos($arguments_tesseract, '%file') !== FALSE)) {
+        // Run tesseract directly on the file.
+        $tesseract_input_filename = $file_path;
+      }
 
-      $command = $command_gs . ' && ' . $command_tesseract;
+      if(!empty($tesseract_input_filename)) {
+        $arguments_tesseract = str_replace('%s', '', $arguments_tesseract);
+        $arguments_tesseract = $this->strReplaceFirst('%file', '%s', $arguments_tesseract);
+        $arguments_tesseract = sprintf($arguments_tesseract, $tesseract_input_filename);
+
+        $commands[] = escapeshellcmd($execpath_tesseract . ' ' . $arguments_tesseract);
+        $command = implode( ' && ', $commands);
+
+      }
+      else {
+        // Absence of $tesseract_input_filename means no usable file was found.
+      }
 
     }
     else {
-      // missing arguments for OCR. Not sure if to log this..
+      // Unable to run tesseract OCR. Not sure if to log this..
     }
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
@@ -722,6 +749,33 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       //"missing arguments for djvu 2 OCR");
     }
     return $command;
+  }
+
+  // Mime types supported as input to Tesseract.
+  // See https://github.com/tesseract-ocr/tessdoc/blob/main/InputFormats.md
+  public function isTesseractMimeType($mime_type): bool {
+    $tesseract_mime_types = [
+      'image/png',
+      'image/jpeg',
+      'image/tiff',
+      'image/jp2',
+      'image/x-jp2',
+      'image/gif',
+      'image/webp',
+      'image/bmp',
+      'image/x-portable-anymap',
+    ];
+    return in_array($mime_type, $tesseract_mime_types);
+  }
+
+  // Mime types supported as input to Tesseract.
+  // See https://github.com/tesseract-ocr/tessdoc/blob/main/InputFormats.md
+  public function isGsMimeType($mime_type): bool {
+    $gs_mime_types = [
+      'application/pdf',
+      'application/x-pdf',
+    ];
+    return in_array($mime_type, $gs_mime_types);
   }
 
 }
