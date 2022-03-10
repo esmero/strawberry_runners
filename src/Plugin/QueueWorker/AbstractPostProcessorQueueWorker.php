@@ -583,9 +583,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     // is a text field where the user can enter the file metadata field name that contains the sequence number for the file on the object. This sequence number
     // is fetched here and used in the run() method for the OcrPostProcessor.
     // If no configured_input_argument is defined, then the input argument field defined in the plugin definition prevails.
-    $configured_input_argument = $processor_instance->getConfiguration()[$processor_instance->getConfiguration()['configured_input_argument']] ?? NULL;
-    if($configured_input_argument && isset($data->{$configured_input_argument})) {
-      $input->{$input_argument} = $data->{$configured_input_argument};
+    $config = $processor_instance->getConfiguration();
+    $configured_input_argument = $config[$config['configured_input_argument']] ?? NULL;
+    if($configured_input_argument && isset($data->metadata[$configured_input_argument])) {
+      $input->{$input_argument} = $data->metadata[$configured_input_argument];
     }
     else {
       $input->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
