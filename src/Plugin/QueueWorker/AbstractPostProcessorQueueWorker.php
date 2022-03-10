@@ -210,14 +210,25 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $input_property = $processor_instance->getPluginDefinition()['input_property'];
         $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
 
-        // If argument is not there we will assume there is a mistake and its
+        // If argument is not there we will assume there is a mistake and that it is
         // a single one.
-        $data->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
+        $data->{$input_argument} = $data->{$input_argument} ?? 1;
 
+        $configured_input_argument = $processor_config[$processor_config['configured_input_argument']] ?? NULL;
         // In case $data->{$input_argument} is an array/data we will use the key as "sequence"
         // Each processor needs to be sure it passes a single item and with a unique key
-
-        if (is_array($data->{$input_argument})) {
+        if($configured_input_argument && isset($data->metadata[$configured_input_argument])) {
+          // See comments in invokeProcessor() method below for explanation of configured_input_arguments.
+          // TODO: Figure out how to pass the sequence number in to the invokeProcessor method, rather
+          // TODO: than recalculating it there.
+          if(is_array($data->metadata[$configured_input_argument])) {
+            $sequence_key = array_key_first($data->metadata[$configured_input_argument]);
+          }
+          else {
+            $sequence_key = $data->metadata[$configured_input_argument];
+          }
+        }
+        elseif (is_array($data->{$input_argument})) {
           $sequence_key = array_key_first($data->{$input_argument});
         }
         else {
@@ -583,13 +594,13 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     // is a text field where the user can enter the file metadata field name that contains the sequence number for the file on the object. This sequence number
     // is fetched here and used in the run() method for the OcrPostProcessor.
     // If no configured_input_argument is defined, then the input argument field defined in the plugin definition prevails.
-    $config = $processor_instance->getConfiguration();
-    $configured_input_argument = $config[$config['configured_input_argument']] ?? NULL;
+    $processor_config = $processor_instance->getConfiguration();
+    $configured_input_argument = $processor_config[$processor_config['configured_input_argument']] ?? NULL;
     if($configured_input_argument && isset($data->metadata[$configured_input_argument])) {
       $input->{$input_argument} = $data->metadata[$configured_input_argument];
     }
     else {
-      $input->{$input_argument} = isset($data->{$input_argument}) ? $data->{$input_argument} : 1;
+      $input->{$input_argument} = $data->{$input_argument} ?? 1;
     }
     // The Node UUID
     $input->nuuid = $data->nuuid;
