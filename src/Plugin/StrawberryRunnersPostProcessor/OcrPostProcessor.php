@@ -41,6 +41,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         'source_type' => 'asstructure',
         'mime_type' => ['application/pdf'],
         'configured_input_argument' => 'sequence_key',
+        'sequence_key' => 'sequence',
         'path' => '',
         'path_tesseract' => '',
         'path_pdf2djvu' => '',
@@ -112,7 +113,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $element['sequence_key'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Within the image file metadata, the field that contains the sequence number.'),
-      '#default_value' => (!empty($this->getConfiguration()['sequence_key'])) ? $this->getConfiguration()['sequence_key'] : 'sequence',
+      '#default_value' => (!empty($this->getConfiguration()['sequence_key'])) ? $this->getConfiguration()['sequence_key'] : '',
       '#states' => [
         'visible' => [
           ':input[name="pluginconfig[source_type]"]' => ['value' => 'asstructure'],
