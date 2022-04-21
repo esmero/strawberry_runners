@@ -8,6 +8,7 @@
 
 namespace Drupal\strawberry_runners\Plugin;
 
+use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityFieldManagerInterface;
 use Drupal\Core\File\FileSystemInterface;
@@ -66,6 +67,13 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
    */
   protected $logger;
 
+  /**
+   * The Cache Backend
+   *
+   * @var \Drupal\Core\Cache\CacheBackendInterface
+   */
+  protected $cacheBackend;
+
   public function __construct(
     array $configuration,
     string $plugin_id,
@@ -75,7 +83,8 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     Client $httpClient,
     ConfigFactoryInterface $config_factory,
     FileSystemInterface $file_system,
-    LoggerInterface $logger
+    LoggerInterface $logger,
+    CacheBackendInterface $cache_backend
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->entityTypeBundleInfo = $entityTypeBundleInfo;
@@ -88,10 +97,10 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     $this->fileSystem = $file_system;
     $this->temporary_directory = $this->fileSystem->getTempDirectory();
     $this->logger = $logger;
+    $this->cacheBackend = $cache_backend;
   }
 
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
-
     return new static(
       $configuration,
       $plugin_id,
@@ -101,7 +110,8 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       $container->get('http_client'),
       $container->get('config.factory'),
       $container->get('file_system'),
-      $container->get('logger.channel.strawberry_runners')
+      $container->get('logger.channel.strawberry_runners'),
+      $container->get('cache.default'),
     );
   }
 
