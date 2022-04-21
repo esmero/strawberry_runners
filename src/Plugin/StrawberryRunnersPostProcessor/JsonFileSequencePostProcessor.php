@@ -37,6 +37,8 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
         'source_type' => 'asstructure',
         'mime_type' => ['application/pdf'],
         'output_type' => 'json',
+        'language_key' => 'language_iso639_3',
+        'language_default' => 'eng',
         'output_destination' => ['plugin' => 'plugin'],
       ] + parent::defaultConfiguration();
   }
@@ -92,13 +94,34 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
       '#description' => $this->t('A single Mimetype type or a coma separed list of mimetypes that qualify to be Processed. Leave empty to apply any file'),
     ];
 
+    $element['language_key'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t("Within the ADO's metadata, the JSON key that contains the language in ISO639-3 (3 letter) format to be used for OCR/NLP processing via Tesseract."),
+      '#default_value' => (!empty($this->getConfiguration()['language_key'])) ? $this->getConfiguration()['language_key'] : '',
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[source_type]"]' => ['value' => 'asstructure'],
+          'and',
+          ':input[name="pluginconfig[jsonkey][as:image]"]' => ['checked' => TRUE],
+        ],
+      ],
+      '#required' => TRUE,
+    ];
+
+    $element['language_default'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t("Please provide a default language in ISO639-3 (3 letter) format. If none is provided we will use 'eng' "),
+      '#default_value' => (!empty($this->getConfiguration()['language_default'])) ? $this->getConfiguration()['language_default'] : 'eng',
+      '#required' => TRUE,
+    ];
+
     $element['timeout'] = [
       '#type' => 'number',
       '#title' => $this->t('Timeout in seconds for this process.'),
       '#default_value' => $this->getConfiguration()['timeout'],
       '#description' => $this->t('If the process runs out of time it can still be processed again.'),
-      '#size' => 2,
-      '#maxlength' => 2,
+      '#size' => 3,
+      '#maxlength' => 3,
       '#min' => 1,
     ];
     $element['weight'] = [
@@ -142,8 +165,8 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
       $io->output = $io->input;
-      // Now check if there is an "flv:identify" and iterate over each one.
-      if (isset($io->input->metadata['flv:identify']) && count($io->input->metadata['flv:identify']) > 0) {
+      // Now check if there is an "flv:identify" and has more than one entry, and iterate over each one.
+      if (isset($io->input->metadata['flv:identify']) && count($io->input->metadata['flv:identify']) > 1) {
         foreach ($io->input->metadata['flv:identify'] as $key => $sequence) {
           $sequence_number[] = $key;
         }
@@ -153,7 +176,17 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
           $sequence_number[] = $key;
         }
       }
-      // At least give it one page. (Should we?)
+      elseif (isset($io->input->metadata['sequence'])) {
+        // If not assign the internal file sequence relative to its type (e.g as:image)
+        // Final Sequence number is always relative to itself given that on Solr
+        // We use the actual file UUID to as part of the ID
+        // e.g default_solr_index-strawberryfield_flavor_datasource/5801:1:en:1e9f687c-e29e-4c23-91ba-655d9c5cdfe6:ocr
+        // For the general ID we will use this number when there are multiple siblings
+        // or 1 if the File is a single ouput
+        $sequence_number[] = $io->input->metadata['sequence'];
+      }
+
+      // If empty it migth be a single image that lacks proper structure. That is fine. we use 1 since
       if (empty($sequence_number)) {
         $sequence_number[] = 1;
       }
