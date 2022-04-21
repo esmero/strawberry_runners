@@ -24,6 +24,7 @@ use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterfa
 use Drupal\strawberryfield\Semantic\ActivityStream;
 use Drupal\Core\File\Exception\FileException;
 use Exception;
+use Drupal\Core\Queue\RequeueException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use stdClass;
@@ -209,36 +210,33 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $inindex = 1;
         $input_property = $processor_instance->getPluginDefinition()['input_property'];
         $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
+        $sequence_key = 1;
 
         // If argument is not there we will assume there is a mistake and that it is
         // a single one.
-        $data->{$input_argument} = $data->{$input_argument} ?? 1;
-
-        $configured_input_argument = $processor_config[$processor_config['configured_input_argument']] ?? NULL;
-        // In case $data->{$input_argument} is an array/data we will use the key as "sequence"
-        // Each processor needs to be sure it passes a single item and with a unique key
-        if($configured_input_argument && isset($data->metadata[$configured_input_argument])) {
-          // See comments in invokeProcessor() method below for explanation of configured_input_arguments.
-          // TODO: Figure out how to pass the sequence number in to the invokeProcessor method, rather
-          // TODO: than recalculating it there.
-          if(is_array($data->metadata[$configured_input_argument])) {
-            $sequence_key = array_key_first($data->metadata[$configured_input_argument]);
+        if ($input_argument) {
+          $data->{$input_argument} = $data->{$input_argument} ?? 1;
+          // In case $data->{$input_argument} is an array/data we will use the key as "sequence"
+          // Each processor needs to be sure it passes a single item and with a unique key
+          if (is_array($data->{$input_argument})) {
+            $sequence_key = array_key_first($data->{$input_argument});
           }
           else {
-            $sequence_key = $data->metadata[$configured_input_argument];
+            $sequence_key = (int) $data->{$input_argument} ?? 1;
           }
         }
-        elseif (is_array($data->{$input_argument})) {
-          $sequence_key = array_key_first($data->{$input_argument});
-        }
-        else {
-          $sequence_key = (int) $data->{$input_argument};
+        // Here goes the main trick for making sure out $sequence_key in the Solr ID
+        // Is the right now (relative to its own, 1 if single file, or an increseasing number if a pdf
+        // We check if the current item has siblings!
+        // If not, we immediatelly, independently of the actual internal
+        // $sequence is 1
+        if (!isset($data->siblings) || isset($data->siblings) && $data->siblings == 1) {
+          $sequence_key = 1;
         }
 
         if (is_a($entity, TranslatableInterface::class)) {
           $translations = $entity->getTranslationLanguages();
           foreach ($translations as $translation_id => $translation) {
-            //@TODO here, the number 1 needs to come from the sequence.
             $item_id = $entity->id() . ':' . $sequence_key . ':' . $translation_id . ':' . $file->uuid() . ':' . $data->plugin_config_entity_id;
             // a single 0 as return will force us to reindex.
             $inindex = $inindex * $this->flavorInSolrIndex($item_id, $data->metadata['checksum'], $indexes);
@@ -262,7 +260,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           }
         }
         // Allows a force in case of corrupted key value? Partial output
-        // Extragenoxus weird data?
+        // External/weird data?
+
         if (($inindex === 0 || $inkeystore === FALSE) ||
           $data->force == TRUE) {
           // Extract file and save it in key_value collection.
@@ -280,10 +279,15 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           $toindex->uri = $io->output->searchapi['uri'] ?? NULL;
           $toindex->label = $io->output->searchapi['label'] ?? NULL;
           $toindex->sentiment = $io->output->searchapi['sentiment'] ?? 0;
+          $toindex->nlplang = $io->output->searchapi['nlplang'] ?? [];
+          $toindex->processlang = $io->output->searchapi['processlang'] ?? [];
+          $toindex->config_processor_id = $data->plugin_config_entity_id ?? '';
 
           // $siblings will be the amount of total children processors that were
           // enqueued for a single Processor chain.
           $toindex->sequence_total = !empty($data->siblings) ? $data->siblings : 1;
+          // Be implicit about this one. No longer depend on the Solr DOC ID splitting.
+          $toindex->sequence_id = $data->{$input_argument} ?? 1;
           $toindex->checksum = $data->metadata['checksum'];
 
           $datasource_id = 'strawberryfield_flavor_datasource';
@@ -298,7 +302,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             $index->trackItemsInserted($datasource_id, $item_ids);
           }
         }
-      } catch (Exception $exception) {
+      }
+      catch (Exception $exception) {
         $message_params = [
           '@file_id' => $data->fid,
           '@entity_id' => $data->nid,
@@ -528,7 +533,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       // Query breaks if not because standard hl is enabled for all fields.
       // and normal hl offsets on OCR HL specific ones.
       $query->setOption('no_highlight', 'on');
-
       $query->addCondition('search_api_id', 'strawberryfield_flavor_datasource/' . $key)
         ->addCondition('search_api_datasource', 'strawberryfield_flavor_datasource')
         ->addCondition('checksum', $checksum);
@@ -581,6 +585,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $input_property = $processor_instance->getPluginDefinition()['input_property'];
     $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
 
+    // CHECK IF $input_argument even exists!
+
+
     $io = new stdClass();
     $input = new stdClass();
 
@@ -613,13 +620,15 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     // And totally discard indexing.
     try {
       $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
-    } catch (\Exception $exception) {
+    }
+    catch (\Exception $exception) {
       $this->logger->error('@plugin id threw an exception while trying to call ::run for Node UUID @nodeuuid with message: @msg', [
           '@msg' => $exception->getMessage(),
           '@plugin' => $processor_instance->getPluginId(),
           '@nodeuuid' => $input->nuuid,
         ]
       );
+      throw new RequeueException('I am not done yet!');
     }
     return $io;
   }
