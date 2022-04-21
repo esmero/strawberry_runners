@@ -8,6 +8,7 @@ use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity;
 use Drupal\Component\Utility\NestedArray;
+use Drupal\Core\Cache\Cache;
 
 /**
  * Builds the form to setup/create Strawberry Runner Processor config entities.
@@ -128,7 +129,8 @@ class strawberryRunnerPostprocessorEntityForm extends EntityForm {
    */
   public function save(array $form, FormStateInterface $form_state) {
     $strawberry_processor = $this->entity;
-
+    $cache_id = "strawberry_runners:postprocessor:".$strawberry_processor->getPluginId();
+    Cache::invalidateTags([$cache_id]);
     $status = $strawberry_processor->save();
 
     switch ($status) {
