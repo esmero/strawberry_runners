@@ -87,6 +87,13 @@ strawberryfield_runners.strawberry_runners_postprocessor.ocr:
     mime_type:
       type: string
       label: 'Mimetypes(s) to limit this Processor to'
+    language_default:
+      type: string
+      label: 'The default language'
+      default: 'eng'
+    language_key:
+      type: bool
+      label: 'The JSON key(s) containing the language code in ISO639-3'
     arguments:
       type: string
       label: 'Any additional argument your executable binary requires'
@@ -102,21 +109,27 @@ strawberryfield_runners.strawberry_runners_postprocessor.ocr:
     arguments_djvu2hocr:
       type: string
       label: 'Any additional argument your executable binary requires'
+    arguments_pdfalto:
+      type: string
+      label: 'Any additional argument your executable binary requires'
     path:
       type: string
-      label: 'The path for he binary to execute'
+      label: 'The path for the binary to execute'
     path_tesseract:
       type: string
-      label: 'The path for he binary to execute'
+      label: 'The path for the binary to execute'
     path_pdf2djvu:
       type: string
-      label: 'The path for he binary to execute'
+      label: 'The path for the binary to execute'
     path_djvudump:
       type: string
-      label: 'The path for he binary to execute'
+      label: 'The path for the binary to execute'
     path_djvu2hocr:
       type: string
-      label: 'The path for he binary to execute'
+      label: 'The path for the binary to execute'
+    path_pdfalto:
+      type: string
+      label: 'The path for the pdfalto binary to execute'
     output_type:
       type: string
       label: 'The expected and desired output of this processor'
