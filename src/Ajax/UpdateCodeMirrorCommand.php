@@ -48,6 +48,5 @@ class UpdateCodeMirrorCommand implements CommandInterface
       'content' => $this->content,
     ];
   }
-
 }
 
