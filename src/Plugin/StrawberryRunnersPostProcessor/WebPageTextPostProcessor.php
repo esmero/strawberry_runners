@@ -1,6 +1,7 @@
 <?php
 
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
+use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
@@ -137,8 +138,8 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
       '#title' => $this->t('Timeout in seconds for this process.'),
       '#default_value' => $this->getConfiguration()['timeout'],
       '#description' => $this->t('If the process runs out of time it can still be processed again.'),
-      '#size' => 3,
-      '#maxlength' => 3,
+      '#size' => 4,
+      '#maxlength' => 4,
       '#min' => 1,
     ];
 
@@ -190,6 +191,25 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
         if ($config['nlp'] && !empty($config['nlp_url']) && strlen(trim($page_text)) > 0 ) {
           $nlp = new NlpClient($config['nlp_url']);
           if ($nlp) {
+            $languages_enabled = [];
+            $detected_lang = $nlp->language($page_text) ?? NULL;
+            $cache_id = "strawberry_runners:postprocessor:".$this->getPluginId();
+            $cached = $this->cacheBackend->get($cache_id);
+            if ($cached) {
+              $languages_enabled = $cached->data;
+            }
+            else {
+              $capabilities = $nlp->get_call('/status', NULL);
+              if ($capabilities && is_array($capabilities) && isset($capabilities['polyglot_lang_models']) && is_array($capabilities['polyglot_lang_models'])) {
+                $languages_enabled = array_keys($capabilities['polyglot_lang_models']);
+                $languages_enabled = array_map(function ($languages_enabled) {
+                  $parts = explode(':', $languages_enabled);
+                  return $parts[1] ?? NULL;
+                }, $languages_enabled);
+                $languages_enabled = array_filter($languages_enabled);
+                $this->cacheBackend->set($cache_id, $languages_enabled, CacheBackendInterface::CACHE_PERMANENT, [$cache_id]);
+              }
+            }
             if ($config['nlp_method'] == 'spacy') {
               /*
               PERSON:      People, including fictional.
@@ -219,16 +239,19 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
               $output->searchapi['metadata'] = array_unique(($spacy['WORK_OF_ART'] ?? []) + ($spacy['EVENT'] ?? []));
             }
             elseif ($config['nlp_method'] == 'polyglot') {
-              $polyglot = $nlp->polyglot_entities($page_text, 'en');
-              $output->searchapi['where'] = $polyglot->getLocations();
-              $output->searchapi['who'] = array_unique(array_merge((array) $polyglot->getOrganizations(),
-                (array) $polyglot->getPersons()));
-              $output->searchapi['sentiment'] = $polyglot->getSentiment();
-              $entities_all = $polyglot->getEntities();
-              if (!empty($entities_all) and is_array($entities_all)) {
-                $output->searchapi['metadata'] = $entities_all;
+              if (in_array($detected_lang, $languages_enabled)) {
+                $polyglot = $nlp->polyglot_entities($page_text, $detected_lang);
+                $output->searchapi['where'] = $polyglot->getLocations();
+                $output->searchapi['who'] = array_unique(array_merge((array) $polyglot->getOrganizations(),
+                  (array) $polyglot->getPersons()));
+                $output->searchapi['sentiment'] = $polyglot->getSentiment();
+                $entities_all = $polyglot->getEntities();
+                if (!empty($entities_all) and is_array($entities_all)) {
+                  $output->searchapi['metadata'] = $entities_all;
+                }
               }
             }
+            $output->searchapi['nlplang'] = [$detected_lang];
           }
           else {
             $this->logger->warning('NLP64 server @nlp_url could not be queried. Skipping NLP.',
@@ -239,6 +262,9 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
         }
         $output->searchapi['uri'] = $page_url;
         $output->searchapi['plaintext'] = $page_title . '\n' . $page_text;
+        // Empty since we are extracting what is there, we did not define
+        // Any post processing language at all here.
+        $output->searchapi['processlang'] = [];
         $output->searchapi['label'] = $page_title;
         $output->searchapi['ts'] = $page_ts;
         $output->plugin = $output->searchapi;
