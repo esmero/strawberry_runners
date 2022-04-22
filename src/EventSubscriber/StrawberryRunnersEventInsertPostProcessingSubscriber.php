@@ -263,6 +263,15 @@ class StrawberryRunnersEventInsertPostProcessingSubscriber extends Strawberryfie
                         $data->nuuid = $entity->uuid();
                         $data->field_name = $field_name;
                         $data->field_delta = $delta;
+                        // Get the configured Language from descriptive metadata
+                        if (isset($config['language_key']) && !empty($config['language_key']) && isset($flatvalues[$config['language_key']])) {
+                          $data->lang = is_array($flatvalues[$config['language_key']]) ? array_values($flatvalues[$config['language_key']]) : [$flatvalues[$config['language_key']]];
+                        }
+                        else {
+                          $data->lang = $config['language_default'] ?? NULL;
+                        }
+                        // Check if there is a key that forces processing.
+                        $force = isset($flatvalues["ap:tasks"]["ap:forcepost"]) ? (bool) $flatvalues["ap:tasks"]["ap:forcepost"] : FALSE;
 
                         // We are passing also the full file metadata.
                         // This gives us an advantage so we can reuse
@@ -284,7 +293,7 @@ class StrawberryRunnersEventInsertPostProcessingSubscriber extends Strawberryfie
                         // Or/ we can have a preSave Subscriber that reads the prop,
                         // sets the state and then removes if before saving
 
-                        $data->force = FALSE;
+                        $data->force = $force;
                         $data->plugin_config_entity_id = $activePluginId;
                         // See https://github.com/esmero/strawberry_runners/issues/10
                         // Since the destination Queue can be a modal thing
