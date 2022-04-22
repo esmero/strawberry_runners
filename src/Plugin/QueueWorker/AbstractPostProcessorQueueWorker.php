@@ -276,6 +276,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           $toindex->where = $io->output->searchapi['where'] ?? [];
           $toindex->when = $io->output->searchapi['when'] ?? [];
           $toindex->ts = $io->output->searchapi['ts'] ?? NULL;
+          // Comes from WACZ Text one
           $toindex->uri = $io->output->searchapi['uri'] ?? NULL;
           $toindex->label = $io->output->searchapi['label'] ?? NULL;
           $toindex->sentiment = $io->output->searchapi['sentiment'] ?? 0;
