@@ -114,8 +114,8 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
       '#title' => $this->t('Timeout in seconds for this process.'),
       '#default_value' => $this->getConfiguration()['timeout'],
       '#description' => $this->t('If the process runs out of time it can still be processed again.'),
-      '#size' => 3,
-      '#maxlength' => 3,
+      '#size' => 4,
+      '#maxlength' => 4,
       '#min' => 1,
     ];
     $element['weight'] = [
