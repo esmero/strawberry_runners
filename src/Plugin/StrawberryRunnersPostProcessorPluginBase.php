@@ -129,8 +129,6 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       'weight' => 0,
       // The id of the config entity from where these values came from.
       'configEntity' => '',
-      // Optional definition of alternate input_argument source field from the configuration.
-      'configured_input_argument' => '',
     ];
   }
 
