@@ -39,8 +39,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     return [
         'source_type' => 'asstructure',
         'mime_type' => ['application/pdf'],
-        'configured_input_argument' => 'sequence_key',
-        'sequence_key' => 'sequence_id',
         'path' => '',
         'path_tesseract' => '',
         'path_pdfalto' => '',
@@ -102,20 +100,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#states' => [
         'visible' => [
           ':input[name="pluginconfig[source_type]"]' => ['value' => 'asstructure'],
-        ],
-      ],
-      '#required' => TRUE,
-    ];
-
-    $element['sequence_key'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Within the image file metadata, the JSON key that contains the sequence number.'),
-      '#default_value' => (!empty($this->getConfiguration()['sequence_key'])) ? $this->getConfiguration()['sequence_key'] : '',
-      '#states' => [
-        'visible' => [
-          ':input[name="pluginconfig[source_type]"]' => ['value' => 'asstructure'],
-          'and',
-          ':input[name="pluginconfig[jsonkey][as:image]"]' => ['checked' => TRUE],
         ],
       ],
       '#required' => TRUE,
@@ -420,7 +404,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
 
 
-            $nlp->spacy_entities($page_text, 'en_core_web_sm');
+            // $nlp->spacy_entities($page_text, 'en_core_web_sm');
             $spacy = $nlp->spacy_entities($page_text, 'en');
             $output->searchapi['sentiment'] = $nlp->sentiment($page_text, 'en');
             $output->searchapi['sentiment'] = is_scalar($output->searchapi['sentiment']) ? $output->searchapi['sentiment'] : NULL;
