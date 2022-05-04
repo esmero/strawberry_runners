@@ -66,3 +66,50 @@ function strawberry_runners_update_8903() {
     return 'runner item entity was not present, so no need to uninstall';
   }
 }
+
+/**
+ * Update 8904 - Add configs for pdfalto executable and language on ocr strawberry_runner post-processor.
+ */
+function strawberry_runners_update_8904() {
+  // Get the path to the pdfalto executable if it exists.
+  $pdfalto_executable = `which pdfalto`;
+  if ($pdfalto_executable) {
+    // Remove trailing newline.
+    $pdfalto_executable = trim($pdfalto_executable);
+    $plugin_config_defaults = [
+      'path_pdfalto' => $pdfalto_executable,
+      'arguments_pdfalto' => '%file',
+      'language_key' => 'language_iso639_3',
+      'language_default' => 'eng',
+      'arguments_tesseract' => '%file stdout -l %language hocr',
+    ];
+    $msgs = [];
+    // Load all strawberry_runners_postprocessor configurations and add the pdfalto settings to the ocr postprocessors if needed.
+    $configNames = \Drupal::service('config.storage')->listAll('strawberry_runners.strawberry_runners_postprocessor');
+    foreach($configNames as $configName) {
+      $config = \Drupal::configFactory()->getEditable($configName);
+      // Is it an ocr postprocessor?
+      if($config && $config->get('pluginid') == 'ocr') {
+        $plugin_config = $config->get('pluginconfig');
+        if($plugin_config) {
+          // Just clobber whatever settings they may have had. Should we be more nuanced?
+          $plugin_config = array_replace($plugin_config, $plugin_config_defaults);
+          $config->set('pluginconfig', $plugin_config);
+          $config->save();
+          $msgs[] = "'" . $configName . "' configuration updated";
+        }
+
+      }
+    }
+
+    if (!empty($msgs)) {
+      return implode("\n", $msgs);
+    }
+    else {
+      return "Could not find ocr postprocessor configurations to update. You will need to manually check and update your ocr postprocessor settings";
+    }
+  }
+  else {
+    return "Could not find the pdfalto executable in your installation. No update made.\nTo use pdfalto in ocr, first ensure that the pdfalto executable is installed and then manually edit your ocr postprocessor(s) to add the path to this executable.";
+  }
+}
