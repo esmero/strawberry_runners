@@ -677,6 +677,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $miniocr->openMemory();
     $miniocr->startDocument('1.0', 'UTF-8');
     $miniocr->startElement("ocr");
+    $atleastone_word = FALSE;
 
     if (!$alto) {
       $this->logger->warning('Sorry for @pageid we could not decode/extract ALTO as XML',
@@ -719,11 +720,17 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
               $w = ltrim(sprintf('%.3f', $width_rel), 0);
               $h = ltrim(sprintf('%.3f', $height_rel), 0);
 
-              $miniocr->startElement("w");
-              $miniocr->writeAttribute("x",
-                $l . ' ' . $t . ' ' . $w . ' ' . $h);
-              $miniocr->text($child_node['CONTENT']);
-              $miniocr->endElement();
+              // New OCR Highlight > 0.71 does not like empty <w> tags at all
+              if (strlen(trim($child_node['CONTENT'] ?? "") > 0)) {
+                $miniocr->startElement("w");
+                $miniocr->writeAttribute("x",
+                  $l . ' ' . $t . ' ' . $w . ' ' . $h);
+                $miniocr->text($child_node['CONTENT']);
+                // Only assume we have at least one word for <w> tags
+                // Since lines? could end empty?
+                $atleastone_word = TRUE;
+                $miniocr->endElement();
+              }
             }
           }
           $miniocr->endElement();
@@ -735,7 +742,12 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $miniocr->endElement();
     $miniocr->endDocument();
     unset($alto);
-    return $miniocr->outputMemory(TRUE);
+    if ($atleastone_word) {
+      return $miniocr->outputMemory(TRUE);
+    }
+    else {
+      return StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
+    }
   }
 
   // Mime types supported as input to Tesseract.
