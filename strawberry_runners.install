@@ -82,6 +82,7 @@ function strawberry_runners_update_8904() {
       'language_key' => 'language_iso639_3',
       'language_default' => 'eng',
       'arguments_tesseract' => '%file stdout -l %language hocr',
+      'datafolder_tesseract' => '/usr/share/tessdata',
     ];
     $msgs = [];
     // Load all strawberry_runners_postprocessor configurations and add the pdfalto settings to the ocr postprocessors if needed.
