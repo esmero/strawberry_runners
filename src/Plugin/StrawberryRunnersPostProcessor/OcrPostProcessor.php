@@ -721,7 +721,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
               $h = ltrim(sprintf('%.3f', $height_rel), 0);
 
               // New OCR Highlight > 0.71 does not like empty <w> tags at all
-              if (strlen(trim($child_node['CONTENT'] ?? "") > 0)) {
+              if (strlen(trim($child_node['CONTENT'] ?? "")) > 0) {
                 $miniocr->startElement("w");
                 $miniocr->writeAttribute("x",
                   $l . ' ' . $t . ' ' . $w . ' ' . $h);
