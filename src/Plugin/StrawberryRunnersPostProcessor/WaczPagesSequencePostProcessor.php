@@ -172,7 +172,7 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
         $j = 0;
         $fp = $z->getStream('pages/pages.jsonl');
         if ($fp) {
-          while (($buffer = fgets($fp, 32767)) !== FALSE) {
+          while (($buffer = fgets($fp)) !== FALSE) {
             // First row in a jsonl will be the headers, we do not need this one.
             if ($i == 0) {
               $i++;
@@ -193,7 +193,7 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
         }
         $fp_extra = $z->getStream('pages/extraPages.jsonl');
         if ($fp_extra) {
-          while (($buffer = fgets($fp_extra, 32767)) !== FALSE) {
+          while (($buffer = fgets($fp_extra)) !== FALSE) {
             // First row in a jsonl will be the headers, we do not need this one.
             if ($j == 0) {
               $j++;
@@ -209,12 +209,13 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
           fclose($fp_extra);
         }
         else {
-          // Opening the ZIP file failed.
-          error_log('No Pages found to extract');
+          error_log('No Extra Pages found to extract');
         }
     }
-
-
+      else {
+        // Opening the ZIP file failed.
+        error_log('Could not open the ZIP file');
+      }
       $output->plugin = [
         'sequence_number' => $sequence_number,
         'plugin_metadata' => $sequence_data,
