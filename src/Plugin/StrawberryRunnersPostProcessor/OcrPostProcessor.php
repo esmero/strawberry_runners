@@ -13,7 +13,7 @@ use Drupal\Core\Form\FormStateInterface;
 use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
-use Web64\Nlp\NlpClient;
+use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
 
 
 /**
@@ -359,15 +359,27 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       if ($config['nlp'] && !empty($config['nlp_url']) && strlen(trim($page_text)) > 0) {
         $nlp = new NlpClient($config['nlp_url']);
         if ($nlp) {
+          $capabilities = $nlp->get_call('/status', NULL);
           $languages_enabled = [];
-          $detected_lang = $nlp->language($page_text) ?? NULL;
+          $detected_lang = NULL;
+          //@TODO Should cache this too. Or deprecate ::language for 0.5.0
+          if ($capabilities
+            && is_array($capabilities)
+            && is_array($capabilities['web64']['endpoints'])
+            && in_array('/fasttext', $capabilities['web64']['endpoints'])) {
+            $detected_lang = $nlp->fasttext($page_text);
+            $detected_lang = is_array($detected_lang) && isset($detected_lang['language']) ? $detected_lang['language'] : $detected_lang;
+          }
+          // Either Capabilities are not present for FastText of we had an issue.
+          if ($detected_lang == NULL) {
+            $detected_lang = $nlp->language($page_text) ?? NULL;
+          }
           $cache_id = "strawberry_runners:postprocessor:".$this->getPluginId();
           $cached = $this->cacheBackend->get($cache_id);
           if ($cached) {
             $languages_enabled = $cached->data;
           }
           else {
-            $capabilities = $nlp->get_call('/status', NULL);
             if ($capabilities && is_array($capabilities) && isset($capabilities['polyglot_lang_models']) && is_array($capabilities['polyglot_lang_models'])) {
               $languages_enabled = array_keys($capabilities['polyglot_lang_models']);
               $languages_enabled = array_map(function ($languages_enabled) {
@@ -400,10 +412,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
             ORDINAL:     “first”, “second”, etc.
             CARDINAL:    Numerals that do not fall under another type.
              */
-
-
-
-
             // $nlp->spacy_entities($page_text, 'en_core_web_sm');
             $spacy = $nlp->spacy_entities($page_text, 'en');
             $output->searchapi['sentiment'] = $nlp->sentiment($page_text, 'en');
@@ -426,6 +434,21 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
             }
           }
           $output->searchapi['nlplang'] = [$detected_lang];
+          //Clean UP based on Regular expression now
+          // Common to all NLP
+          //$data_to_test = ["Düsseldorf", "إسرائيل", "сейчас", "γνωρίζωἀπὸ","საერთა შორისო","---hola---", "'", "hola", "", "ሰማይ አይታረስ", "O'Higgins", "4th Of July"];
+          foreach (['where','who', 'metadata'] as $nlp_key) {
+            if (isset($output->searchapi[$nlp_key])
+              && is_array(
+                $output->searchapi[$nlp_key]
+              )
+            ) {
+              $output->searchapi[$nlp_key] = preg_grep(
+                "/^[\p{L}|\p{N}\s+]+[\p{L}|\p{N}\s\-'+]+[\p{L}|\p{N}\s+]+$/u",
+                $output->searchapi[$nlp_key]
+              );
+            }
+          }
         }
       }
       $output->searchapi['plaintext'] = $page_text;
