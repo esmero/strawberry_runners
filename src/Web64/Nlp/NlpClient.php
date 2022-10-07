@@ -54,6 +54,10 @@ class NlpClient extends Web64NlpClient {
   }
 
   public function post_call($path, $params, $retry = 0) {
+    // Do not POST without query parameters.
+    if(!is_array($params) || empty($params)) {
+      return NULL;
+    }
     $url = $this->api_url . $path;
     $retry++;
     if ($retry > static::MAX_RETRY_HOST) {
