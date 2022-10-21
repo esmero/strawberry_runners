@@ -7,14 +7,18 @@ services:
     class: Drupal\strawberry_runners\EventSubscriber\StrawberryRunnersEventSavePostProcessingSubscriber
     tags:
       - {name: event_subscriber}
-    arguments: ['@string_translation', '@messenger', '@logger.factory', '@config.factory', '@stream_wrapper_manager', '@file_system', '@entity_type.manager', '@strawberry_runner.processor_manager', '@current_user']
+    arguments: [ '@string_translation', '@messenger', '@current_user', '@strawberry_runner.utility']
 
   strawberry_runner.postprocessing_insert_subscriber:
     class: Drupal\strawberry_runners\EventSubscriber\StrawberryRunnersEventInsertPostProcessingSubscriber
     tags:
       - {name: event_subscriber}
-    arguments: ['@string_translation', '@messenger', '@logger.factory', '@config.factory', '@stream_wrapper_manager', '@file_system', '@entity_type.manager', '@strawberry_runner.processor_manager', '@current_user']
+    arguments: ['@string_translation', '@messenger', '@current_user', '@strawberry_runner.utility']
 
   logger.channel.strawberry_runners:
     parent: logger.channel_base
     arguments: [ 'strawberry_runner' ]
+
+  strawberry_runner.utility:
+    class: Drupal\strawberry_runners\strawberryRunnerUtilityService
+    arguments: ['@string_translation', '@queue', '@messenger', '@logger.factory', '@config.factory', '@stream_wrapper_manager', '@file_system', '@entity_type.manager', '@strawberry_runner.processor_manager', '@current_user']

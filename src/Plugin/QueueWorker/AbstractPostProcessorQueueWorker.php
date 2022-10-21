@@ -150,7 +150,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $file = $this->entityTypeManager->getStorage('file')->load($data->fid);
     // 0 byte files have checksum, check what it is!
     if ($file === NULL || !isset($data->metadata['checksum'])) {
-      $this->logger->log(LogLevel::ERROR, 'Sorry the file ID @fileid does not exist or has no checksum yet. We really need the checksum', [
+      $this->logger->log(LogLevel::ERROR, 'Sorry the file ID @fileid does not (longer?) exists or has no checksum yet. We really need the checksum', [
         '@fileid' => $data->fid,
       ]);
       return;
@@ -161,7 +161,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ->load($data->nid);
 
     if (!$entity) {
-      $this->logger->log(LogLevel::ERROR, 'Sorry the Node ID @nodeid passed to the Strawberry Runners processor does not (longer?) exist. Skipping.', [
+      $this->logger->log(LogLevel::ERROR, 'Sorry the Node ID @nodeid passed to the Strawberry Runners processor does not (longer?) exists. Skipping.', [
         '@nodeid' => $data->nid,
       ]);
       return;
