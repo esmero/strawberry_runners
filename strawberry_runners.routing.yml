@@ -15,15 +15,3 @@ entity.strawberry_runners_postprocessor.collection:
     _permission: 'access administration pages'
   options:
     _admin_route: TRUE
-strawberry_runners.ado_tools:
-  path: '/node/{node}/adotools'
-  defaults:
-    _form: '\Drupal\strawberry_runners\Form\StrawberryRunnersToolsForm'
-    _title: 'ADO Tools'
-  requirements:
-    _entity_access: 'node.update'
-  options:
-    _node_operation_route: TRUE
-    parameters:
-      node:
-        type: 'entity:node'
