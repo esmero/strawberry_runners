@@ -28,7 +28,7 @@ use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
  *    input_argument = NULL
  * )
  */
-class TextPostProcessor extends SystemBinaryPostProcessor {
+class TextPostProcessor extends OcrPostProcessor {
 
   public $pluginDefinition;
 
@@ -241,7 +241,6 @@ class TextPostProcessor extends SystemBinaryPostProcessor {
     $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default']) : 'eng'];
     if ($file_path && $file_uuid && $node_uuid) {
       $output = new \stdClass();
-      $sequence_number = $io->input->metadata['sequence'] ?? 1;
       // Let's see if we need an output path or not
       $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
       $out_file_path = NULL;
@@ -251,20 +250,31 @@ class TextPostProcessor extends SystemBinaryPostProcessor {
       if ($file_mime) {
         $text_content = file_get_contents($file_path);
         if (!$this->isBinary($text_content)) {
-          $output->searchapi['fulltext']
-            = StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
           if ($this->isTextMime($file_mime)) {
-            $output->searchapi['fulltext']
-              = StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
             $page_text = $text_content;
           }
           elseif ($this->isXmlMime($file_mime)) {
             // Lastly plain text version of the XML
-            $page_text = strip_tags(str_replace(
-              ["<br>","</br>"],
-              PHP_EOL, $text_content));
-            $page_text = html_entity_decode($page_text);
-            $page_text = preg_replace(['/\h{2,}|(\h*\v{1,})/umi','/\v{2,}/uim', '/\h{2,}/uim'],["\n","\n",' '], $page_text);
+            // Try first with HOCR
+            $page_text = $this->hOCRtoMiniOCR($text_content, $sequence_number);
+            if ($page_text) {
+              $page_text = strip_tags(str_replace("<l>",
+                PHP_EOL . "<l> ", $page_text)) ;
+            }
+            else {
+              // Simple remove all
+              $page_text = strip_tags(
+                str_replace(
+                  ["<br>", "</br>"],
+                  PHP_EOL, $text_content
+                )
+              );
+              $page_text = html_entity_decode($page_text);
+              $page_text = preg_replace(
+                ['/\h{2,}|(\h*\v{1,})/umi', '/\v{2,}/uim', '/\h{2,}/uim'],
+                [" \n", " \n", ' '], $page_text
+              );
+            }
           }
           elseif ($this->isJsonMime($file_mime)) {
             $page_array = json_decode($text_content, TRUE);
