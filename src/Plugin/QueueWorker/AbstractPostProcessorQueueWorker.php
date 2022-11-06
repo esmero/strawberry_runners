@@ -245,8 +245,13 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         }
 
         // Check if we already have this entry in Solr
-        if ($inindex !== 0) {
-          $this->logger->log(LogLevel::INFO, 'Already in index so skipping.');
+        if ($inindex !== 0 && !$data->force) {
+          $this->logger->log(LogLevel::INFO, 'Flavor already in index for @plugin on ADO Node ID @nodeid, not forced, so skipping.',
+          [
+            '@plugin' => $processor_instance->getPluginId(),
+            '@nodeid' => $data->nid,
+          ]
+          );
         }
         $inkeystore = TRUE;
         // Skip file if element for every language is found in key_value collection.
@@ -265,6 +270,12 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         if (($inindex === 0 || $inkeystore === FALSE) ||
           $data->force == TRUE) {
           // Extract file and save it in key_value collection.
+          $this->logger->log(LogLevel::INFO, 'Invoking @plugin on ADO Node ID @nodeid.',
+            [
+              '@plugin' => $processor_instance->getPluginId(),
+              '@nodeid' => $data->nid,
+            ]
+          );
           $io = $this->invokeProcessor($processor_instance, $data);
 
           // Check if $io->output exists?
@@ -312,7 +323,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         ];
         if (!isset($data->extract_attempts)) {
           $data->extract_attempts = 0;
-          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed with message: @message File id @file_id at Node @entity_id.', $message_params);
+          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed with message: @message File id @file_id at ADO Node ID @entity_id.', $message_params);
         }
         if ($data->extract_attempts < 3) {
           $data->extract_attempts++;
@@ -324,7 +335,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             '@file_id' => $data->fid,
             '@entity_id' => $data->nid,
           ];
-          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts File Id @file_id at Node @entity_id.', $message_params);
+          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts File Id @file_id at ADO Node ID @entity_id.', $message_params);
         }
       }
     }
@@ -603,6 +614,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $input->nuuid = $data->nuuid;
     // All the rest of the associated Metadata in an as:structure
     $input->metadata = $data->metadata;
+    $input->field_name = $data->field_name;
+    $input->field_delta = $data->field_delta;
+    $input->lang = $data->lang ?? NULL;
     $io->input = $input;
     $io->output = NULL;
     //@TODO implement the TEST and BENCHMARK logic here
