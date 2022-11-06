@@ -133,7 +133,6 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
   public function invokeProcessorForAdo(ContentEntityInterface $entity, array $sbf_fields, bool $force = FALSE, array $filter = []): void {
 
     $active_plugins = $this->getActivePluginConfigs();
-
     // First pass: for files, all the as:structures we want for, keyed by content type
     /* check your config
        "source_type" => "asstructure"
@@ -242,10 +241,10 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                           $data->lang = $config['language_default'] ?? NULL;
                         }
                         // Check if there is a key that forces processing.
-                        $force_from_metadata
+                        $force_from_metadata_or_arg
                           = isset($flatvalues["ap:tasks"]["ap:forcepost"])
                           ? (bool) $flatvalues["ap:tasks"]["ap:forcepost"]
-                          : FALSE;
+                          : $force;
 
                         // We are passing also the full file metadata.
                         // This gives us an advantage so we can reuse
@@ -263,7 +262,7 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         // Can be a JSON passed property or an argument.
                         // Issue with JSON passed property is that we can no longer
 
-                        $data->force = $force_from_metadata ?? $force;
+                        $data->force = $force_from_metadata_or_arg;
                         $data->plugin_config_entity_id = $activePluginId;
                         // See https://github.com/esmero/strawberry_runners/issues/10
                         // Since the destination Queue can be a modal thing
