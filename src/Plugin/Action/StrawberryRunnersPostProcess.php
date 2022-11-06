@@ -1,24 +1,15 @@
 <?php
 
 namespace Drupal\strawberry_runners\Plugin\Action;
-
-use Drupal\Component\Diff\Diff;
-use Drupal\Component\Diff\DiffFormatter;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
-use Drupal\Core\TempStore\PrivateTempStoreFactory;
-use Drupal\strawberryfield\StrawberryfieldUtilityService;
-use Drupal\strawberry_runners\strawberryRunnerUtilityServiceInterface;
 use Drupal\views\ViewExecutable;
 use Drupal\views_bulk_operations\Action\ViewsBulkOperationsActionCompletedTrait;
 use Drupal\views_bulk_operations\Action\ViewsBulkOperationsActionInterface;
 use Drupal\Core\Plugin\PluginFormInterface;
 use Drupal\strawberryfield\Plugin\Action\StrawberryfieldJsonPatch;
 use Drupal\views_bulk_operations\Action\ViewsBulkOperationsPreconfigurationInterface;
-use Psr\Log\LoggerInterface;
-use Swaggest\JsonDiff\Exception as JsonDiffException;
-use Swaggest\JsonDiff\JsonDiff;
+
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
@@ -117,7 +108,7 @@ class StrawberryRunnersPostProcess extends StrawberryfieldJsonPatch implements V
    */
   public function execute($entity = NULL) {
 
-    /** @var \Drupal\Core\Entity\EntityInterface $entity */
+    /** @var \Drupal\Core\Entity\ContentEntityInterface $entity */
     $invoked = FALSE;
     if ($entity) {
       if ($sbf_fields = $this->strawberryfieldUtility->bearsStrawberryfield(
@@ -125,7 +116,9 @@ class StrawberryRunnersPostProcess extends StrawberryfieldJsonPatch implements V
       )
       ) {
         $force = $this->configuration['force'] ?? FALSE;
+        $force = (bool) $force;
         $filter = $this->configuration['plugins'] ?? [];
+        $filter = array_filter($filter);
         if (!empty($filter)) {
           $this->strawberryRunnerUtilityService->invokeProcessorForAdo(
             $entity, $sbf_fields, $force, $filter
@@ -134,8 +127,9 @@ class StrawberryRunnersPostProcess extends StrawberryfieldJsonPatch implements V
         }
 
       }
-      return $invoked;
+
     }
+    return $invoked;
   }
 
 
@@ -146,6 +140,7 @@ class StrawberryRunnersPostProcess extends StrawberryfieldJsonPatch implements V
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
 
     $active_plugins = $this->strawberryRunnerUtilityService->getActivePluginConfigs();
+    $options = [];
     foreach ($active_plugins as $source => $processors) {
       $options = array_combine(array_keys($processors), array_keys($processors));
     }
