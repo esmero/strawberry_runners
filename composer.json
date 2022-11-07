@@ -1,6 +1,6 @@
 {
     "name": "strawberryfield/strawberry_runners",
-    "description": "Strawberryfield post processing module for Drupal 8/9 using PHP React",
+    "description": "Strawberryfield post processing module for Drupal 9/10 using PHP React",
     "type": "drupal-module",
     "license": "GPL-2.0+",
     "homepage": "https://github.com/esmero/strawberry_runners",
@@ -19,6 +19,10 @@
         }
     ],
     "require": {
+        "php": ">=8.0",
+        "ext-zip": "*",
+        "ext-json": "*",
+        "drupal/views_bulk_operations": "^3.9 || ^4.1",
         "drupal/core": "^8.9 || ^9",
         "ml/json-ld": "^1.0",
         "drupal/search_api_solr": "~4.1",
@@ -28,6 +32,9 @@
         "react/child-process": "^0.6",
         "react/stream": "^1.1",
         "web64/php-nlp-client" : ">=0.4",
-        "mixnode/mixnode-warcreader-php":">=0.0"
+        "mixnode/mixnode-warcreader-php":">=0.0",
+        "ext-simplexml": "*",
+        "ext-libxml": "*",
+        "ext-xmlwriter": "*"
     }
 }

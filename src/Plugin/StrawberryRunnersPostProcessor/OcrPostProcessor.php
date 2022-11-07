@@ -312,25 +312,126 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       setlocale(LC_CTYPE, 'en_US.UTF-8');
       $execstring_pdfalto = $this->buildExecutableCommand_pdfalto($io);
       if ($execstring_pdfalto) {
-          $backup_locale = setlocale(LC_CTYPE, '0');
-          setlocale(LC_CTYPE, $backup_locale);
-          // Support UTF-8 commands.
-          // @see http://www.php.net/manual/en/function.shell-exec.php#85095
-          shell_exec("LANG=en_US.utf-8");
-          $proc_output = $this->proc_execute($execstring_pdfalto, $timeout);
-          if (is_null($proc_output)) {
-            $this->logger->warning("PDFALTO processing via {$execstring_pdfalto} timed out");
-            throw new \Exception("Could not execute {$execstring_pdfalto} or timed out");
+        $backup_locale = setlocale(LC_CTYPE, '0');
+        setlocale(LC_CTYPE, $backup_locale);
+        // Support UTF-8 commands.
+        // @see http://www.php.net/manual/en/function.shell-exec.php#85095
+        shell_exec("LANG=en_US.utf-8");
+        $proc_output = $this->proc_execute($execstring_pdfalto, $timeout);
+        if (is_null($proc_output)) {
+          $this->logger->warning("@sbr_processor: PDFALTO processing via {$execstring_pdfalto} timed out for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
+            [
+              '@sbr_processor' => $this->getPluginId(),
+              '@node_uuid' => $node_uuid ?? 'ABSENT',
+              '@file_uuid' => $file_uuid ?? 'ABSENT',
+              '@sequence_id' => $sequence_number,
+            ]);
+          throw new \Exception("Could not execute {$execstring_pdfalto} or timed out");
+        }
+        if (strpos($proc_output,"TextBlock")!== FALSE) {
+          $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
+          if ($miniocr == NULL) {
+            $this->logger->warning("@sbr_processor: ALTO extracted from PDF to miniOCR processing failed for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
+              [
+                '@sbr_processor' => $this->getPluginId(),
+                '@node_uuid' => $node_uuid ?? 'ABSENT',
+                '@file_uuid' => $file_uuid ?? 'ABSENT',
+                '@sequence_id' => $sequence_number,
+              ]);
           }
-          if (strpos($proc_output,"TextBlock")!== FALSE) {
-            $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
-            $output->searchapi['fulltext'] = $miniocr;
-            $output->plugin = $miniocr;
-            $io->output = $output;
+          $output->searchapi['fulltext'] = $miniocr;
+          $output->plugin = $miniocr;
+          $io->output = $output;
         }
       }
-      //if not searchable run tesseract
-      if (!isset($output->plugin)) {
+      //if not searchable run try to load the ADO, check if there is a as:text HOCR with the same size
+      //as the current Image and try to process, if not, run, tesseract
+      $width = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['width'] ?? NULL;
+      $height = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['height'] ?? NULL;
+      if ($width && $height) {
+        $width_hocr = NULL;
+        $height_hocr = NULL;
+        $ados = $this->entityTypeManager->getStorage('node')
+          ->loadByProperties(['uuid' => $node_uuid]);
+        foreach ($ados as $entity) {
+          // Interesting ...
+          // $ado->referencedEntities()
+          $decoded_values = $entity->get($io->input->field_name)->get(
+            (int) $io->input->field_delta
+          )->provideDecoded();
+          if (isset($decoded_values["as:text"]) && is_array($decoded_values["as:text"])) {
+            $external_found = FALSE;
+            foreach($decoded_values["as:text"] as $text_astructure) {
+              if ($external_found) {
+                break;
+              }
+              // Even if HOCR iS XML it is really HTML (XHTML) so
+              // we only search in as:text here
+              /* we are searching for something like this
+              "flv:exif": {
+                 "FileSize": "884 bytes",
+                 "HtmlLang": "en",
+                  "MIMEType": "application\/xml",
+                  "HtmlXmlns": "http:\/\/www.w3.org\/1999\/xhtml",
+                  "HtmlBodyDivId": "page_1",
+                  "HtmlHeadTitle": "\n",
+                  "HtmlBodyDivClass": "ocr_page",
+                  "HtmlBodyDivDivId": "block_1_1",
+                  "HtmlBodyDivTitle": "image \"\/var\/www\/drupal\/sites\/default\/tmp\/gc_12936_OBJ.jp2.tif\"; bbox 0 0 6312 9055; ppageno 0",
+              */
+              if (isset($text_astructure["dr:mimetype"]) && $text_astructure["dr:mimetype"] == "text/html") {
+                // "flv:exif".HtmlBodyDivTitle will contain what we need
+                $is_ocr_page = $text_astructure["flv:exif"]["HtmlBodyDivClass"] ?? NULL;
+                $is_ocr_page = $is_ocr_page == "ocr_page";
+                if ($is_ocr_page) {
+                  $ocr_page_title =  $text_astructure["flv:exif"]["HtmlBodyDivTitle"] ?? '';
+                  $titleparts = explode(";" , $ocr_page_title);
+                  foreach($titleparts as $titlepart) {
+                    $title_pos = strpos($titlepart, 'bbox');
+                    // External/old HOCR might have more data before the bbox.
+                    if ($title_pos !== FALSE) {
+                      $pagetitle = substr($titlepart, $title_pos + 5);
+                      //  0 0 6312 9055
+                      $page_coords = explode(' ', $pagetitle);
+                      $width_hocr = $page_coords[2] ?? $width_hocr;
+                      $height_hocr = $page_coords[3] ?? $height_hocr;
+                      // NOTE: we can not match offset OCRs. either full page or not
+                      if (($width_hocr == $width) && ($height_hocr == $height)) {
+                        $ocr_html = file_get_contents($text_astructure['url']);
+                        if ($ocr_html !== FALSE) {
+                          $miniocr = $this->hOCRtoMiniOCR($ocr_html, $sequence_number);
+                          if ($miniocr == NULL) {
+                            $this->logger->warning("@sbr_processor: HOCR to miniOCR processing from attached text file with UUID @source_hocr_uuid failed for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
+                              [
+                                '@sbr_processor' => $this->getPluginId(),
+                                '@node_uuid' => $node_uuid ?? 'ABSENT',
+                                '@file_uuid' => $file_uuid ?? 'ABSENT',
+                                '@source_hocr_uuid' => $text_astructure["dr:uuid"] ?? 'ABSENT',
+                                '@sequence_id' => $sequence_number,
+                              ]);
+                          }
+
+                          $output->searchapi['fulltext'] = $miniocr;
+                          $output->plugin = $miniocr;
+                          $io->output = $output;
+                          $external_found = TRUE;
+
+                        }
+                      }
+                      // If a bbox was found break, no need to process
+                      // the other parts.
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      // At this stage only run Tesseract if we are still without $output->plugin
+
+      if (!isset($output->plugin) || $output->plugin == NULL) {
         setlocale(LC_CTYPE, 'en_US.UTF-8');
         $execstring = $this->buildExecutableCommand($io);
         if ($execstring) {
@@ -341,14 +442,43 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           shell_exec("LANG=en_US.utf-8");
           $proc_output = $this->proc_execute($execstring, $timeout);
           if (is_null($proc_output)) {
-            $this->logger->warning("OCR processing via {$execstring} timed out");
+            $this->logger->warning("@sbr_processor: OCR processing via {$execstring} timed out for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
+              [
+                '@sbr_processor' => $this->getPluginId(),
+                '@node_uuid' => $node_uuid ?? 'ABSENT',
+                '@file_uuid' => $file_uuid ?? 'ABSENT',
+                '@sequence_id' => $sequence_number,
+              ]);
             throw new \Exception("Could not execute {$execstring} or timed out");
           }
 
           $miniocr = $this->hOCRtoMiniOCR($proc_output, $sequence_number);
+          if ($miniocr == NULL) {
+            $this->logger->warning("@sbr_processor: HOCR to miniOCR processing from Tesseract failed for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
+              [
+                '@sbr_processor' => $this->getPluginId(),
+                '@node_uuid' => $node_uuid ?? 'ABSENT',
+                '@file_uuid' => $file_uuid ?? 'ABSENT',
+                '@sequence_id' => $sequence_number,
+              ]);
+          }
           $output->searchapi['fulltext'] = $miniocr;
           $output->plugin = $miniocr;
         }
+      }
+
+      if (!isset($output->plugin) || $output->plugin == NULL) {
+        // If we still have no OCR at this state it is time to bail out
+        $this->logger->warning("@sbr_processor: HOCR to miniOCR processing from Tesseract failed for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
+          [
+            '@sbr_processor' => $this->getPluginId(),
+            '@node_uuid' => $node_uuid ?? 'ABSENT',
+            '@file_uuid' => $file_uuid ?? 'ABSENT',
+            '@sequence_id' => $sequence_number,
+          ]);
+        throw new \Exception(
+          "No OCR could be processed. Bailing out."
+        );
       }
 
       // Lastly plain text version of the XML
@@ -601,10 +731,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     libxml_clear_errors();
     libxml_use_internal_errors($internalErrors);
     if (!$hocr) {
-      $this->logger->warning('Sorry for @pageid we could not decode/extract HOCR as XML',
-        [
-          '@pageid' => $pageid,
-        ]);
       return NULL;
     }
     $miniocr = new \XMLWriter();
@@ -612,21 +738,20 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $miniocr->startDocument('1.0', 'UTF-8');
     $miniocr->startElement("ocr");
     $atleastone_word = FALSE;
-    foreach ($hocr->body->children() as $page) {
+    $pages = $hocr->body->children() ?? [];
+    foreach ($pages as $page) {
       $titleparts = explode(';', $page['title']);
       $pagetitle = NULL;
       foreach ($titleparts as $titlepart) {
         $titlepart = trim($titlepart);
-        if (strpos($titlepart, 'bbox') === 0) {
-          $pagetitle = substr($titlepart, 5);
+        $title_pos = strpos($titlepart, 'bbox');
+        // External/old HOCR might have more data before the bbox.
+        if ($title_pos !== FALSE) {
+          $pagetitle = substr($titlepart, $title_pos + 5);
         }
       }
       if ($pagetitle == NULL) {
         $miniocr->flush();
-        $this->logger->warning('Could not convert HOCR to MiniOCR for @pageid, no valid page dimensions found',
-          [
-            '@pageid' => $pageid,
-          ]);
         return NULL;
       }
       $coos = explode(" ", $pagetitle);
@@ -703,10 +828,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $atleastone_word = FALSE;
 
     if (!$alto) {
-      $this->logger->warning('Sorry for @pageid we could not decode/extract ALTO as XML',
-        [
-          '@pageid' => $pageid,
-        ]);
       return NULL;
     }
     foreach ($alto->Layout->children() as $page) {
