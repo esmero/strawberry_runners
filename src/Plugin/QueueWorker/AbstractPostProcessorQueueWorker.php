@@ -626,7 +626,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
     }
     catch (\Exception $exception) {
-      $this->logger->error('@plugin id threw an exception while trying to call ::run for Node UUID @nodeuuid with message: @msg', [
+      $this->logger->error('@plugin threw an exception while trying to call ::run for Node UUID @nodeuuid with message: @msg', [
           '@msg' => $exception->getMessage(),
           '@plugin' => $processor_instance->getPluginId(),
           '@nodeuuid' => $input->nuuid,
