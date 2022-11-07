@@ -226,7 +226,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           }
         }
         // Here goes the main trick for making sure out $sequence_key in the Solr ID
-        // Is the right now (relative to its own, 1 if single file, or an increseasing number if a pdf
+        // Is the right now (relative to its own, 1 if single file, or an increasing number if a pdf
         // We check if the current item has siblings!
         // If not, we immediatelly, independently of the actual internal
         // $sequence is 1
