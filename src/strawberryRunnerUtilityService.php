@@ -195,6 +195,18 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                   && is_numeric($asstructure['dr:fid'])
                 ) {
                   foreach ($activePlugins as $activePluginId => $config) {
+                    // Checks if the flag is set and is an array.
+                    $nopost = (isset($flatvalues["ap:tasks"]["ap:nopost"]) &&
+                      is_array($flatvalues["ap:tasks"]["ap:nopost"]));
+
+                    if ($nopost) {
+                      if (in_array($activePluginId, $flatvalues["ap:tasks"]["ap:nopost"])) {
+                        // if we have an entry like ["ap:tasks"]["ap:nopost"][0] == "pager" we don't run pager
+                        // for this ADO. We won't delete existing ones. Just never process.
+                        continue;
+                      }
+                    }
+
                     // Never ever run a processor over its own creation
                     if ($asstructure["dr:for"] == 'flv:' . $activePluginId) {
                       continue;
