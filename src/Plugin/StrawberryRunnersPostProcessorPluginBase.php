@@ -10,21 +10,20 @@ namespace Drupal\strawberry_runners\Plugin;
 
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
-use Drupal\Core\Entity\EntityFieldManagerInterface;
+use Drupal\Core\Datetime\DrupalDateTime;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
-use Drupal\Core\File\Exception\FileException;
-use Drupal\Component\Plugin\Exception\PluginException;
-use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\Core\Plugin\PluginBase;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
-use Drupal\Core\Field\FieldTypePluginManager;
+use Drupal\strawberryfield\Event\StrawberryfieldFileEvent;
+use Drupal\strawberryfield\StrawberryfieldEventType;
 use GuzzleHttp\Client;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Plugin\PluginWithFormsTrait;
+use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 
 abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase implements StrawberryRunnersPostProcessorPluginInterface, ContainerFactoryPluginInterface {
@@ -74,6 +73,19 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
    */
   protected $cacheBackend;
 
+  /**
+   * An array containing files that can be deleted.
+   *
+   * @var array
+   */
+  protected $instanceFiles = [];
+
+  /**
+   * @var \Symfony\Component\EventDispatcher\EventDispatcherInterface
+   */
+  protected $eventDispatcher;
+
+
   public function __construct(
     array $configuration,
     string $plugin_id,
@@ -84,7 +96,8 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     ConfigFactoryInterface $config_factory,
     FileSystemInterface $file_system,
     LoggerInterface $logger,
-    CacheBackendInterface $cache_backend
+    CacheBackendInterface $cache_backend,
+    EventDispatcherInterface $event_dispatcher
   ) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->entityTypeBundleInfo = $entityTypeBundleInfo;
@@ -98,6 +111,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     $this->temporary_directory = $this->fileSystem->getTempDirectory();
     $this->logger = $logger;
     $this->cacheBackend = $cache_backend;
+    $this->eventDispatcher = $event_dispatcher;
   }
 
   public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
@@ -112,6 +126,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       $container->get('file_system'),
       $container->get('logger.channel.strawberry_runners'),
       $container->get('cache.default'),
+      $container->get('event_dispatcher'),
     );
   }
 
@@ -183,6 +198,10 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     $handle = proc_open($command, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipe);
     $startTime = microtime(true);
     $read = NULL;
+    if(!is_resource($handle)) {
+      return $read;
+    }
+    fclose($pipe[0]);
     /* Read the command output and kill it if the process surpassed the timeout */
     while(!feof($pipe[1])) {
       $read .= fread($pipe[1], 8192);
@@ -191,10 +210,24 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
         break;
       }
     }
-    $status = proc_get_status($handle);
-    $this->kill($status['pid']);
-    proc_close($handle);
 
+    $status = proc_get_status($handle);
+    if($status['running'] == true) {
+      fclose($pipe[1]); //stdout
+      fclose($pipe[2]); //stderr
+      $ppid = $status['pid'];
+      exec('ps -o pid,ppid', $ps_out);
+      for($i = 1; $i <= count($ps_out) - 1; $i++) {
+        $pid_row = preg_split('/\s+/', trim($ps_out[$i]));
+        if (((int)$pid_row[1] ?? '') == $ppid && is_numeric(($pid_row[0] ?? ''))) {
+          $pid_to_kill = (int) $pid_row[0];
+          $this->kill($pid_to_kill);
+        }
+      }
+      // Also kill the main one.
+      $this->kill($ppid);
+      proc_close($handle);
+    }
     return $read;
   }
 
@@ -212,7 +245,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
    * @param  string  $subject
    * @return string
    */
-   public function strReplaceFirst(string $search, string $replace, string $subject) {
+  public function strReplaceFirst(string $search, string $replace, string $subject) {
     if ($search === '') {
       return $subject;
     }
@@ -223,5 +256,17 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
 
     return $subject;
   }
+
+  public function __destruct() {
+    foreach($this->instanceFiles as $instanceFile) {
+      $event_type = StrawberryfieldEventType::TEMP_FILE_CREATION;
+      $current_timestamp = (new DrupalDateTime())->getTimestamp();
+      $event = new StrawberryfieldFileEvent($event_type, 'strawberry_runners', $instanceFile, $current_timestamp);
+      // This will allow any temp file on ADO save to be managed
+      // IN a queue by \Drupal\strawberryfield\EventSubscriber\StrawberryfieldEventCompostBinSubscriber
+      $this->eventDispatcher->dispatch($event, $event_type);
+    }
+  }
+
 
 }
