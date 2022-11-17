@@ -18,7 +18,7 @@ use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
 
 /**
  *
- * System Binary Post processor Plugin Implementation
+ * OCR processor Plugin Implementation
  *
  * @StrawberryRunnersPostProcessor(
  *    id = "ocr",
@@ -122,8 +122,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $element['arguments'] = [
       '#type' => 'textfield',
       '#title' => $this->t('Any additional argument your executable binary requires.'),
-      '#default_value' => !empty($this->getConfiguration()['arguments']) ? $this->getConfiguration()['arguments'] : '%file',
-      '#description' => t('Any arguments your binary requires to run. Use %file as replacement for the file if the executable requires the filename to be passed under a specific argument.'),
+      '#default_value' => !empty($this->getConfiguration()['arguments']) ? $this->getConfiguration()['arguments'] : '-r150 %file',
+      '#description' => t('Any arguments your ghostscript (gs) binary requires to run. Use %file as replacement for the file if the executable requires the filename to be passed under a specific argument. We recommend testing with -r150 (150dpi image extraction) for better performance but -r300 can be also used if source Images in a PDF are small'),
       '#required' => TRUE,
     ];
 
@@ -626,7 +626,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       ->verifyCommand($execpath_tesseract);
     $filename = pathinfo($file_path, PATHINFO_FILENAME);
     $sourcefolder = pathinfo($file_path, PATHINFO_DIRNAME);
-    $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : sys_get_temp_dir() . '/';
+    $sourcefolder = strlen($sourcefolder) > 0 ? $sourcefolder . '/' : $this->temporary_directory . '/';
     $file_mime = $io->input->metadata["dr:mimetype"] ?? NULL;
 
     // If we can't run tesseract, or have no mime type, we can't do anything.
@@ -638,7 +638,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       if ($can_run_gs && $this->isGsMimeType($file_mime) && (strpos($arguments_gs,
             '%file') !== FALSE)) {
         $tesseract_input_filename = "{$sourcefolder}{$filename}_{$sequence_number}.png";
-        $arguments_gs = "-dBATCH -dNOPAUSE -r300 -dUseCropBox -dQUIET -sDEVICE=pnggray -dFirstPage={$sequence_number} -dLastPage={$sequence_number} -sOutputFile=$tesseract_input_filename " . $arguments_gs;
+        // Removed here -r300. This will now pass as a setting.
+        $arguments_gs = "-dBATCH -dNOPAUSE -dUseCropBox -dQUIET -sDEVICE=pnggray -dFirstPage={$sequence_number} -dLastPage={$sequence_number} -sOutputFile=$tesseract_input_filename " . $arguments_gs;
         $arguments_gs = str_replace('%s', '', $arguments_gs);
         $arguments_gs = $this->strReplaceFirst('%file', '%s', $arguments_gs);
         $arguments_gs = sprintf($arguments_gs, $file_path);
@@ -652,6 +653,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       }
 
       if (!empty($tesseract_input_filename)) {
+        $this->instanceFiles[] = $tesseract_input_filename;
         if (strlen(trim($datafolder_tesseract))>0) {
           $arguments_tesseract = ' --tessdata-dir ' . $datafolder_tesseract . ' ' . $arguments_tesseract;
         }

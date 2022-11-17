@@ -227,8 +227,6 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
           $output->plugin = $proc_output;
         }
         $io->output = $output;
-
-
       }
     }
     else {

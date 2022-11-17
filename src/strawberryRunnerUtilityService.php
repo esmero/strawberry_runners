@@ -239,6 +239,13 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         $data->nuuid = $entity->uuid();
                         $data->field_name = $field_name;
                         $data->field_delta = $delta;
+                        // Used to pass to the processor children the fact
+                        // That a cleanup queue item was already sent
+                        // Allows a leaf to cleanup even if there are
+                        // no future enqueuing happening
+                        // and avoids leafs to double enqueue for cleanup
+                        // of locally generated files from $data->fid
+                        $data->sbr_cleanedup_before = FALSE;
                         // Get the configured Language from descriptive metadata
                         if (isset($config['language_key'])
                           && !empty($config['language_key'])
