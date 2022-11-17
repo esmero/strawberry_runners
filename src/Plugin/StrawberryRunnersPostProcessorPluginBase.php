@@ -126,7 +126,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       $container->get('file_system'),
       $container->get('logger.channel.strawberry_runners'),
       $container->get('cache.default'),
-      $container->get('event_dispatcher'),
+      $container->get('event_dispatcher')
     );
   }
 
