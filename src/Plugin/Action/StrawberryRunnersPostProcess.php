@@ -17,7 +17,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *
  * @Action(
  *   id = "entity:sbr_postprocess_action",
- *   action_label = @Translation("Trigger Strawberrry Runners process/reprocess for Archipelago Digital Objects"),
+ *   action_label = @Translation("Trigger Strawberry Runners process/reprocess for Archipelago Digital Objects"),
  *   category = @Translation("Strawberry Runners"),
  *   deriver = "Drupal\strawberry_runners\Plugin\Action\Derivative\EntitySbfActionDeriver",
  *   type = "node",
