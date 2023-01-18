@@ -16,6 +16,7 @@ use Drupal\Core\Entity\TranslatableInterface;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\KeyValueStore\KeyValueFactoryInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
+use Drupal\Core\Queue\DelayedRequeueException;
 use Drupal\Core\Queue\QueueWorkerBase;
 use Drupal\Core\StreamWrapper\StreamWrapperInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
@@ -168,7 +169,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $processor_instance = $this->getProcessorPlugin($data->plugin_config_entity_id);
 
     if (!$processor_instance) {
-      $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted because the @processor may be inactive', ['@processor' => $processor_instance->label()]);
+      $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted because the @processor queue processor may be inactive', ['@processor' => $data->plugin_config_entity_id]);
       return;
     }
     $processor_config = $processor_instance->getConfiguration();
@@ -408,16 +409,46 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             ->createItem($data);
         }
         else {
+          Drupal::queue('strawberryrunners_process_index_failed', TRUE)
+            ->createItem($data);
           $message_params = [
             '@file_id' => $data->fid,
             '@entity_id' => $data->nid,
           ];
-          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts File Id @file_id at ADO Node ID @entity_id.', $message_params);
+          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts File Id @file_id at ADO Node ID @entity_id. Adding the item to "strawberryrunners_process_index_failed" queue.', $message_params);
         }
       }
     }
+    // Invoke the background process queue for items not being indexed.
     else {
-      $io = $this->invokeProcessor($processor_instance, $data);
+      try {
+        $io = $this->invokeProcessor($processor_instance, $data);
+      }
+      catch(Exception $exception) {
+        $message_params = [
+          '@file_id' => $data->fid,
+          '@entity_id' => $data->nid,
+          '@message' => $exception->getMessage(),
+        ];
+        if (!isset($data->extract_attempts)) {
+          $data->extract_attempts = 0;
+          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed with message: @message File id @file_id at ADO Node ID @entity_id.', $message_params);
+        }
+        if ($data->extract_attempts < 3) {
+          $data->extract_attempts++;
+          Drupal::queue('strawberryrunners_process_background', TRUE)
+            ->createItem($data);
+        }
+        else {
+          $message_params = [
+            '@file_id' => $data->fid,
+            '@entity_id' => $data->nid,
+          ];
+          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts File Id @file_id at ADO Node ID @entity_id. Adding the item to "strawberryrunners_process_background_failed" queue.', $message_params);
+          Drupal::queue('strawberryrunners_process_background_failed', TRUE)
+            ->createItem($data);
+        }
+      }
     }
     // Means we got a file back from the processor
     if ($tobeupdated && isset($io->output->file) && !empty($io->output->file)) {
@@ -728,7 +759,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           '@nodeuuid' => $input->nuuid,
         ]
       );
-      throw new RequeueException('I am not done yet. Will re-enqueu myself');
+      throw new DelayedRequeueException('I am not done yet. Will re-enqueue myself');
     }
     return $io;
   }
