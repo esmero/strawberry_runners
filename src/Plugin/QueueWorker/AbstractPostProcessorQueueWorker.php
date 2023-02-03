@@ -475,6 +475,11 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
                 isset($input_property_value[$value])) {
                 $childdata->{$input_property} = $input_property_value[$value];
               }
+              // TODO: Replace with the chained processor's queue id
+              //      $queue_id = $childprocessorschain
+
+//              Drupal::messenger()->addMessage(implode(", ", array_keys(get_object_vars($this->))), 'warning');
+//              Drupal::messenger()->addMessage(print_r($this->getBaseID(), TRUE), 'warning');
               Drupal::queue('strawberryrunners_process_background', TRUE)
                 ->createItem($childdata);
             }
@@ -709,8 +714,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     try {
       $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
     }
-    // If there is a failure during processing, try re-enqueueing up to three times. If it fails on the third try, then put the queue item into
-      // the `strawberryrunners_process_item_failed` queue.
+    // If there is a failure during processing, put the queue item into the `strawberryrunners_process_item_failed` queue,
+    // where it may be inspected, and either re-tried or removed.
     catch (\Exception $exception) {
 
       $message_params = [
@@ -724,38 +729,16 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         '@queue' => $this->getBaseId(),
       ];
 
-      if (!isset($data->extract_attempts)) {
-        $data->extract_attempts = 0;
-      }
-      $data->extract_attempts++;
-      $message_params['@attempts'] = \Drupal::translation()->formatPlural($data->extract_attempts, '1 attempt', '@count attempts')->render();
-
-      // Put re-enqueue logic here. Use attempts count.
-      if ($data->extract_attempts < 3) {
-        $message_string = '@processor (@queue) processing failed (after @attempts) with message: @message File id @file_id at ADO Node ID @entity_id. Adding back to the "@queue" queue to retry.';
-        $this->logger->log(LogLevel::ERROR, $message_string, $message_params);
-        Drupal::messenger()->addMessage(t($message_string, $message_params), 'warning');
-
-        // Add the item back to the original queue.
-        Drupal::queue($this->getBaseId(), TRUE)
-          ->createItem($data);
-      }
-      elseif ($data->extract_attempts == 3) {
         // Add some info to the queue item that we're going to save to assist in evaluating what happened.
         $data->item_failure_data = $message_params;
 
-        $message_string = '@processor (@queue) processing failed after 3 attempts File Id @file_id at ADO Node ID @entity_id. Adding the item to "strawberryrunners_process_item_failed" queue.';
+        $message_string = '@processor (@queue) processing failed for File Id @file_id at ADO Node ID @entity_id. Adding the item to "strawberryrunners_process_item_failed" queue where it can be inspected and then deleted or re-tried. To re-try, process the failed items queue - that will move it back to the original @queue queue.';
         $this->logger->log(LogLevel::ERROR, $message_string, $message_params);
         Drupal::messenger()->addMessage(t($message_string, $message_params), 'error');
 
         // Queue it to strawberryrunners_process_item_failed.
         Drupal::queue('strawberryrunners_process_item_failed', TRUE)
           ->createItem($data);
-      }
-      // If somehow we get to greater than 3, ensure we don't keep enqueueing!
-      else {
-        throw new Exception("Fatal error at " . __FILE__ . ":" . __LINE__);
-      }
     }
 
     return $io;
