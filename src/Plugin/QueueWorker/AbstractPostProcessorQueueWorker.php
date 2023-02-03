@@ -167,7 +167,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $processor_instance = $this->getProcessorPlugin($data->plugin_config_entity_id);
 
     if (!$processor_instance) {
-      $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted because the @processor queue processor may be inactive', ['@processor' => $data->plugin_config_entity_id]);
+      $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted because the @processor processor may be inactive', ['@processor' => $data->plugin_config_entity_id]);
       return;
     }
     $processor_config = $processor_instance->getConfiguration();
@@ -350,7 +350,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             [
               '@plugin' => $processor_instance->getPluginId(),
               '@nodeid' => $data->nid,
-              '@sequence' => !empty($data->sequence_number) ? ", page " . $data->sequence_number : "",
+              '@sequence' => !empty($data->sequence_number) ? ", sequence " . $data->sequence_number : "",
             ]
           );
           $io = $this->invokeProcessor($processor_instance, $data);
