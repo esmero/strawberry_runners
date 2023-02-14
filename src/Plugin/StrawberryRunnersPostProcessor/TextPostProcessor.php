@@ -476,14 +476,13 @@ class TextPostProcessor extends OcrPostProcessor {
   }
 
   /**
-   * Determine whether the given value is a binary string by checking to see if it has detectable character encoding.
+   * Determine whether the given value is a binary string. From Symfony DB debug.
    *
    * @param string $value
    *
    * @return bool
    */
-  private function isBinary($value): bool
-  {
-    return false === mb_detect_encoding((string)$value, null, true);
+  private function isBinary($value): bool {
+    return !preg_match('//u', $value);
   }
 }
