@@ -348,7 +348,16 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       //as the current Image and try to process, if not, run, tesseract
       $width = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['width'] ?? NULL;
       $height = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['height'] ?? NULL;
+      // In case identify failed, we can try with flv:exif (e.g JP2s might not pass the identify test)
+      if (!($width && $height)) {
+         $width = $io->input->metadata['flv:exif']['ImageWidth'] ?? NULL;
+         $height = $io->input->metadata['flv:exif']['ImageHeight'] ?? NULL;
+      }
+    
       if ($width && $height) {
+        // Cast them to INT to make sure we are matching exactly
+        $width = (int)$width;
+        $height = (int)$height;
         $width_hocr = NULL;
         $height_hocr = NULL;
         $ados = $this->entityTypeManager->getStorage('node')
@@ -395,6 +404,9 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
                       $page_coords = explode(' ', $pagetitle);
                       $width_hocr = $page_coords[2] ?? $width_hocr;
                       $height_hocr = $page_coords[3] ?? $height_hocr;
+                       // Cast them to INT to make sure we are matching exactly
+                      $width_hocr = $width_hocr ? (int)$width_hocr : $width_hocr;
+                      $height_hocr = $height_hocr ? (int)$height_hocr : $height_hocr;
                       // NOTE: we can not match offset OCRs. either full page or not
                       if (($width_hocr == $width) && ($height_hocr == $height)) {
                         $ocr_html = file_get_contents($text_astructure['url']);
@@ -410,12 +422,20 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
                                 '@sequence_id' => $sequence_number,
                               ]);
                           }
-
+                          else {
+                            $this->logger->info("@sbr_processor: HOCR to miniOCR processing from attached text file with UUID @source_hocr_uuid successfull for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
+                             [
+                                '@sbr_processor' => $this->getPluginId(),
+                                '@node_uuid' => $node_uuid ?? 'ABSENT',
+                                '@file_uuid' => $file_uuid ?? 'ABSENT',
+                                '@source_hocr_uuid' => $text_astructure["dr:uuid"] ?? 'ABSENT',
+                                '@sequence_id' => $sequence_number,
+                              ]);
+                          }
                           $output->searchapi['fulltext'] = $miniocr;
                           $output->plugin = $miniocr;
                           $io->output = $output;
                           $external_found = TRUE;
-
                         }
                       }
                       // If a bbox was found break, no need to process
