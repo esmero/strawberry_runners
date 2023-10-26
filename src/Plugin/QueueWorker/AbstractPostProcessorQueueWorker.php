@@ -27,7 +27,6 @@ use Drupal\strawberryfield\Semantic\ActivityStream;
 use Drupal\Core\File\Exception\FileException;
 use Drupal\strawberryfield\StrawberryfieldEventType;
 use Exception;
-use Drupal\Core\Queue\RequeueException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use stdClass;
@@ -168,7 +167,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $processor_instance = $this->getProcessorPlugin($data->plugin_config_entity_id);
 
     if (!$processor_instance) {
-      $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted because the @processor may be inactive', ['@processor' => $processor_instance->label()]);
+      $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted because the @processor processor may be inactive', ['@processor' => $data->plugin_config_entity_id]);
       return;
     }
     $processor_config = $processor_instance->getConfiguration();
@@ -347,15 +346,16 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         if (($inindex === 0 || $inkeystore === FALSE) ||
           $data->force == TRUE) {
           // Extract file and save it in key_value collection.
-          $this->logger->log(LogLevel::INFO, 'Invoking @plugin on ADO Node ID @nodeid.',
+          $this->logger->log(LogLevel::INFO, 'Invoking @plugin on ADO Node ID @nodeid@sequence.',
             [
               '@plugin' => $processor_instance->getPluginId(),
               '@nodeid' => $data->nid,
+              '@sequence' => !empty($data->sequence_number) ? ", sequence " . $data->sequence_number : "",
             ]
           );
           $io = $this->invokeProcessor($processor_instance, $data);
 
-          // Check if $io->output exists?
+          // No need to check if $io exists. invokeProcessor throws an exception if it doesn't.
           $toindex = new stdClass();
           $toindex->fulltext = $io->output->searchapi['fulltext'] ?? '';
           $toindex->plaintext = $io->output->searchapi['plaintext'] ?? '';
@@ -393,31 +393,19 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         }
       }
       catch (Exception $exception) {
-        $message_params = [
-          '@file_id' => $data->fid,
-          '@entity_id' => $data->nid,
-          '@message' => $exception->getMessage(),
-        ];
-        if (!isset($data->extract_attempts)) {
-          $data->extract_attempts = 0;
-          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed with message: @message File id @file_id at ADO Node ID @entity_id.', $message_params);
-        }
-        if ($data->extract_attempts < 3) {
-          $data->extract_attempts++;
-          Drupal::queue('strawberryrunners_process_index', TRUE)
-            ->createItem($data);
-        }
-        else {
-          $message_params = [
-            '@file_id' => $data->fid,
-            '@entity_id' => $data->nid,
-          ];
-          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts File Id @file_id at ADO Node ID @entity_id.', $message_params);
-        }
+        // Set $io to empty object to prevent further processing after the catch().
+        $io = new stdClass();
       }
     }
+    // Invoke the background process queue for items not being indexed.
     else {
-      $io = $this->invokeProcessor($processor_instance, $data);
+      try {
+        $io = $this->invokeProcessor($processor_instance, $data);
+      }
+      catch(Exception $exception) {
+        // Set $io to empty object to prevent further processing after the catch().
+        $io = new stdClass();
+      }
     }
     // Means we got a file back from the processor
     if ($tobeupdated && isset($io->output->file) && !empty($io->output->file)) {
@@ -487,6 +475,11 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
                 isset($input_property_value[$value])) {
                 $childdata->{$input_property} = $input_property_value[$value];
               }
+              // TODO: Replace with the chained processor's queue id
+              //      $queue_id = $childprocessorschain
+
+//              Drupal::messenger()->addMessage(implode(", ", array_keys(get_object_vars($this->))), 'warning');
+//              Drupal::messenger()->addMessage(print_r($this->getBaseID(), TRUE), 'warning');
               Drupal::queue('strawberryrunners_process_background', TRUE)
                 ->createItem($childdata);
             }
@@ -721,15 +714,33 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     try {
       $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
     }
+    // If there is a failure during processing, put the queue item into the `strawberryrunners_process_item_failed` queue,
+    // where it may be inspected, and either re-tried or removed.
     catch (\Exception $exception) {
-      $this->logger->error('@plugin threw an exception while trying to call ::run for Node UUID @nodeuuid with message: @msg', [
-          '@msg' => $exception->getMessage(),
-          '@plugin' => $processor_instance->getPluginId(),
-          '@nodeuuid' => $input->nuuid,
-        ]
-      );
-      throw new RequeueException('I am not done yet. Will re-enqueu myself');
+
+      $message_params = [
+        '@message' => $exception->getMessage(),
+        '@plugin' => $processor_instance->getPluginId(),
+        '@nodeuuid' => $input->nuuid,
+        '@sequence_id' => !empty($data->sequence_id) ? ", page " . $data->sequence_id : "",
+        '@processor' => $processor_instance->getPluginId(),
+        '@file_id' => $data->fid,
+        '@entity_id' => $data->nid,
+        '@queue' => $this->getBaseId(),
+      ];
+
+        // Add some info to the queue item that we're going to save to assist in evaluating what happened.
+        $data->item_failure_data = $message_params;
+
+        $message_string = '@processor (@queue) processing failed for File Id @file_id at ADO Node ID @entity_id. Adding the item to "strawberryrunners_process_item_failed" queue where it can be inspected and then deleted or re-tried. To re-try, process the failed items queue - that will move it back to the original @queue queue.';
+        $this->logger->log(LogLevel::ERROR, $message_string, $message_params);
+        Drupal::messenger()->addMessage(t($message_string, $message_params), 'error');
+
+        // Queue it to strawberryrunners_process_item_failed.
+        Drupal::queue('strawberryrunners_process_item_failed', TRUE)
+          ->createItem($data);
     }
+
     return $io;
   }
 
