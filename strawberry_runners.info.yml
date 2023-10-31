@@ -1,10 +1,11 @@
 name: Strawberry Runners
-description: Provides Post processing integration based on Strawberryfield JSON data.
+description: Provides Post processing integration based on Strawberryfield JSON data for Drupal 9/10.
 package: Archipelago
 type: module
-core_version_requirement: ^8.9 || ^9
-php: 7.1
+core_version_requirement: ^9.5 || ^10
+php: 8
 dependencies:
   - 'drupal:views'
   - 'strawberryfield'
   - 'search_api_solr'
+  - 'views_bulk_operations'
