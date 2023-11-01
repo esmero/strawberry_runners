@@ -266,7 +266,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
       //Ok, let's try to get the an extension if there is one
       // will be 4 characters after
       $extension = substr($arguments, (int) $pos + 8, 5);
-      $extension = trim($extension);
+      $extension = trim($extension ?? '');
       $extension = (strpos($extension, '.') === 0) && strlen($extension) >= 4 ? $extension : '';
 
       $out_file_path = $this->temporary_directory . '/' . pathinfo($file_path, PATHINFO_FILENAME);

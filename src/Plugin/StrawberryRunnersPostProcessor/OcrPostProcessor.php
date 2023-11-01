@@ -304,7 +304,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     $config = $this->getConfiguration();
     $timeout = $config['timeout']; // in seconds
-    $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default']) : 'eng'];
+    $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default'] ?? '') : 'eng'];
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       $output = new \stdClass();
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
@@ -353,7 +353,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
          $width = $io->input->metadata['flv:exif']['ImageWidth'] ?? NULL;
          $height = $io->input->metadata['flv:exif']['ImageHeight'] ?? NULL;
       }
-    
+
       if ($width && $height) {
         // Cast them to INT to make sure we are matching exactly
         $width = (int)$width;
@@ -506,7 +506,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
       $output->searchapi['metadata'] = [];
       // Check if NPL processing is enabled and if so do it.
-      if ($config['nlp'] && !empty($config['nlp_url']) && strlen(trim($page_text)) > 0) {
+      if ($config['nlp'] && !empty($config['nlp_url']) && strlen(trim($page_text ?? '')) > 0) {
         $nlp = new NlpClient($config['nlp_url']);
         if ($nlp) {
           $capabilities = $nlp->get_call('/status', NULL);
@@ -674,7 +674,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
       if (!empty($tesseract_input_filename)) {
         $this->instanceFiles[] = $tesseract_input_filename;
-        if (strlen(trim($datafolder_tesseract))>0) {
+        if (strlen(trim($datafolder_tesseract ?? '')) >0) {
           $arguments_tesseract = ' --tessdata-dir ' . $datafolder_tesseract . ' ' . $arguments_tesseract;
         }
         $arguments_tesseract = str_replace('%s', '', $arguments_tesseract);
@@ -696,6 +696,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
       return $command;
+      error_log($command);
     }
     return NULL;
   }
@@ -765,7 +766,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       $titleparts = explode(';', $page['title']);
       $pagetitle = NULL;
       foreach ($titleparts as $titlepart) {
-        $titlepart = trim($titlepart);
+        $titlepart = trim($titlepart ?? '');
         $title_pos = strpos($titlepart, 'bbox');
         // External/old HOCR might have more data before the bbox.
         if ($title_pos !== FALSE) {
@@ -785,7 +786,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         $miniocr->startElement("p");
         $miniocr->writeAttribute("xml:id", 'sequence_' . $pageid);
         $miniocr->writeAttribute("wh",
-          ltrim($pwidth, 0) . " " . ltrim($pheight, 0));
+          ltrim($pwidth ?? '', 0) . " " . ltrim($pheight ?? '', 0));
         $miniocr->startElement("b");
         $page->registerXPathNamespace('ns', 'http://www.w3.org/1999/xhtml');
         foreach ($page->xpath('.//ns:span[@class="ocr_line"]') as $line) {
@@ -798,17 +799,17 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
               $y0 = (float) $wcoos[2];
               $x1 = (float) $wcoos[3];
               $y1 = (float) $wcoos[4];
-              $l = ltrim(sprintf('%.3f', ($x0 / $pwidth)), 0);
-              $t = ltrim(sprintf('%.3f', ($y0 / $pheight)), 0);
-              $w = ltrim(sprintf('%.3f', (($x1 - $x0) / $pwidth)), 0);
-              $h = ltrim(sprintf('%.3f', (($y1 - $y0) / $pheight)), 0);
+              $l = ltrim(sprintf('%.3f', ($x0 / $pwidth)) ?? '', 0);
+              $t = ltrim(sprintf('%.3f', ($y0 / $pheight)) ?? '', 0);
+              $w = ltrim(sprintf('%.3f', (($x1 - $x0) / $pwidth)) ?? '', 0);
+              $h = ltrim(sprintf('%.3f', (($y1 - $y0) / $pheight)) ?? '', 0);
               $text = (string) $word;
               if ($notFirstWord) {
                 $miniocr->text(' ');
               }
               $notFirstWord = TRUE;
               // New OCR Highlight does not like empty <w> tags at all
-              if (strlen(trim($text)) > 0) {
+              if (strlen(trim($text ?? '')) > 0) {
                 $miniocr->startElement("w");
                 $miniocr->writeAttribute("x",
                   $l . ' ' . $t . ' ' . $w . ' ' . $h);
@@ -881,10 +882,10 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
               $width_rel = (float) $child_node['WIDTH'] / $pageWidthPts;
               $height_rel = (float) $child_node['HEIGHT'] / $pageHeightPts;
 
-              $l = ltrim(sprintf('%.3f', $hpos_rel), 0);
-              $t = ltrim(sprintf('%.3f', $vpos_rel), 0);
-              $w = ltrim(sprintf('%.3f', $width_rel), 0);
-              $h = ltrim(sprintf('%.3f', $height_rel), 0);
+              $l = ltrim(sprintf('%.3f', $hpos_rel) ?? '', 0);
+              $t = ltrim(sprintf('%.3f', $vpos_rel) ?? '', 0);
+              $w = ltrim(sprintf('%.3f', $width_rel) ?? '', 0);
+              $h = ltrim(sprintf('%.3f', $height_rel) ?? '', 0);
 
               // New OCR Highlight > 0.71 does not like empty <w> tags at all
               if (strlen(trim($child_node['CONTENT'] ?? "")) > 0) {
@@ -948,7 +949,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       ->verifyCommand($execpath_tesseract)) {
       // --tessdata-dir /usr/share/tessdata
 
-      if ($datafolder_tesseract && strlen(trim($datafolder_tesseract)) >0 ) {
+      if ($datafolder_tesseract && strlen(trim($datafolder_tesseract ?? '') >0 )) {
         $execpath_tesseract = $execpath_tesseract . ' --tessdata-dir '. escapeshellarg( $datafolder_tesseract);
       }
       $execpath_tesseract = $execpath_tesseract .' --list-langs';

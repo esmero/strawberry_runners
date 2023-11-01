@@ -218,7 +218,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       $ppid = $status['pid'];
       exec('ps -o pid,ppid', $ps_out);
       for($i = 1; $i <= count($ps_out) - 1; $i++) {
-        $pid_row = preg_split('/\s+/', trim($ps_out[$i]));
+        $pid_row = preg_split('/\s+/', trim($ps_out[$i] ?? ''));
         if (((int)$pid_row[1] ?? '') == $ppid && is_numeric(($pid_row[0] ?? ''))) {
           $pid_to_kill = (int) $pid_row[0];
           $this->kill($pid_to_kill);

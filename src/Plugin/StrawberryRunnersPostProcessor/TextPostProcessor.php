@@ -238,7 +238,7 @@ class TextPostProcessor extends OcrPostProcessor {
     $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
     $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
     $config = $this->getConfiguration();
-    $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default']) : 'eng'];
+    $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default'] ?? '') : 'eng'];
     if ($file_path && $file_uuid && $node_uuid) {
       $output = new \stdClass();
       // Let's see if we need an output path or not
@@ -281,7 +281,7 @@ class TextPostProcessor extends OcrPostProcessor {
             if (json_last_error() == JSON_ERROR_NONE) {
               $page_text = '';
               array_walk_recursive($page_array, function ($item, $key) use (&$page_text){$page_text .= $key.' '. $item .' ';});
-              $page_text = trim($page_text);
+              $page_text = trim($page_text ?? '');
             }
           }
           $output->searchapi['fulltext']
@@ -302,7 +302,7 @@ class TextPostProcessor extends OcrPostProcessor {
         // Check if NPL processing is enabled and if so do it.
         if ($config['nlp'] && !empty($config['nlp_url'])
           && strlen(
-            trim($page_text)
+            trim($page_text ?? '')
           ) > 0
         ) {
           $nlp = new NlpClient($config['nlp_url']);
