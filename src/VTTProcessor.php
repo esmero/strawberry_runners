@@ -35,7 +35,7 @@ class VTTProcessor implements \Iterator
       }
       elseif ($newline) {
         if (is_string($line) && strlen(trim($line)) > 0 && !preg_match('/^\s*\d+$/', $line)) {
-          $newline->appendToBody($line);
+          $newline->appendToBody(" " . $line);
           $bodyAppended = TRUE;
         }
       }
