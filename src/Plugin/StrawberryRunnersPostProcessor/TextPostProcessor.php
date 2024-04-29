@@ -482,7 +482,7 @@ class TextPostProcessor extends OcrPostProcessor {
    *
    * @return bool
    */
-  private function isBinary($value): bool {
+  public function isBinary($value): bool {
     return !preg_match('//u', $value);
   }
 }
