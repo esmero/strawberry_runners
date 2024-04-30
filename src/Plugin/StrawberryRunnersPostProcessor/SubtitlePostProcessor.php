@@ -444,7 +444,6 @@ class SubtitlePostProcessor extends TextPostProcessor {
       $miniocr->writeAttribute("xml:id", 'timesequence_' . $pageid);
       $miniocr->writeAttribute("wh", $pageWidthPts . " " . $pageHeightPts);
       $miniocr->startElement("b"); // Testing with a single Block first
-      $transcription->rewind();
       /** @var VTTLine $line */
       foreach ($transcription as $line) {
         $miniocr->startElement("l");

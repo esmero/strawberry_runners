@@ -29,6 +29,7 @@ class VTTProcessor implements \Iterator
         if ($newline && strlen(trim($newline->getBody()) > 0)) {
           // This would be a line added on a previous loop;
           $results[] = $newline;
+          $this->maxTime = ($this->maxTime ?? 0) < $newline->getEndstime() ? $newline->getEndstime() : $this->maxTime;
         }
         $newline = new VTTLine($times[0], $times[1]);
         $bodyAppended = FALSE;
@@ -44,7 +45,7 @@ class VTTProcessor implements \Iterator
       // becase we add to results on a Next valid timestamp, we will have missed the last line or if a single one.
       $results[] = $newline;
       //This will preserve the max extracted end time of the bunch at this class.
-      $this->maxTime= $newline->getEndstime();
+      $this->maxTime = ($this->maxTime ?? 0) < $newline->getEndstime() ? $newline->getEndstime() : $this->maxTime;
     }
 
     return array_values($results);
