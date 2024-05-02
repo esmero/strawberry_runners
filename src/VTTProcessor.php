@@ -26,7 +26,7 @@ class VTTProcessor implements \Iterator
     $results = [];
     foreach ($lines as $index => $line) {
       if ($times = $this->validateTimeSpan($line)) {
-        if ($newline && strlen(trim($newline->getBody()) > 0)) {
+        if ($newline && strlen(trim($newline->getBody())) > 0) {
           // This would be a line added on a previous loop;
           $results[] = $newline;
           $this->maxTime = ($this->maxTime ?? 0) < $newline->getEndstime() ? $newline->getEndstime() : $this->maxTime;
