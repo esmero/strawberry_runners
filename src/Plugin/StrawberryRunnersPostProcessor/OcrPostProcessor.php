@@ -10,7 +10,6 @@ namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
@@ -344,7 +343,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           $io->output = $output;
         }
       }
-      //if not searchable run try to load the ADO, check if there is a as:text HOCR with the same size
+      //if not searchable run try to load the ADO, check if there is an as:text HOCR with the same size
       //as the current Image and try to process, if not, run, tesseract
       $width = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['width'] ?? NULL;
       $height = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['height'] ?? NULL;
@@ -696,7 +695,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
       return $command;
-      error_log($command);
     }
     return NULL;
   }
