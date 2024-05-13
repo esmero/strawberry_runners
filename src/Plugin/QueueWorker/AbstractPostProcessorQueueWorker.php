@@ -177,6 +177,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     // every processor will work only on Files.
     // True for now, but eventually we want processors that do only
     // metadata to metadata.
+
     if (!isset($data->fid) || $data->fid == NULL || !isset($data->nid) || $data->nid == NULL || !is_array($data->metadata)) {
       return;
     }
@@ -201,25 +202,30 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       return;
     }
 
-    $filelocation = $this->ensureFileAvailability($file);
-
-    if ($filelocation === FALSE) {
-      $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted for ADO Node ID @nodeid because we could not ensure a local file location needed for @processor. You might have run out space or have permission issues or (less likely) the original File/ADO was removed milliseconds ago.',
-        [
-          '@processor' => $processor_instance->label(),
-          '@nodeid' => $data->nid,
-        ]
-      );
-      // Note. If $filelocation could not be acquired, means we do not need to compost neither
-      // its already gone/not possible
-      return;
+    // We only need to ensure $file if we are going to use the actual file for processing.
+    if ($processor_instance-->getPluginDefinition()['input_property'] == 'filepath') {
+      $filelocation = $this->ensureFileAvailability($file);
+      if ($filelocation === FALSE) {
+        $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted for ADO Node ID @nodeid because we could not ensure a local file location needed for @processor. You might have run out space or have permission issues or (less likely) the original File/ADO was removed milliseconds ago.',
+          [
+            '@processor' => $processor_instance->label(),
+            '@nodeid' => $data->nid,
+          ]
+        );
+        // Note. If $filelocation could not be acquired, means we do not need to compost neither
+        // its already gone/not possible
+        return;
+      }
+      // Means we could pass also a file directly anytime. But not really as such
+      // only into $data->filepath but not into $filelocation bc
+      // that would compost and remove the file. What if its needed later?
+      $data->filepath = $filelocation;
+      // We preset it up here.
+      $this->instanceFiles = [$filelocation];
     }
-    // Means we could pass also a file directly anytime. But not really as such
-    // only into $data->filepath but not into $filelocation bc
-    // that would compost and remove the file. What if its needed later?
-    $data->filepath = $filelocation;
-    // We preset it up here.
-    $this->instanceFiles = [$filelocation];
+    else {
+      $data->filepath = NULL;
+    }
 
     if (!isset($processor_config['output_destination']) || !is_array($processor_config['output_destination'])) {
       $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted for ADO Node ID @nodeid because there is no output destination setup for @processor',
@@ -255,7 +261,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     // If not cleaned up before
     // AND won't chain in the future
 
-    $needs_localfile_cleanup = !$will_chain_future && !$data->sbr_cleanedup_before;
+    $needs_localfile_cleanup = !$will_chain_future && !$data->sbr_cleanedup_before && $processor_instance-->getPluginDefinition()['input_property'] == 'filepath';
     // We set this before triggering cleanup, means future thinking
     // bc we need to make sure IF there is a next processor it will get
     // The info that during this queuworker processing cleanup at the end
@@ -314,6 +320,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         if (is_a($entity, TranslatableInterface::class)) {
           $translations = $entity->getTranslationLanguages();
           foreach ($translations as $translation_id => $translation) {
+            // checksum and file->uuid apply even if the source is not a local-ized/ensure local file.
+            // But we will have to change this if we plan on indexing JSON RAW directly as an vector embedding.
             $item_id = $entity->id() . ':' . $sequence_key . ':' . $translation_id . ':' . $file->uuid() . ':' . $data->plugin_config_entity_id;
             // a single 0 as return will force us to reindex.
             $inindex = $inindex * $this->flavorInSolrIndex($item_id, $data->metadata['checksum'], $indexes);
@@ -479,8 +487,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
               // The count will always be relative to this call
               // Means count of how many children are being called.
               $childdata->siblings = count($input_argument_value);
-              // In case the $input_property_value is an array coming from a plugin we may want to if has the same amount of values of $input_argument_value
-              // If so its many to one and we only need the corresponding entry to this sequence
+              // In case the $input_property_value is an array coming from a plugin we may want to know if it has the same amount of values of $input_argument_value
+              // If so, it is many to one, and we only need the corresponding entry to this sequence
               if ($input_property_value_from_plugin &&
                 is_array($input_property_value) &&
                 count($input_property_value) == $childdata->siblings &&
