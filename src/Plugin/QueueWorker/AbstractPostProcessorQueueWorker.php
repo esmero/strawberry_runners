@@ -203,7 +203,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     }
 
     // We only need to ensure $file if we are going to use the actual file for processing.
-    if ($processor_instance-->getPluginDefinition()['input_property'] == 'filepath') {
+    if ($processor_instance->getPluginDefinition()['input_property'] == 'filepath') {
       $filelocation = $this->ensureFileAvailability($file);
       if ($filelocation === FALSE) {
         $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted for ADO Node ID @nodeid because we could not ensure a local file location needed for @processor. You might have run out space or have permission issues or (less likely) the original File/ADO was removed milliseconds ago.',
@@ -261,7 +261,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     // If not cleaned up before
     // AND won't chain in the future
 
-    $needs_localfile_cleanup = !$will_chain_future && !$data->sbr_cleanedup_before && $processor_instance-->getPluginDefinition()['input_property'] == 'filepath';
+    $needs_localfile_cleanup = !$will_chain_future && !$data->sbr_cleanedup_before && $processor_instance->getPluginDefinition()['input_property'] == 'filepath';
     // We set this before triggering cleanup, means future thinking
     // bc we need to make sure IF there is a next processor it will get
     // The info that during this queuworker processing cleanup at the end
