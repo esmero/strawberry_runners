@@ -366,6 +366,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           // Check if $io->output exists?
           $toindex = new stdClass();
           $toindex->fulltext = $io->output->searchapi['fulltext'] ?? '';
+          $toindex->config_processor_id = $data->plugin_config_entity_id ?? '';
           $toindex->plaintext = $io->output->searchapi['plaintext'] ?? '';
           $toindex->metadata = $io->output->searchapi['metadata'] ?? [];
           $toindex->who = $io->output->searchapi['who'] ?? [];
@@ -378,7 +379,12 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           $toindex->sentiment = $io->output->searchapi['sentiment'] ?? 0;
           $toindex->nlplang = $io->output->searchapi['nlplang'] ?? [];
           $toindex->processlang = $io->output->searchapi['processlang'] ?? [];
-          $toindex->config_processor_id = $data->plugin_config_entity_id ?? '';
+          // ML ones.
+          $toindex->vector_384 = $io->output->searchapi['vector_384'] ?? NULL;
+          $toindex->vector_512 = $io->output->searchapi['vector_512'] ?? NULL;
+          $toindex->vector_576 = $io->output->searchapi['vector_576'] ?? NULL;
+          $toindex->vector_1024 = $io->output->searchapi['vector_1024'] ?? NULL;
+          $toindex->service_md5 = $io->output->searchapi['vector_1024'] ?? '';
 
           // $siblings will be the amount of total children processors that were
           // enqueued for a single Processor chain.
