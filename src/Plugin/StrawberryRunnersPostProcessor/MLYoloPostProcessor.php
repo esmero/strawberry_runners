@@ -89,8 +89,8 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
     $output->plugin = NULL;
     $labels = [];
     $ML = $nlpClient->get_call($config['ml_method'],  $arguments, 'en');
-    $output->searchapi['vector_576'] = is_array($ML['yolo']['vector']) && count($ML['yolo']['vector'])== 576 ? $ML['yolo']['vector'] : NULL;
-    if (is_array($ML['yolo']['objects']) && count($ML['yolo']['objects']) > 0 ) {
+    $output->searchapi['vector_576'] = isset($ML['yolo']['vector']) && is_array($ML['yolo']['vector']) && count($ML['yolo']['vector'])== 576 ? $ML['yolo']['vector'] : NULL;
+    if (isset($ML['yolo']['objects']) && is_array($ML['yolo']['objects']) && count($ML['yolo']['objects']) > 0 ) {
       $miniocr = $this->yolotToMiniOCR($ML['yolo']['objects'], $width, $height, $sequence_number);
       $output->searchapi['fulltext'] = $miniocr;
       $output->plugin = $miniocr;
@@ -139,7 +139,7 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
       $t = ltrim(sprintf('%.3f', $y0) ?? '', 0);
       $w = ltrim(sprintf('%.3f', ($x1 - $x0)) ?? '', 0);
       $h = ltrim(sprintf('%.3f', ($y1 - $y0)) ?? '', 0);
-      $text = (string) $object['name']?? 'Unlabeled' .' ~ '. $object['confidence'];
+      $text = (string) ($object['name'] ?? 'Unlabeled') .' ~ '. (string) ("{$object['confidence']}" ?? "0");
       if ($notFirstWord) {
         $miniocr->text(' ');
       }
