@@ -4,9 +4,43 @@
  * Contains strawberryfield.module.
  */
 
-use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Url;
-use Drupal\webform\WebformSubmissionForm;
-use Drupal\Core\Entity\ContentEntityInterface;
-use Drupal\file\Entity\File;
-use Drupal\node\NodeInterface;
+use Drupal\Core\Utility\Error as ErrorAlias;
+use Drupal\search_api\Entity\Index;
+
+
+
+/**
+ * Implements hook_views_data_alter().
+ */
+function strawberry_runners_views_data_alter(array &$data) {
+  //@see search_api_views_data()
+  /** @var \Drupal\search_api\IndexInterface $index */
+  foreach (Index::loadMultiple() as $index) {
+    try {
+      $key = 'search_api_index_' . $index->id();
+      $table = &$data[$key];
+
+      $ml_image_filter = _search_api_views_find_field_alias('sbr_imageml_filter', $table);
+      $table[$ml_image_filter] = [
+        'title'  => t('Image Similarity Filter via KNN (Experimental)'),
+        'group' => t('Search'),
+        'help' => t('Filters one or more Images belonging to an ADO against the Corresponding Vector in a Strawberry Flavor Document generating on the Fly an Embedding Vector.'),
+        'filter' => [
+          'title' => t('Image Similarity Filter via KNN '),
+          'field' => 'id',
+          'id'    => 'sbr_imageml_filter',
+        ],
+      ];
+      if ($ml_image_filter != 'sbr_imageml_filter') {
+        $table[$ml_image_filter]['real field'] = 'sbr_imageml_filter';
+      }
+    }
+    catch (\Exception $e) {
+      $args = [
+        '%index' => $index->label(),
+      ];
+      ErrorAlias::logException('strawberry_runners', $e, '%type while computing Views data for index %index: @message in %function (line %line of %file).', $args);
+    }
+  }
+  return $data;
+}
