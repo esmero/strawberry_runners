@@ -224,7 +224,7 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
     $form['sbf_fields'] = [
       '#type' => 'select',
       '#title' => $this->t(
-        'KNN Fields query against'
+        'KNN Dense Vector Field to query against'
       ),
       '#description' => $this->t(
         'Select the fields that will be used to query against.'
@@ -276,10 +276,6 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
     $valid = FALSE;
     $options = $form_state->getValue('options');
     $processor_id = $options['ml_strawberry_postprocessor'] ?? NULL;
-    if ($processor_id == NULL) {
-      // Can't validate yet here.Probably being setup by the user still.
-      return;
-    }
     $field_id = $options['sbf_fields'];
     if ($processor_id) {
       /* @var $plugin_config_entity \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity|null */
@@ -293,22 +289,16 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
           if ($field_info) {
             // We do allow mixed data sources. One can be a node of course even if the source is a flavor. This is because each source could inherit properties from the other.
             $propath_pieces = explode('/', $field_info->getCombinedPropertyPath());
-            if (end($propath_pieces) == 'vector_' .$vector_size && $field_info->getType() == 'densevector_' . $vector_size) {
-              $valid = TRUE;
-            }
-            else {
-              $form_state->setErrorByName('ml_strawberry_postprocessor', $this->t('The Field/Processor Combination is not right. Make sure your Vector Field and processor are targeting the same Vector Dimensions'));
+            if (!(end($propath_pieces) == 'vector_' .$vector_size && $field_info->getType() == 'densevector_' . $vector_size)) {
+              $form_state->setErrorByName('options][ml_strawberry_postprocessor', $this->t('The Field/Processor combination is not right. Make sure your Configured KNN Dense Vector Field and the Strawberry Processor are targeting the same Vector Dimensions (e.g first one is from a vector_576 data source property and the field type is densevector_576 and the processor is calling YOLO)'));
             }
           }
           else {
             // The field is gone.
-            $form_state->setErrorByName('sbf_fields', $this->t('Configured Dense Vector field does not longer exists.'));
+            $form_state->setErrorByName('options][sbf_fields', $this->t('CConfigured KNN Dense Vector Field does not longer exists. Please replace your config with a valid/indexed field.'));
           }
         }
       }
-    }
-    if ($valid) {
-
     }
   }
 
