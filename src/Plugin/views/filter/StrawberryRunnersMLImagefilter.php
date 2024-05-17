@@ -42,8 +42,6 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
 
   use SearchApiFilterTrait;
 
-
-
   protected $alwaysMultiple = TRUE;
 
   public $no_operator = TRUE;
@@ -90,6 +88,13 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
    */
   protected $cache;
 
+  /**
+   * The Strawberry Runners Utility Service.
+   *
+   * @var \Drupal\strawberry_runners\strawberryRunnerUtilityServiceInterface
+   */
+  private $strawberryRunnerUtilityService;
+
 
   /**
    * {@inheritdoc}
@@ -111,6 +116,9 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
     );
     $plugin->setCache($container->get('cache.default'));
     $plugin->currentUser = $container->get('current_user');
+    $plugin->strawberryRunnerUtilityService = $container->get(
+      'strawberry_runner.utility'
+    );
     return $plugin;
   }
 
@@ -194,6 +202,10 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
   public function buildOptionsForm(&$form, FormStateInterface $form_state) {
     parent::buildOptionsForm($form, $form_state);
 
+    $active_plugins = $this->strawberryRunnerUtilityService->getActivePluginConfigs();
+
+
+
     $fields = $this->getSbfDenseVectorFields() ?? [];
     $form['sbf_fields'] = [
       '#type' => 'select',
@@ -224,6 +236,10 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
         'If any other facets will be treated as pre-queries to the actual KNN query.'
       ),
     ];
+    $form['ml_strawberry_postprocessor'] = [
+
+    ];
+
   }
 
   public function submitOptionsForm(&$form, FormStateInterface $form_state) {
@@ -233,6 +249,8 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
   }
 
   protected function valueForm(&$form, FormStateInterface $form_state) {
+    // At this stage  $this->value is not set?
+
     $this->value = is_array($this->value) ? $this->value : (array) $this->value;
       if (!$form_state->get('exposed')) {
         $form['value'] = [
@@ -337,6 +355,8 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
 
   public function validateExposed(&$form, FormStateInterface $form_state) {
     // Only validate exposed input.
+    // In theory this is where i can alter the actual form state input
+    // to set a different URL argument? compress?
     if (empty($this->options['exposed'])
       || empty($this->options['expose']['identifier'])
     ) {
@@ -362,14 +382,45 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
 
     $values = (array) $input;
     if ($values) {
-      $this->validated_exposed_input = [];
+      if ($this->isExposed()) {
+        // If already JSON
+        $json_input = json_decode($values[0] ?? '');
+        if ($json_input !== JSON_ERROR_NONE) {
+          // Probably not the place to compress the data for the URL?
+             $encoded = base64_encode(gzcompress($values[0]));
+             $form_state->setValue($identifier, $encoded);
+             $input = $form_state->getUserInput();
+             $input[$identifier] = $encoded;
+             $form_state->setUserInput($input);
+             $this->validated_exposed_input = $json_input;
+             $filter_input = $this->view->getExposedInput();
+             $filter_input[$identifier] = $encoded;
+             $this->view->setExposedInput($filter_input);
+        }
+        else {
+          // check if base64 encoded then
+          if ($this->is_base64()) {
+
+            $decoded = gzdecode(base64_decode($values[0]));
+            if ($decoded !== FALSE) {
+              $json_input = json_decode($values[0] ?? '');
+
+            }
+          }
+        }
+      }
+      else {
+
+      }
     }
   }
 
 
   public function acceptExposedInput($input) {
+    // Called during the form submit itself..
     $rc = parent::acceptExposedInput($input);
-
+    // a False means it won't be included/alter the generated query.
+    // This is useful!
     if ($rc) {
       // If we have previously validated input, override.
       if (isset($this->validated_exposed_input)) {
@@ -409,5 +460,19 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
 
   protected function getExistingDenseVectorForImage($uri, $field) {
 
+  }
+
+  protected function is_base64($s){
+    // Check if there are valid base64 characters
+    if (!preg_match('/^[a-zA-Z0-9\/\r\n+]*={0,2}$/', $s)) return false;
+
+    // Decode the string in strict mode and check the results
+    $decoded = base64_decode($s, true);
+    if(false === $decoded) return false;
+
+    // Encode the string again
+    if(base64_encode($decoded) != $s) return false;
+
+    return true;
   }
 }
