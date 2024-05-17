@@ -28,10 +28,11 @@ interface strawberryRunnerUtilityServiceInterface {
   /**
    * Gets all Currently Active PLugin Entities and Configs initialized
    *
-   *
+   * @param bool $onlyRoot
+   *     TRUE means we only get Top/first call Processors. FALSE, any processor at any level.
    * @return array
    * @throws \Drupal\Component\Plugin\Exception\PluginException
    */
-  public function getActivePluginConfigs():array;
+  public function getActivePluginConfigs($onlyRoot = TRUE):array;
 
 }

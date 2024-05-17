@@ -2,6 +2,7 @@
 
 namespace Drupal\strawberry_runners;
 
+use Drupal\Component\Plugin\Exception\PluginException;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Queue\QueueFactory;
 use Drupal\Core\Entity\ContentEntityInterface;
@@ -394,13 +395,14 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
   }
 
   /**
-   * Gets all Currently Active PLugin Entities and Configs initialized
+   * Gets all Currently Active Plugin Entities and Configs initialized
    *
-   *
+   * @param bool $onlyRoot
+   *    TRUE means we only get Top/first call Processors. FALSE, any processor at any level.
    * @return array
-   * @throws \Drupal\Component\Plugin\Exception\PluginException
+   * @throws PluginException
    */
-  public function getActivePluginConfigs():array {
+  public function getActivePluginConfigs($onlyRoot = TRUE):array {
     $active_plugins = [];
     /* @var $plugin_config_entities \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity[] */
     $plugin_config_entities = $this->entityTypeManager->getListBuilder(
@@ -410,7 +412,7 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
     foreach ($plugin_config_entities as $plugin_config_entity) {
       // Only get first level (no Parents) and Active ones.
       if ($plugin_config_entity->isActive()
-        && $plugin_config_entity->getParent() == ''
+        && (($onlyRoot && $plugin_config_entity->getParent() == '') || (!$onlyRoot))
       ) {
         $entity_id = $plugin_config_entity->id();
         $configuration_options = $plugin_config_entity->getPluginconfig();
