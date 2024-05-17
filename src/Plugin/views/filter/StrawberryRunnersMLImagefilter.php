@@ -142,7 +142,11 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
   public function defineOptions() {
     $options = parent::defineOptions();
     $options['value']['default'] = [];
-    $options['sbf_fields'] = ['default' => []];
+    $options['sbf_fields'] = ['default' => NULL];
+    $options['pre_query'] = ['default' => TRUE];
+    $options['pre_query_facets'] = ['default' => TRUE];
+    $options['topk'] = ['default' => 3];
+    $options['ml_strawberry_postprocessor'] = ['default' => NULL];
     return $options;
   }
 
@@ -166,6 +170,10 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
 
   protected function valueSubmit($form, FormStateInterface $form_state) {
     $form_state = $form_state;
+  }
+
+  protected function valueValidate($form, FormStateInterface $form_state) {
+    $form_state->setValue(['options', 'value'], []);
   }
 
 
@@ -250,6 +258,16 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
         'If any other facets will be treated as pre-queries to the actual KNN query.'
       ),
     ];
+    $form['topk'] = [
+      '#type' => 'number',
+      '#default_value' => $this->options['topk'],
+      '#title' => $this->t('Top Similarity KNN hits to request to the backend.'),
+      '#description'=> $this->t(
+        'The more, the slower'
+      ),
+      '#min' => 1,
+      '#max' => 100,
+    ];
     $form['ml_strawberry_postprocessor'] =  [
       '#type' => 'select',
       '#title' => $this->t(
@@ -328,18 +346,6 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
         '#suffix' => '</div>'
       ] ;
     }
-  }
-
-  protected function valueValidate($form, FormStateInterface $form_state) {
-    $node_uuids = [];
-    if ($values = $form_state->getValue(['options', 'value'])) {
-      if (!is_array($values)) { (array) $values;}
-      foreach ($values as $value) {
-        $node_uuids_or_ids[] = $value;
-      }
-      sort($node_uuids_or_ids);
-    }
-    $form_state->setValue(['options', 'value'], $node_uuids_or_ids);
   }
 
   public function hasExtraOptions() {
