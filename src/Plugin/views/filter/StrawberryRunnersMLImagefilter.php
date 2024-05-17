@@ -4,6 +4,7 @@ namespace Drupal\strawberry_runners\Plugin\views\filter;
 
 use Drupal\Core\Cache\CacheableMetadata;
 use Drupal\Core\Cache\RefinableCacheableDependencyInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\TypedData\EntityDataDefinitionInterface;
 use Drupal\Core\Field\TypedData\FieldItemDataDefinitionInterface;
 use Drupal\Core\Form\FormStateInterface;
@@ -54,11 +55,11 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
   public $validated_exposed_input = NULL;
 
   /**
-   * The vocabulary storage.
+   * The Entity Type manager
    *
-   * @var \Drupal\node\NodeStorageInterface
+   * @var \Drupal\Core\Entity\EntityStorageInterface
    */
-  protected $nodeStorage;
+  protected $sbrEntityStorage;
 
   /**
    * The vocabulary storage.
@@ -95,22 +96,31 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
    */
   private $strawberryRunnerUtilityService;
 
+  /**
+   * The StrawberryRunner Processor Plugin Manager.
+   *
+   * @var \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager
+   */
+  private $strawberryRunnerProcessorPluginManager;
 
   /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container,
-    array $configuration, $plugin_id, $plugin_definition
+                                array $configuration, $plugin_id, $plugin_definition
   ) {
     /** @var static $plugin */
     $plugin = parent::create(
       $container, $configuration, $plugin_id, $plugin_definition
     );
 
-    $plugin->setNodeStorage(
-      $container->get('entity_type.manager')->getStorage('node')
+    $plugin->setSbrEntityStorage(
+      $container->get('entity_type.manager')->getStorage('strawberry_runners_postprocessor')
     );
     $plugin->setFieldsHelper($container->get('search_api.fields_helper'));
+    $plugin->setViewStorage(
+      $container->get('entity_type.manager')->getStorage('view')
+    );
     $plugin->setViewStorage(
       $container->get('entity_type.manager')->getStorage('view')
     );
@@ -118,6 +128,9 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
     $plugin->currentUser = $container->get('current_user');
     $plugin->strawberryRunnerUtilityService = $container->get(
       'strawberry_runner.utility'
+    );
+    $plugin->strawberryRunnerProcessorPluginManager  = $container->get(
+      'strawberry_runner.processor_manager'
     );
     return $plugin;
   }
@@ -132,6 +145,13 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
     $options['sbf_fields'] = ['default' => []];
     return $options;
   }
+
+  public function setSbrEntityStorage(EntityStorageInterface $sbrEntityStorage): StrawberryRunnersMLImagefilter
+  {
+    $this->sbrEntityStorage = $sbrEntityStorage;
+    return $this;
+  }
+
   protected function canBuildGroup() {
     return FALSE;
   }
@@ -148,19 +168,6 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
     $form_state = $form_state;
   }
 
-  /**
-   * Sets the Node Storage.
-   *
-   * @param \Drupal\node\NodeStorageInterface $nodestorage
-   *   The node storage.
-   *
-   * @return $this
-   */
-
-  public function setNodeStorage(NodeStorageInterface $nodestorage) {
-    $this->nodeStorage = $nodestorage;
-    return $this;
-  }
 
   public function setFieldsHelper(FieldsHelperInterface $fieldsHelper) {
     $this->fieldsHelper = $fieldsHelper;
@@ -201,8 +208,15 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
    */
   public function buildOptionsForm(&$form, FormStateInterface $form_state) {
     parent::buildOptionsForm($form, $form_state);
+    $active_plugins = $this->strawberryRunnerUtilityService->getActivePluginConfigs(FALSE);
 
-    $active_plugins = $this->strawberryRunnerUtilityService->getActivePluginConfigs();
+    foreach ($active_plugins as $by_source => $plugins) {
+      foreach ($plugins as $entity_id => $active_plugin) {
+        if (isset($active_plugin['ml_method'])) {
+          $post_processor_options[$entity_id] = $active_plugin['ml_method'] ."({$entity_id})";
+        }
+      }
+    }
 
 
 
@@ -236,10 +250,66 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
         'If any other facets will be treated as pre-queries to the actual KNN query.'
       ),
     ];
-    $form['ml_strawberry_postprocessor'] = [
-
+    $form['ml_strawberry_postprocessor'] =  [
+      '#type' => 'select',
+      '#title' => $this->t(
+        'Strawberry Runners processor to extract the on-the fly embedding'
+      ),
+      '#description' => $this->t(
+        'Select the ML Strawberry Runners Processor that was used to index Vectors into the field you are going to search against. These need to match'
+      ),
+      '#options' => $post_processor_options,
+      '#multiple' => FALSE,
+      '#default_value' => $this->options['ml_strawberry_postprocessor'],
+      '#required' => TRUE,
     ];
+  }
+  /**
+   * Validate the options form.
+   */
+  public function validateOptionsForm(&$form, FormStateInterface $form_state) {
+    // We need to validate that the selected field is of the same source/size as model that will
+    // be used to generate the on the fly vectors.
+    // So we need to load the SBR entity passed, compare the model against the constant present in
+    // \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\abstractMLPostProcessor::ML_IMAGE_VECTOR_SIZE
+    // and then load the field and see if the source (is of the same SBFlavor property/size (vector_576, etc)
+    $valid = FALSE;
+    $options = $form_state->getValue('options');
+    $processor_id = $options['ml_strawberry_postprocessor'] ?? NULL;
+    if ($processor_id == NULL) {
+      // Can't validate yet here.Probably being setup by the user still.
+      return;
+    }
+    $field_id = $options['sbf_fields'];
+    if ($processor_id) {
+      /* @var $plugin_config_entity \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity|null */
+      $plugin_config_entity = $this->sbrEntityStorage->load($processor_id);
+      if ($plugin_config_entity->isActive()) {
+        $config = $plugin_config_entity->getPluginconfig();
+        // Note, we could also restrict to the same image mimetypes that the processor is setup to handle?
+        if (isset($config['ml_method'])) {
+          $vector_size = \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\abstractMLPostProcessor::ML_IMAGE_VECTOR_SIZE[$config['ml_method']] ?? '';
+          $field_info = $this->getSbfDenseVectorFieldSource($field_id);
+          if ($field_info) {
+            // We do allow mixed data sources. One can be a node of course even if the source is a flavor. This is because each source could inherit properties from the other.
+            $propath_pieces = explode('/', $field_info->getCombinedPropertyPath());
+            if (end($propath_pieces) == 'vector_' .$vector_size && $field_info->getType() == 'densevector_' . $vector_size) {
+              $valid = TRUE;
+            }
+            else {
+              $form_state->setErrorByName('ml_strawberry_postprocessor', $this->t('The Field/Processor Combination is not right. Make sure your Vector Field and processor are targeting the same Vector Dimensions'));
+            }
+          }
+          else {
+            // The field is gone.
+            $form_state->setErrorByName('sbf_fields', $this->t('Configured Dense Vector field does not longer exists.'));
+          }
+        }
+      }
+    }
+    if ($valid) {
 
+    }
   }
 
   public function submitOptionsForm(&$form, FormStateInterface $form_state) {
@@ -252,22 +322,22 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
     // At this stage  $this->value is not set?
 
     $this->value = is_array($this->value) ? $this->value : (array) $this->value;
-      if (!$form_state->get('exposed')) {
-        $form['value'] = [
-          '#type' => 'textarea',
-          '#title' => t('JSON used to query internal form'),
-          '#prefix' => '<div class="views-group-box">',
-          '#suffix' => '</div>'
-        ];
-      }
-      elseif ($this->isExposed()) {
-        $form['value'] = [
-            '#type' => 'textarea',
-            '#title' => t('JSON used to query public form'),
-            '#prefix' => '<div class="views-group-box">',
-            '#suffix' => '</div>'
-          ] ;
-      }
+    if (!$form_state->get('exposed')) {
+      $form['value'] = [
+        '#type' => 'textarea',
+        '#title' => t('JSON used to query internal form'),
+        '#prefix' => '<div class="views-group-box">',
+        '#suffix' => '</div>'
+      ];
+    }
+    elseif ($this->isExposed()) {
+      $form['value'] = [
+        '#type' => 'textarea',
+        '#title' => t('JSON used to query public form'),
+        '#prefix' => '<div class="views-group-box">',
+        '#suffix' => '</div>'
+      ] ;
+    }
   }
 
   protected function valueValidate($form, FormStateInterface $form_state) {
@@ -316,14 +386,10 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
     $query = $this->getQuery();
 
     if (array_filter($this->value, 'is_numeric') === $this->value) {
-      $nodes = $this->value ? $this->nodeStorage->loadByProperties(
-        ['nid' => $this->value]
-      ) : [];
+
     }
     else {
-      $nodes = $this->value ? $this->nodeStorage->loadByProperties(
-        ['uuid' => $this->value]
-      ) : [];
+
     }
     return;
   }
@@ -387,15 +453,15 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
         $json_input = json_decode($values[0] ?? '');
         if ($json_input !== JSON_ERROR_NONE) {
           // Probably not the place to compress the data for the URL?
-             $encoded = base64_encode(gzcompress($values[0]));
-             $form_state->setValue($identifier, $encoded);
-             $input = $form_state->getUserInput();
-             $input[$identifier] = $encoded;
-             $form_state->setUserInput($input);
-             $this->validated_exposed_input = $json_input;
-             $filter_input = $this->view->getExposedInput();
-             $filter_input[$identifier] = $encoded;
-             $this->view->setExposedInput($filter_input);
+          $encoded = base64_encode(gzcompress($values[0]));
+          $form_state->setValue($identifier, $encoded);
+          $input = $form_state->getUserInput();
+          $input[$identifier] = $encoded;
+          $form_state->setUserInput($input);
+          $this->validated_exposed_input = $json_input;
+          $filter_input = $this->view->getExposedInput();
+          $filter_input[$identifier] = $encoded;
+          $this->view->setExposedInput($filter_input);
         }
         else {
           // check if base64 encoded then
@@ -453,9 +519,17 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
       if (str_starts_with($field->getType(), 'densevector_') === TRUE) {
         $field->getDataDefinition();
         $fields[$field_id] = $field->getPrefixedLabel() . '('. $field->getFieldIdentifier() .')';
-        }
+      }
     }
     return $fields;
+  }
+
+  protected function getSbfDenseVectorFieldSource($field_id) {
+    $fields = [];
+    /** @var \Drupal\search_api\IndexInterface $index */
+    $index = Index::load(substr($this->table, 17));
+    $fields_info = $index->getField($field_id);
+    return $fields_info;
   }
 
   protected function getExistingDenseVectorForImage($uri, $field) {
