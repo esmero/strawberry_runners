@@ -39,6 +39,17 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
       ] + parent::defaultConfiguration();
   }
 
+  public const ML_IMAGE_VECTOR_SIZE = [
+    '/image/yolo' => 576,
+    '/image/mobilenet' => 1024,
+    '/image/insightfacet' => 512,
+  ];
+
+  public const ML_TEXT_VECTOR_SIZE = [
+    '/text/bert' => 384,
+  ];
+
+  protected $nlp_client = null;
 
   public function calculateDependencies() {
     // Since Processors could be chained we need to check if any other
@@ -239,7 +250,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
     $output = new \stdClass();
 
     if (!empty($config['nlp_url']) && !empty($config['ml_method'])) {
-      $nlp = new NlpClient($config['nlp_url']);
+      $nlp = $this->getNLPClient();
       if ($nlp) {
         $capabilities = $nlp->get_call('/status', NULL);
         $languages_enabled = [];
@@ -276,40 +287,9 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
       }
   }
 
-  protected function runImageMLfromIIIF($io, NlpClient $nlpClient): \stdClass {
-    // This is an example. Each implementing class needs to deal with actual processing of output of the endpoint
-    $output = new \stdClass();
-    $config = $this->getConfiguration();
-    $input_argument = $this->pluginDefinition['input_argument'];
-    $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default'] ?? '') : 'eng'];
-    // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
-    $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
-    setlocale(LC_CTYPE, 'en_US.UTF-8');
-    $width = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['width'] ?? NULL;
-    $height = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['height'] ?? NULL;
-    if (!($width && $height)) {
-      $width = $io->input->metadata['flv:exif']['ImageWidth'] ?? NULL;
-      $height = $io->input->metadata['flv:exif']['ImageHeight'] ?? NULL;
-    }
+  abstract protected function runImageMLfromIIIF($io, NlpClient $nlpClient): \stdClass;
 
-    $ML = $nlpClient->get_call($config['ml_method'],  [], 'en');
-    $output->searchapi['plaintext'] = '';
-    $output->searchapi['processlang'] = $file_languages;
-    $output->searchapi['ts'] = date("c");
-    $output->searchapi['label'] = $this->t("ML Image Embeddings & Vectors") . ' ' . $sequence_number;
-    return $output;
-  }
-
-  protected function runTextMLfromMetadata($io, NlpClient $nlpClient) {
-    $output = new \stdClass();
-    $config = $this->getConfiguration();
-    $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default'] ?? '') : 'eng'];
-    $output->searchapi['plaintext'] = '';
-    $output->searchapi['processlang'] = $file_languages;
-    $output->searchapi['ts'] = date("c");
-    $output->searchapi['label'] = $this->t("ML Text Embedding");
-    return $output;
-  }
+  abstract protected function runTextMLfromMetadata($io, NlpClient $nlpClient) :\stdClass;
 
   // Mime types supported as input to Tesseract.
   // See https://github.com/tesseract-ocr/tessdoc/blob/main/InputFormats.md
@@ -323,5 +303,32 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
     ];
     return in_array($mime_type, $image_ML_mime_types);
   }
+
+  public function getVectorMLInfo() {
+    $config = $this->getConfiguration();
+    $info = [
+      'nlp_url' => $config['nlp_url'],
+      'ml_method' => $config['ml_method'],
+      'iiif_server' => $config['iiif_server'],
+    ];
+  }
+
+  public function callNlPwithArguments() {
+    return [];
+  }
+
+  protected function getNLPClient() {
+    if ($this->nlp_client) {
+      return $this->nlp_client;
+    }
+    else {
+      $config = $this->getConfiguration();
+      $nlp = new NlpClient($config['nlp_url']);
+      $this->nlp_client = $nlp;
+      return $this->nlp_client;
+    }
+  }
+
+
 
 }
