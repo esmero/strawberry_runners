@@ -25,4 +25,13 @@ interface strawberryRunnerUtilityServiceInterface {
     array $sbf_fields, bool $force = FALSE, array $filter = []
   ): void;
 
+  /**
+   * Gets all Currently Active PLugin Entities and Configs initialized
+   *
+   *
+   * @return array
+   * @throws \Drupal\Component\Plugin\Exception\PluginException
+   */
+  public function getActivePluginConfigs():array;
+
 }

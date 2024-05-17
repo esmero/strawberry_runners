@@ -19,7 +19,6 @@ use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDat
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
 use Laracasts\Transcriptions\Transcription;
 
-
 /**
  *
  * ML YOLO
@@ -59,6 +58,12 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
     return $element;
   }
 
+  protected function runTextMLfromMetadata($io, NlpClient $nlpClient): \stdClass {
+    $output = new \stdClass();
+    return $output;
+    // TODO: Implement runTextMLfromMetadata() method.
+  }
+
   protected function runImageMLfromIIIF($io, NlpClient $nlpClient): \stdClass {
     $output = new \stdClass();
     $config = $this->getConfiguration();
@@ -82,13 +87,13 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
     }
     //@TODO we know yolov8 takes 640px. We can pass just that to make it faster.
     // But requires us to call info.json and pre-process the sizes.
-    $arguments['iiif_image_url'] =   $config['iiif_server']."/{$iiifidentifier}/full/full/0/default.jpg";
+    $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/full/full/0/default.jpg";
     //@TODO we are not filtering here by label yet. Next release.
-    $arguments['labels'] =   [];
+    $labels = [];
     $page_text = NULL;
     $output->plugin = NULL;
     $labels = [];
-    $ML = $nlpClient->get_call($config['ml_method'],  $arguments, 'en');
+    $ML = callImageML($iiif_image_url,$labels);
     $output->searchapi['vector_576'] = isset($ML['yolo']['vector']) && is_array($ML['yolo']['vector']) && count($ML['yolo']['vector'])== 576 ? $ML['yolo']['vector'] : NULL;
     if (isset($ML['yolo']['objects']) && is_array($ML['yolo']['objects']) && count($ML['yolo']['objects']) > 0 ) {
       $miniocr = $this->yolotToMiniOCR($ML['yolo']['objects'], $width, $height, $sequence_number);
@@ -168,4 +173,15 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
       return StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
     }
   }
+
+  public function callImageML($image_url, $labels) {
+    $nlpClient = $this->getNLPClient();
+    $config = $this->getConfiguration();
+    $arguments['iiif_image_url'] =  $image_url;
+    //@TODO we are not filtering here by label yet. Next release.
+    $arguments['labels'] = $labels;
+    $ML = $nlpClient->get_call($config['ml_method'],  $arguments, 1);
+    return $ML;
+  }
+
 }
