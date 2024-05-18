@@ -499,11 +499,11 @@ JSON;
           $all_knns = $this->getQuery()->getOption('sbf_knn') ?? [];
           foreach ($response as $endpoint_key => $values) {
             if (isset($values['vector']) && is_array($values['vector']) && count($values['vector']) == abstractMLPostProcessor::ML_IMAGE_VECTOR_SIZE[$sbr_config['ml_method']]) {
-              $all_knns[$this->getPluginId()][] = $this->buildKNNQuery($this->getQuery(), $values['vector']);
+              $all_knns[] = $this->buildKNNQuery($this->getQuery(), $values['vector']);
             }
           }
-          array_filter($all_knns[$this->getPluginId()]);
-          if (count($all_knns[$this->getPluginId()])) {
+          array_filter($all_knns);
+          if (count($all_knns)) {
             $this->getQuery()->setOption('sbf_knn', $all_knns);
           }
         }
@@ -553,6 +553,12 @@ JSON;
     $this->validated_exposed_input = NULL;
     $identifier = $this->options['expose']['identifier'];
     $input = $form_state->getValue($identifier);
+    if (is_string($input)) {
+      trim($input);
+      if (strlen($input) == 0) {
+        return;
+      }
+    }
     $values = (array) $input;
     if ($values) {
       if ($this->isExposed()) {
