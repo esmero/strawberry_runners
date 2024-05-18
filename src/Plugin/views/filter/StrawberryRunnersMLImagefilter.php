@@ -355,10 +355,10 @@ JSON;
       /* @var $plugin_config_entity \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity|null */
       $plugin_config_entity = $this->sbrEntityStorage->load($processor_id);
       if ($plugin_config_entity->isActive()) {
-        $config = $plugin_config_entity->getPluginconfig();
+        $sbr_config = $plugin_config_entity->getPluginconfig();
         // Note, we could also restrict to the same image mimetypes that the processor is setup to handle?
-        if (isset($config['ml_method'])) {
-          $vector_size = abstractMLPostProcessor::ML_IMAGE_VECTOR_SIZE[$config['ml_method']] ?? '';
+        if (isset($sbr_config['ml_method'])) {
+          $vector_size = abstractMLPostProcessor::ML_IMAGE_VECTOR_SIZE[$sbr_config['ml_method']] ?? '';
           $field_info = $this->getSbfDenseVectorFieldSource($field_id);
           if ($field_info) {
             // We do allow mixed data sources. One can be a node of course even if the source is a flavor. This is because each source could inherit properties from the other.
@@ -425,7 +425,8 @@ JSON;
 
 
   public function query() {
-    if (empty($this->value) || empty($this->validated_exposed_input)) {
+    if (empty($this->value) || empty($this->validated_exposed_input) || !$this->getQuery()) {
+      // basically not validated, not present as a value and also someone cancelled/nuklled the query before?
       return;
     }
     /*
@@ -450,7 +451,7 @@ JSON;
     /* @var $plugin_config_entity \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity|null */
     $plugin_config_entity = $this->sbrEntityStorage->load($processor_id);
     if ($plugin_config_entity->isActive()) {
-      $config = $plugin_config_entity->getPluginconfig();
+      $sbr_config = $plugin_config_entity->getPluginconfig();
       // Now we need to actually generate an instance of the runner using the config
       $entity_id = $plugin_config_entity->id();
       $configuration_options = $plugin_config_entity->getPluginconfig();
@@ -476,7 +477,7 @@ JSON;
         if (isset($this->validated_exposed_input->bbox->x)) {
           $region = 'pct:'.($this->validated_exposed_input->bbox->x * 100).','.($this->validated_exposed_input->bbox->y * 100).','.($this->validated_exposed_input->bbox->w * 100).','.($this->validated_exposed_input->bbox->h * 100);
         }
-        $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/{$region}/!640,640/0/default.jpg";
+        $iiif_image_url =  $sbr_config['iiif_server']."/{$iiifidentifier}/{$region}/!640,640/0/default.jpg";
         try {
           $response = $plugin_instance->callImageML($iiif_image_url, []);
         }
@@ -488,25 +489,28 @@ JSON;
           // we should log this
           return;
         }
-        else {
+        elseif (isset($response['message'])) {
           // Now here is an issue. Each endpoint will return the vector inside a yolo/etc.
           // We should change that and make it generic (requires new pythong code/rebuilding NLP container)
           // so for now i will use the ml method config split/last to get the right key.
-
-
+          foreach (["error","message","web64"] as $remove) {
+            unset($response[$remove]);
+          }
+          $all_knns = $this->getQuery()->getOption('sbf_knn') ?? [];
+          foreach ($response as $endpoint_key => $values) {
+            if (isset($values['vector']) && is_array($values['vector']) && count($values['vector']) == abstractMLPostProcessor::ML_IMAGE_VECTOR_SIZE[$sbr_config['ml_method']]) {
+              $all_knns[$this->getPluginId()][] = $this->buildKNNQuery($this->getQuery(), $values['vector']);
+            }
+          }
+          array_filter($all_knns[$this->getPluginId()]);
+          if (count($all_knns[$this->getPluginId()])) {
+            $this->getQuery()->setOption('sbf_knn', $all_knns);
+          }
         }
       }
     }
     if (!$iiif_image_url) {
       return;
-    }
-    $query = $this->getQuery();
-
-    if (array_filter($this->value, 'is_numeric') === $this->value) {
-
-    }
-    else {
-
     }
     return;
   }
@@ -663,4 +667,25 @@ JSON;
 
     return true;
   }
+
+    /**
+     * @param \Drupal\search_api\Plugin\views\query\SearchApiQuery $query
+     *
+     * @throws \Drupal\search_api\SearchApiException
+     */
+    protected function buildKNNQuery(SearchApiQuery $query, array $vector=[]):array|null {
+      // We can only use Solr kids.
+      $solr_query_string = [];
+      $backend = $query->getIndex()->getServerInstance()->getBackend();
+      if (!($backend instanceof \Drupal\search_api_solr\SolrBackendInterface)) {
+        return FALSE;
+      }
+      $allfields_translated_to_solr = $backend
+        ->getSolrFieldNames($query->getIndex());
+      if (isset($allfields_translated_to_solr[$this->options['sbf_fields']])) {
+        $solr_query_string[] = "{!knn f={$allfields_translated_to_solr[$this->options['sbf_fields']]} topK={$this->options['topk']}}[" . implode(', ', $vector) . ']';
+        // {!knn f=vector topK=3}[-9.01364535e-03, -7.26634488e-02, -1.73818860e-02, ..., -1.16323479e-01]
+      }
+    return $solr_query_string;
+    }
 }
