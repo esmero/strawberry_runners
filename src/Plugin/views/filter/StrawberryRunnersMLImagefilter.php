@@ -10,6 +10,7 @@ use Drupal\Core\Field\TypedData\FieldItemDataDefinitionInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Form\OptGroup;
 use Drupal\Core\Language\LanguageInterface;
+use Drupal\Core\StreamWrapper\StreamWrapperManager;
 use Drupal\Core\TypedData\ComplexDataDefinitionInterface;
 use Drupal\Core\TypedData\DataDefinitionInterface;
 use Drupal\node\NodeStorageInterface;
@@ -31,6 +32,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Entity\Element\EntityAutocomplete;
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Render\RenderContext;
+use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\abstractMLPostProcessor;
 
 /**
  * Defines a filter that handles Image Similarity.
@@ -356,7 +358,7 @@ JSON;
         $config = $plugin_config_entity->getPluginconfig();
         // Note, we could also restrict to the same image mimetypes that the processor is setup to handle?
         if (isset($config['ml_method'])) {
-          $vector_size = \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\abstractMLPostProcessor::ML_IMAGE_VECTOR_SIZE[$config['ml_method']] ?? '';
+          $vector_size = abstractMLPostProcessor::ML_IMAGE_VECTOR_SIZE[$config['ml_method']] ?? '';
           $field_info = $this->getSbfDenseVectorFieldSource($field_id);
           if ($field_info) {
             // We do allow mixed data sources. One can be a node of course even if the source is a flavor. This is because each source could inherit properties from the other.
@@ -423,7 +425,7 @@ JSON;
 
 
   public function query() {
-    if (empty($this->value)) {
+    if (empty($this->value) || empty($this->validated_exposed_input)) {
       return;
     }
     /*
@@ -435,13 +437,69 @@ JSON;
   w = {float} 1.0
   h = {float} 1.0
      */
-
-    // Select boxes will always generate a single value.
-    // I could check here or cast sooner on validation?
+    // Just to be sure here bc we have our own way. Who knows if some external code decides to alter the value
+    $this->value = $this->validated_exposed_input;
+    // We should only be at this stage if we have validation
     if (!is_array($this->value)) {
       $this->value = (array) $this->value;
     }
+    // As always, start by processing all inline, then move to separate code for cleaner methods
+    // We need to load the SBR entity first here
+    $iiif_image_url = null;
+    $processor_id = $this->options['ml_strawberry_postprocessor'];
+    /* @var $plugin_config_entity \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity|null */
+    $plugin_config_entity = $this->sbrEntityStorage->load($processor_id);
+    if ($plugin_config_entity->isActive()) {
+      $config = $plugin_config_entity->getPluginconfig();
+      // Now we need to actually generate an instance of the runner using the config
+      $entity_id = $plugin_config_entity->id();
+      $configuration_options = $plugin_config_entity->getPluginconfig();
+      $configuration_options['configEntity'] = $entity_id;
+      /* @var \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface $plugin_instance */
+      $plugin_instance
+        = $this->strawberryRunnerProcessorPluginManager->createInstance(
+        $plugin_config_entity->getPluginid(),
+        $configuration_options
+      );
+      if ($plugin_instance instanceof abstractMLPostProcessor) {
+        $iiifidentifier = urlencode(
+          StreamWrapperManager::getTarget( $this->validated_exposed_input->iiif_image_id) ?? NULL
+        );
+        if ($iiifidentifier == NULL || empty($iiifidentifier)) {
+          return;
+        }
+        // basically the whole image if no bbox will be used as default
+        // Now prep the image for fetching. First pass, just an ID, then deal with the UUID for the file option
+        // pct:x,y,w,h
+        // !w,h
+        $region = 'full';
+        if (isset($this->validated_exposed_input->bbox->x)) {
+          $region = 'pct:'.($this->validated_exposed_input->bbox->x * 100).','.($this->validated_exposed_input->bbox->y * 100).','.($this->validated_exposed_input->bbox->w * 100).','.($this->validated_exposed_input->bbox->h * 100);
+        }
+        $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/{$region}/!640,640/0/default.jpg";
+        try {
+          $response = $plugin_instance->callImageML($iiif_image_url, []);
+        }
+        catch (\Exception $exception) {
+          // Give user feedback
+          return;
+        }
+        if (!empty($response['error'])) {
+          // we should log this
+          return;
+        }
+        else {
+          // Now here is an issue. Each endpoint will return the vector inside a yolo/etc.
+          // We should change that and make it generic (requires new pythong code/rebuilding NLP container)
+          // so for now i will use the ml method config split/last to get the right key.
 
+
+        }
+      }
+    }
+    if (!$iiif_image_url) {
+      return;
+    }
     $query = $this->getQuery();
 
     if (array_filter($this->value, 'is_numeric') === $this->value) {
@@ -499,7 +557,7 @@ JSON;
         if ($json_input) {
           // Probably not the place to compress the data for the URL?
           $encoded = base64_encode(gzcompress($values[0]));
-
+          $form_state->setValue($identifier, $encoded);
           $this->validated_exposed_input = $json_input;
         }
         elseif ($this->is_base64($values[0])) {
@@ -516,11 +574,15 @@ JSON;
         // Check if the JSON is the right structure.
         $form_state->setErrorByName($identifier, $this->t("Wrong format for the ML Image filter input"));
       }
+      else {
+        // Else what diego?
+      }
     }
     else {
-      // Do for non exposed. Should be directly a JSON
+      // Do for non exposed. Should be directly a JSON?
     }
   }
+
 
 
   public function acceptExposedInput($input) {
@@ -533,10 +595,21 @@ JSON;
       if (isset($this->validated_exposed_input)) {
         $this->value = $this->validated_exposed_input;
       }
+      else {
+        $this->value = NULL;
+      }
     }
-
     return $rc;
   }
+
+  /**
+   * @inheritDoc
+   */
+  public function submitExposed(&$form, FormStateInterface $form_state)
+  {
+    parent::submitExposed($form, $form_state); // TODO: Change the autogenerated stub
+  }
+
 
   /**
    * Retrieves a list of all fields that contain in its path a Node Entity.

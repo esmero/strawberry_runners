@@ -174,7 +174,7 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
     }
   }
 
-  public function callImageML($image_url, $labels) {
+  public function callImageML($image_url, $labels):mixed {
     $nlpClient = $this->getNLPClient();
     $config = $this->getConfiguration();
     $arguments['iiif_image_url'] =  $image_url;

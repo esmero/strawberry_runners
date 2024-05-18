@@ -313,9 +313,8 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
     ];
   }
 
-  public function callNlPwithArguments() {
-    return [];
-  }
+  abstract public function callImageML($image_url, $labels):mixed;
+
 
   protected function getNLPClient() {
     if ($this->nlp_client) {
