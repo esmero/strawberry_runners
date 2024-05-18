@@ -20,6 +20,7 @@ use Drupal\search_api\Plugin\views\filter\SearchApiFulltext;
 use Drupal\search_api\Plugin\views\query\SearchApiQuery;
 use Drupal\search_api\SearchApiException;
 use Drupal\search_api_solr\Utility\Utility;
+use Drupal\strawberryfield\Tools\StrawberryfieldJsonHelper;
 use Drupal\views\Plugin\views\filter\FilterPluginBase;
 use Drupal\search_api\Plugin\views\filter\SearchApiFilterTrait;
 use Drupal\views\Plugin\views\filter\InOperator;
@@ -40,6 +41,61 @@ use Drupal\Core\Render\RenderContext;
  */
 class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBase */
 {
+
+  const IMAGEML_INPUT_SCHEMA = <<<'JSON'
+{
+    "title": "Image ML filter Input structure",
+    "description": "A JSON Schema describing what this filter accepts.",
+    "type": "object",
+    "properties": {
+      "iiif_image_id": {
+        "type": "string"
+      },
+      "image_uuid": {
+        "type": "string"
+      },
+      "bbox": {
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "w": {
+            "type": "number"
+          },
+          "h": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "w",
+          "h"
+        ]
+      }
+    },
+    "oneOf": [
+      {
+        "required": [
+          "iiif_image_id"
+        ]
+      },
+      {
+        "required": [
+          "image_uuid"
+        ]
+      }
+    ],
+    "required": [
+      "bbox"
+    ]
+}
+JSON;
+
 
   use SearchApiFilterTrait;
 
@@ -226,8 +282,6 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
       }
     }
 
-
-
     $fields = $this->getSbfDenseVectorFields() ?? [];
     $form['sbf_fields'] = [
       '#type' => 'select',
@@ -328,7 +382,6 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
 
   protected function valueForm(&$form, FormStateInterface $form_state) {
     // At this stage  $this->value is not set?
-
     $this->value = is_array($this->value) ? $this->value : (array) $this->value;
     if (!$form_state->get('exposed')) {
       $form['value'] = [
@@ -373,6 +426,16 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
     if (empty($this->value)) {
       return;
     }
+    /*
+     * $this->value = {stdClass}
+ iiif_image_id = "3b9%2Fimage-dcpl-p034-npsncr-00015-rexported-f2c69aeb-7bcb-434a-a781-e580cb3695b7.tiff"
+ bbox = {stdClass}
+  x = {float} 0.0
+  y = {float} 0.0
+  w = {float} 1.0
+  h = {float} 1.0
+     */
+
     // Select boxes will always generate a single value.
     // I could check here or cast sooner on validation?
     if (!is_array($this->value)) {
@@ -424,56 +487,38 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
     ) {
       return;
     }
-    // Exposed input for this filter is meant for power users.
-    // It will be a JSON with the following structure
-    /*
-     * {
-     * "iiif_image_id": "a IIIF id. We won't allow External Images to be used for searching for now.",
-     * "bbox": {
-     *    "x": float,
-     *    "y": float,
-     *    "w": float,
-     *    "w": float
-     * }
-     * }
-     *
-     */
 
+    $this->validated_exposed_input = NULL;
     $identifier = $this->options['expose']['identifier'];
     $input = $form_state->getValue($identifier);
-
     $values = (array) $input;
     if ($values) {
       if ($this->isExposed()) {
         // If already JSON
-        $json_input = json_decode($values[0] ?? '');
-        if ($json_input !== JSON_ERROR_NONE) {
+        $json_input = StrawberryfieldJsonHelper::isValidJsonSchema($values[0], static::IMAGEML_INPUT_SCHEMA);
+        if ($json_input) {
           // Probably not the place to compress the data for the URL?
           $encoded = base64_encode(gzcompress($values[0]));
-          $form_state->setValue($identifier, $encoded);
-          $input = $form_state->getUserInput();
-          $input[$identifier] = $encoded;
-          $form_state->setUserInput($input);
+
           $this->validated_exposed_input = $json_input;
-          $filter_input = $this->view->getExposedInput();
-          $filter_input[$identifier] = $encoded;
-          $this->view->setExposedInput($filter_input);
         }
-        else {
-          // check if base64 encoded then
-          if ($this->is_base64()) {
-
-            $decoded = gzdecode(base64_decode($values[0]));
-            if ($decoded !== FALSE) {
-              $json_input = json_decode($values[0] ?? '');
-
+        elseif ($this->is_base64($values[0])) {
+          $decoded = gzdecode(base64_decode($values[0]));
+          if ($decoded !== FALSE) {
+            $json_input = StrawberryfieldJsonHelper::isValidJsonSchema($values[0], static::IMAGEML_INPUT_SCHEMA);
+            if ($json_input === JSON_ERROR_NONE) {
+              $this->validated_exposed_input = $json_input;
             }
           }
         }
       }
-      else {
-
+      if (!$this->validated_exposed_input) {
+        // Check if the JSON is the right structure.
+        $form_state->setErrorByName($identifier, $this->t("Wrong format for the ML Image filter input"));
       }
+    }
+    else {
+      // Do for non exposed. Should be directly a JSON
     }
   }
 
