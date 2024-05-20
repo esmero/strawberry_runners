@@ -431,7 +431,7 @@ JSON;
     }
     /*
      * $this->value = {stdClass}
- iiif_image_id = "3b9%2Fimage-dcpl-p034-npsncr-00015-rexported-f2c69aeb-7bcb-434a-a781-e580cb3695b7.tiff"
+ iiif_image_id = "s3://3b9%2Fimage-dcpl-p034-npsncr-00015-rexported-f2c69aeb-7bcb-434a-a781-e580cb3695b7.tiff"
  bbox = {stdClass}
   x = {float} 0.0
   y = {float} 0.0
@@ -571,10 +571,10 @@ JSON;
           $this->validated_exposed_input = $json_input;
         }
         elseif ($this->is_base64($values[0])) {
-          $decoded = gzdecode(base64_decode($values[0]));
+          $decoded = gzuncompress(base64_decode($values[0]));
           if ($decoded !== FALSE) {
             $json_input = StrawberryfieldJsonHelper::isValidJsonSchema($values[0], static::IMAGEML_INPUT_SCHEMA);
-            if ($json_input === JSON_ERROR_NONE) {
+            if ($json_input !== FALSE) {
               $this->validated_exposed_input = $json_input;
             }
           }
@@ -585,7 +585,13 @@ JSON;
         $form_state->setErrorByName($identifier, $this->t("Wrong format for the ML Image filter input"));
       }
       else {
-        // Else what diego?
+        if ($this->validated_exposed_input->iiif_image_id && !(empty($this->validated_exposed_input->iiif_image_id))) {
+            $image_id = StreamWrapperManager::getTarget($this->validated_exposed_input->iiif_image_id);
+            // means passed without a streamwrapper
+            if (!$image_id) {
+                $form_state->setErrorByName($identifier, $this->t("Wrong format for the ML IIIF Image ID property. Make sure it contains a streamwrapper (e.g s3://)"));
+            }
+        }
       }
     }
     else {
