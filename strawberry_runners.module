@@ -30,6 +30,12 @@ function strawberry_runners_views_data_alter(array &$data) {
           'field' => 'id',
           'id'    => 'sbr_imageml_filter',
         ],
+        'argument' => [
+          'title' => t('Image Similarity Filter via KNN '),
+          'field' => 'id',
+          'id'    => 'sbr_imageml_filter',
+          'disable_break_phrase' => TRUE, // Disallows multiple values for ML fields
+        ],
       ];
       if ($ml_image_filter != 'sbr_imageml_filter') {
         $table[$ml_image_filter]['real field'] = 'sbr_imageml_filter';
