@@ -459,14 +459,7 @@ JSON;
         //return $this->argument_validated = $plugin->validateArgument($arg);
         if ($arg) {
             // If already JSON
-            $json_input = StrawberryfieldJsonHelper::isValidJsonSchema($arg, static::IMAGEML_INPUT_SCHEMA);
-            if ($json_input) {
-                // Probably not the place to compress the data for the URL?
-                $encoded = base64_encode(gzcompress($arg));
-                $form_state->setValue($identifier, $encoded);
-                $this->expanded_argument = $json_input;
-            } // WE uRL decode because base64 might contain "/" which is the argument separator. So we pre-encoded it.
-            elseif ($this->is_base64(urldecode($arg))) {
+            if ($this->is_base64(urldecode($arg))) {
                 $decoded = gzuncompress(base64_decode(urldecode("eJxNzssOgjAQheE1JLyD6ZqB0ivwMqS3wRoVojFqCO9uwZi4%2B7%2FZnFmKPCMxRhzixYxhiJ70B3LnfV2bTtX7EURwjeYCrZDKdoZZJ1xgwgT0lCO2MBt7nuAabg9voOkUBy1pq2lgwLz0IJRk0KKg4IzSqIJ1yHV1mkdSbg9YO73S7pI6I1vRipY73v94JjQ%2FHL9IvRb5%2BgG%2BNTFV")));
 
                 if ($decoded !== FALSE) {
