@@ -4,6 +4,7 @@ namespace Drupal\strawberry_runners\Plugin\views\argument;
 
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManager;
+use Drupal\file\Entity\File;
 use Drupal\search_api\Entity\Index;
 use Drupal\search_api\Plugin\views\argument\SearchApiStandard;
 use Drupal\search_api\Plugin\views\query\SearchApiQuery;
@@ -21,62 +22,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *
  * @ViewsArgument("sbr_imageml_filter")
  */
-class StrawberryRunnersMLImageArgument extends SearchApiStandard
-{
-
-    const IMAGEML_INPUT_SCHEMA = <<<'JSON'
-{
-    "title": "Image ML filter Input structure",
-    "description": "A JSON Schema describing what this filter accepts.",
-    "type": "object",
-    "properties": {
-      "iiif_image_id": {
-        "type": "string"
-      },
-      "image_uuid": {
-        "type": "string"
-      },
-      "bbox": {
-        "type": "object",
-        "properties": {
-          "x": {
-            "type": "number"
-          },
-          "y": {
-            "type": "number"
-          },
-          "w": {
-            "type": "number"
-          },
-          "h": {
-            "type": "number"
-          }
-        },
-        "required": [
-          "x",
-          "y",
-          "w",
-          "h"
-        ]
-      }
-    },
-    "oneOf": [
-      {
-        "required": [
-          "iiif_image_id"
-        ]
-      },
-      {
-        "required": [
-          "image_uuid"
-        ]
-      }
-    ],
-    "required": [
-      "bbox"
-    ]
-}
-JSON;
+class StrawberryRunnersMLImageArgument extends SearchApiStandard {
 
     /**
      * Is argument validated.
@@ -90,11 +36,18 @@ JSON;
     public $expanded_argument = NULL;
 
     /**
-     * The Entity Type manager
+     * The SBR Entity Type Storage
      *
      * @var \Drupal\Core\Entity\EntityStorageInterface
      */
-    protected $sbrEntityStorage;
+      protected $sbrEntityStorage;
+
+    /**
+     * The File Entity Type Storage
+     *
+     * @var \Drupal\Core\Entity\EntityStorageInterface
+     */
+    protected $fileEntityStorage;
 
     /**
      * The vocabulary storage.
@@ -150,6 +103,9 @@ JSON;
         $plugin->setSbrEntityStorage(
             $container->get('entity_type.manager')->getStorage('strawberry_runners_postprocessor')
         );
+        $plugin->setFileEntityStorage(
+            $container->get('entity_type.manager')->getStorage('file')
+        );
         $plugin->setFieldsHelper($container->get('search_api.fields_helper'));
         $plugin->setViewStorage(
             $container->get('entity_type.manager')->getStorage('view')
@@ -186,6 +142,12 @@ JSON;
     public function setSbrEntityStorage(EntityStorageInterface $sbrEntityStorage)
     {
         $this->sbrEntityStorage = $sbrEntityStorage;
+        return $this;
+    }
+
+    public function setFileEntityStorage(EntityStorageInterface $fileEntityStorage)
+    {
+        $this->fileEntityStorage = $fileEntityStorage;
         return $this;
     }
 
@@ -242,7 +204,6 @@ JSON;
                 }
             }
         }
-
         $fields = $this->getSbfDenseVectorFields() ?? [];
         $form['sbf_fields'] = [
             '#type' => 'select',
@@ -358,15 +319,6 @@ JSON;
             // basically not validated, not present as a value and also someone cancelled/nuklled the query before?
             return;
         }
-        /*
-         * $this->value = {stdClass}
-     iiif_image_id = "3b9%2Fimage-dcpl-p034-npsncr-00015-rexported-f2c69aeb-7bcb-434a-a781-e580cb3695b7.tiff"
-     bbox = {stdClass}
-      x = {float} 0.0
-      y = {float} 0.0
-      w = {float} 1.0
-      h = {float} 1.0
-         */
         // Just to be sure here bc we have our own way. Who knows if some external code decides to alter the value
         $this->value = $this->expanded_argument;
         // We should only be at this stage if we have validation
@@ -397,11 +349,9 @@ JSON;
                 }
                 // basically the whole image if no bbox will be used as default
                 // Now prep the image for fetching. First pass, just an ID, then deal with the UUID for the file option
-                // pct:x,y,w,h
-                // !w,h
                 $region = 'full';
                 if (isset($this->value->bbox->x)) {
-                    $region = 'pct:'.($this->value->bbox->x * 100).','.($this->value->bbox->y * 100).','.($this->value->bbox->w * 100).','.($this->value->bbox->h * 100);
+                    $region = 'pct:'.($this->value->bbox->x).','.($this->value->bbox->y).','.($this->value->bbox->w).','.($this->value->bbox->h);
                 }
                 $iiif_image_url =  $sbr_config['iiif_server']."/{$iiifidentifier}/{$region}/!640,640/0/default.jpg";
                 try {
@@ -411,11 +361,7 @@ JSON;
                     // Give user feedback
                     return;
                 }
-                if (!empty($response['error'])) {
-                    // we should log this
-                    return;
-                }
-                elseif (isset($response['message'])) {
+               if (isset($response['message'])) {
                     // Now here is an issue. Each endpoint will return the vector inside a yolo/etc.
                     // We should change that and make it generic (requires new pythong code/rebuilding NLP container)
                     // so for now i will use the ml method config split/last to get the right key.
@@ -457,29 +403,57 @@ JSON;
 
         $plugin = $this->getPlugin('argument_validator');
         //return $this->argument_validated = $plugin->validateArgument($arg);
-        if ($arg) {
-            // If already JSON
-            if ($this->is_base64(urldecode($arg))) {
-                $decoded = gzuncompress(base64_decode(urldecode("eJxNzssOgjAQheE1JLyD6ZqB0ivwMqS3wRoVojFqCO9uwZi4%2B7%2FZnFmKPCMxRhzixYxhiJ70B3LnfV2bTtX7EURwjeYCrZDKdoZZJ1xgwgT0lCO2MBt7nuAabg9voOkUBy1pq2lgwLz0IJRk0KKg4IzSqIJ1yHV1mkdSbg9YO73S7pI6I1vRipY73v94JjQ%2FHL9IvRb5%2BgG%2BNTFV")));
+        if ($arg && $this->is_base64(urldecode($arg))) {
+              // Because of actual implementation (JS to PHP) details changes are this will come from a JS encoded gzip that needs to be unpacked
+              // to try that first. On JS using pako with gzip is the ideal way.
+              // if  unpacked it will be actuall an string encoded array (utf8, just numbers)
+              $arg = urldecode(base64_decode(urldecode($arg)));
+              $decoded = NULL;
+              $unpacked_deflated = explode(",", $arg);
+              if (count($unpacked_deflated) > 2) {
+                try {
+                  $decoded = gzdecode(pack("c*",...$unpacked_deflated));
+                }
+                catch (\Exception $e) {
+                  // Ok was not that so we try another method
+                }
+              }
+              if (!$decoded) {
+                $decoded = gzuncompress($arg);
 
-                if ($decoded !== FALSE) {
-                    $json_input = StrawberryfieldJsonHelper::isValidJsonSchema($decoded, static::IMAGEML_INPUT_SCHEMA);
-                    if ($json_input !== FALSE) {
-                        $this->expanded_argument = $json_input;
-                    }
+
+              }
+            if ($decoded) {
+              $decoded_object = json_decode($decoded);
+              if ($decoded_object) {
+                if (!empty($decoded_object->fileuuid ?? NULL) &&
+                    !empty($decoded_object->nodeuuid ?? NULL) &&
+                    !empty($decoded_object->fragment ?? NULL)) {
+                  $files = $this->fileEntityStorage->loadByProperties(['uuid' => $decoded_object->fileuuid]);
+                  //@TODO for security. Check if the file is attached to the node too.
+                  $file = reset($files);
+                  /* @var File $file */
+                  if ($file) {
+                      $this->expanded_argument = new \stdClass;
+                      $this->expanded_argument->iiif_image_id = $file->getFileUri();
+                      $fragment_pieces = explode("xywh=percent:",$decoded_object->fragment);
+                      if (count($fragment_pieces) == 2) {
+                          $xywh = explode(",", $fragment_pieces[1]);
+                          if (count($xywh) == 4) {
+                            // we got them all
+                              $this->expanded_argument->bbox = (object) array_combine(['x','y','w','h'], $xywh);
+                              $this->argument_validated = TRUE;
+                          }
+                      }
+                  }
                 }
-            }
-            if (!$this->expanded_argument) {
-                $this->argument_validated = FALSE;
-            }
-            else {
-                if ($this->expanded_argument->iiif_image_id && !(empty($this->expanded_argument->iiif_image_id))) {
-                    $image_id = StreamWrapperManager::getTarget($this->expanded_argument->iiif_image_id);
-                    // means passed without a streamwrapper
-                    if ($image_id) {
-                        $this->argument_validated = TRUE;
-                    }
-                }
+              }
+              /* const image_data = {
+            "fileuuid": groupssetting.file_uuid,
+            "nodeuuid": groupssetting.nodeuuid,
+            "fragment": annotation.target.selector.value,
+            "textualbody": annotation.body?.value
+          } */
             }
         }
         return $this->argument_validated ?? FALSE;

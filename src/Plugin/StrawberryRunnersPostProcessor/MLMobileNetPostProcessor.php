@@ -24,14 +24,14 @@ use Laracasts\Transcriptions\Transcription;
  * ML YOLO
  *
  * @StrawberryRunnersPostProcessor(
- *    id = "ml_yolo",
- *    label = @Translation("Post processor that generates Object detection and Vector Embeddings using YOLO"),
+ *    id = "ml_mobilenet",
+ *    label = @Translation("Post processor that generates Object detection and Vector Embeddings using MobileNet"),
  *    input_type = "entity:file",
  *    input_property = "filepath",
  *    input_argument = "sequence_number"
  * )
  */
-class MLYoloPostProcessor extends abstractMLPostProcessor {
+class MLMobileNetPostProcessor extends abstractMLPostProcessor {
 
   public $pluginDefinition;
 
@@ -49,7 +49,7 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
         'language_default' => 'eng',
         'timeout' => 300,
         'nlp_url' => 'http://esmero-nlp:6400',
-        'ml_method' => '/image/yolov8',
+        'ml_method' => '/image/mobilenet',
       ] + parent::defaultConfiguration();
   }
 
@@ -69,7 +69,6 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
     $config = $this->getConfiguration();
     $input_argument = $this->pluginDefinition['input_argument'];
     $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default'] ?? '') : 'eng'];
-    // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
     $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
     setlocale(LC_CTYPE, 'en_US.UTF-8');
     $width = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['width'] ?? NULL;
@@ -85,7 +84,8 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
     if ($iiifidentifier == NULL || empty($iiifidentifier)) {
       return $output;
     }
-    //@TODO we know yolov8 takes 640px. We can pass just that to make it faster.
+    /// Mobilenet does its own (via mediapipe) image scalling. So we can pass a smaller if needed. Internally
+    /// it uses 480 x 480 but not good to pass square bc it makes % bbox calculation harder.
     // But requires us to call info.json and pre-process the sizes.
     $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/full/full/0/default.jpg";
     //@TODO we are not filtering here by label yet. Next release.
@@ -94,9 +94,9 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
     $output->plugin = NULL;
     $labels = [];
     $ML = $this->callImageML($iiif_image_url,$labels);
-    $output->searchapi['vector_576'] = isset($ML['yolo']['vector']) && is_array($ML['yolo']['vector']) && count($ML['yolo']['vector'])== 576 ? $ML['yolo']['vector'] : NULL;
-    if (isset($ML['yolo']['objects']) && is_array($ML['yolo']['objects']) && count($ML['yolo']['objects']) > 0 ) {
-      $miniocr = $this->yoloToMiniOCR($ML['yolo']['objects'], $width, $height, $sequence_number);
+    $output->searchapi['vector_1024'] = isset($ML['mobilenet']['vector']) && is_array($ML['mobilenet']['vector']) && count($ML['mobilenet']['vector'])== 1024 ? $ML['mobilenet']['vector'] : NULL;
+    if (isset($ML['mobilenet']['objects']) && is_array($ML['mobilenet']['objects']) && count($ML['mobilenet']['objects']) > 0 ) {
+      $miniocr = $this->mobilenetToMiniOCR($ML['mobilenet']['objects'], $width, $height, $sequence_number);
       $output->searchapi['fulltext'] = $miniocr;
       $output->plugin = $miniocr;
       $page_text = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>",
@@ -104,21 +104,21 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
       // What is a good confidence ratio here?
       // based on the % of the bounding box?
       // Just the value?
-      foreach($ML['yolo']['objects'] as $object) {
+      foreach($ML['mobilenet']['objects'] as $object) {
         $labels[$object['name']] =  $object['name'];
       }
     }
     $output->searchapi['metadata'] = $labels;
-    $output->searchapi['service_md5'] = isset($ML['yolo']['modelinfo']) ? md5(json_encode($ML['yolo']['modelinfo'])) : NULL;
+    $output->searchapi['service_md5'] = isset($ML['mobilenet']['modelinfo']) ? md5(json_encode($ML['mobilenet']['modelinfo'])) : NULL;
     $output->searchapi['plaintext'] = $page_text ?? '';
     $output->searchapi['processlang'] = $file_languages;
     $output->searchapi['ts'] = date("c");
-    $output->searchapi['label'] = $this->t("ML Image Embeddings & Vectors") . ' ' . $sequence_number;
+    $output->searchapi['label'] = $this->t("MobileNet ML Image Embeddings & Vectors") . ' ' . $sequence_number;
     return $output;
   }
 
 
-  protected function yoloToMiniOCR(array $objects, $width, $height, $pageid) {
+  protected function mobilenetToMiniOCR(array $objects, $width, $height, $pageid) {
     $miniocr = new \XMLWriter();
     $miniocr->openMemory();
     $miniocr->startDocument('1.0', 'UTF-8');

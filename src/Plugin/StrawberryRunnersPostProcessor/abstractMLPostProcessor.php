@@ -34,7 +34,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
         'language_default' => 'eng',
         'timeout' => 300,
         'nlp_url' => 'http://esmero-nlp:6400',
-        'ml_method' => 'yolov8',
+        'ml_method' => NULL,
         'iiif_server' => '',
       ] + parent::defaultConfiguration();
   }
