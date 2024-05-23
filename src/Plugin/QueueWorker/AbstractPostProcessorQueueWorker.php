@@ -384,7 +384,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           $toindex->vector_512 = $io->output->searchapi['vector_512'] ?? NULL;
           $toindex->vector_576 = $io->output->searchapi['vector_576'] ?? NULL;
           $toindex->vector_1024 = $io->output->searchapi['vector_1024'] ?? NULL;
-          $toindex->service_md5 = $io->output->searchapi['vector_1024'] ?? '';
+          $toindex->service_md5 = $io->output->searchapi['service_md5'] ?? '';
 
           // $siblings will be the amount of total children processors that were
           // enqueued for a single Processor chain.

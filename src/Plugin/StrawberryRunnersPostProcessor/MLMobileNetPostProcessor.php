@@ -105,7 +105,9 @@ class MLMobileNetPostProcessor extends abstractMLPostProcessor {
       // based on the % of the bounding box?
       // Just the value?
       foreach($ML['mobilenet']['objects'] as $object) {
-        $labels[$object['name']] =  $object['name'];
+        if (isset($category['category_name'])) {
+          $labels[$category['category_name']] = $category['category_name'];
+        }
       }
     }
     $output->searchapi['metadata'] = $labels;
@@ -127,40 +129,48 @@ class MLMobileNetPostProcessor extends abstractMLPostProcessor {
     // To avoid divisions by 0
     $pwidth = (float) $width;
     $pheight = (float) $height;
+    // Format here is different. Instead of normalizing on Python we do here?
+    // @TODO make all methods in python act the same
+    // :[{"bounding_box":{"height":0.9609375,"origin_x":0.0,"origin_y":0.0453125,"width":1.0},"categories":[{"category_name":"person","display_name":null,"index":null,"score":0.8881509304046631}]
     // NOTE: floats are in the form of .1 so we need to remove the first 0.
     $miniocr->startElement("p");
-    $miniocr->writeAttribute("xml:id", 'ml_yolo_' . $pageid);
+    $miniocr->writeAttribute("xml:id", 'ml_mobilenet_' . $pageid);
     $miniocr->writeAttribute("wh",
       ltrim($pwidth ?? '', 0) . " " . ltrim($pheight ?? '', 0));
     $miniocr->startElement("b");
     foreach ($objects as $object) {
       $notFirstWord = FALSE;
-      $miniocr->startElement("l");
-      $x0 = (float) $object['box']['x1'];
-      $y0 = (float) $object['box']['y1'];
-      $x1 = (float) $object['box']['x2'];
-      $y1 = (float) $object['box']['y2'];
-      $l = ltrim(sprintf('%.3f', $x0)  ?? '', 0);
-      $t = ltrim(sprintf('%.3f', $y0) ?? '', 0);
-      $w = ltrim(sprintf('%.3f', ($x1 - $x0)) ?? '', 0);
-      $h = ltrim(sprintf('%.3f', ($y1 - $y0)) ?? '', 0);
-      $text = (string) ($object['name'] ?? 'Unlabeled') .' ~ '. (string) ("{$object['confidence']}" ?? "0");
-      if ($notFirstWord) {
-        $miniocr->text(' ');
-      }
-      $notFirstWord = TRUE;
-      // New OCR Highlight does not like empty <w> tags at all
-      if (strlen(trim($text ?? '')) > 0) {
-        $miniocr->startElement("w");
-        $miniocr->writeAttribute("x",
-          $l . ' ' . $t . ' ' . $w . ' ' . $h);
-        $miniocr->text($text);
-        // Only assume we have at least one word for <w> tags
-        // Since lines? could end empty?
-        $atleastone_word = TRUE;
+      if ($object['bounding_box'] ?? FALSE) {
+        $miniocr->startElement("l");
+        $x0 = (float)$object['bounding_box']['origin_x'];
+        $y0 = (float)$object['bounding_box']['origin_y'];
+        $w = (float)$object['bounding_box']['width'];
+        $h = (float)$object['bounding_box']['height'];
+        $l = ltrim(sprintf('%.3f', $x0) ?? '', 0);
+        $t = ltrim(sprintf('%.3f', $y0) ?? '', 0);
+        $w = ltrim(sprintf('%.3f', $w) ?? '', 0);
+        $h = ltrim(sprintf('%.3f', $h) ?? '', 0);
+        $text = '';
+        foreach ($object['categories'] as $category) {
+          $text .= (string)($category['category_name'] ?? 'Unlabeled') . ' ~ ' . (string)sprintf('%.3f', $category['score'] ?? 0);
+        }
+        if ($notFirstWord) {
+          $miniocr->text(' ');
+        }
+        $notFirstWord = TRUE;
+        // New OCR Highlight does not like empty <w> tags at all
+        if (strlen(trim($text ?? '')) > 0) {
+          $miniocr->startElement("w");
+          $miniocr->writeAttribute("x",
+            $l . ' ' . $t . ' ' . $w . ' ' . $h);
+          $miniocr->text($text);
+          // Only assume we have at least one word for <w> tags
+          // Since lines? could end empty?
+          $atleastone_word = TRUE;
+          $miniocr->endElement();
+        }
         $miniocr->endElement();
       }
-      $miniocr->endElement();
     }
     $miniocr->endElement();
     $miniocr->endElement();
