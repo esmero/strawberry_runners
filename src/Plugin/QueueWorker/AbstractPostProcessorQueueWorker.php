@@ -450,7 +450,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $input_property = $plugin_info['plugin_definition']['input_property'];
         $input_argument = $plugin_info['plugin_definition']['input_argument'];
         //@TODO check if this are here and not null!
-        // $io->ouput will contain whatever the output is
+        // $io->output will contain whatever the output is
         // We will check if the child processor
         // contains a property contained in $output
         // If so we check if there is a single value or multiple ones

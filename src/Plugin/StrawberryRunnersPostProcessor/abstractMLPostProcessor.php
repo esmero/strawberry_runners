@@ -46,7 +46,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
   ];
 
   public const ML_TEXT_VECTOR_SIZE = [
-    '/text/bert' => 384,
+    '/text/sentence_transformer' => 384,
   ];
 
   protected $nlp_client = null;
@@ -155,7 +155,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
         'searchapi' => 'In a Search API Document using the Strawberryfield Flavor Data Source (e.g used for ML Vector Comparison)',
       ],
       '#default_value' => (!empty($this->getConfiguration()['output_destination']) && is_array($this->getConfiguration()['output_destination'])) ? $this->getConfiguration()['output_destination'] : [],
-      '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this ouput.'),
+      '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this output.'),
       '#required' => TRUE,
     ];
 
@@ -264,7 +264,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
 
           if (in_array($config['source_type'], ['asstructure']) && isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
             $mloutput = $this->runImageMLfromIIIF($io, $nlp);
-            $io->output = $mloutput ?? $output;;
+            $io->output = $mloutput ?? $output;
           }
           elseif (in_array($config['source_type'], ['ado', 'json']) && $node_uuid) {
             $mloutput = $this->runTextMLfromMetadata($io, $nlp);
@@ -314,7 +314,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
   }
 
   abstract public function callImageML($image_url, $labels):mixed;
-
+  abstract public function callTextML($text, $query):mixed;
 
   protected function getNLPClient() {
     if ($this->nlp_client) {

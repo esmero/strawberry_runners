@@ -194,4 +194,7 @@ class MLMobileNetPostProcessor extends abstractMLPostProcessor {
     return $ML;
   }
 
+  public function callTextML($text, $query):mixed {
+    return FALSE;
+  }
 }
