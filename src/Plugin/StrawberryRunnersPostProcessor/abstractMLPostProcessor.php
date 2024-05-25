@@ -42,7 +42,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
   public const ML_IMAGE_VECTOR_SIZE = [
     '/image/yolo' => 576,
     '/image/mobilenet' => 1024,
-    '/image/insightfacet' => 512,
+    '/image/insightface' => 512,
   ];
 
   public const ML_TEXT_VECTOR_SIZE = [
@@ -186,7 +186,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
         '/image/yolo' => 'yolov8 (Image Object detection (as MiniOCR Annotations) & embedding as a Unit Length Vector)',
         '/image/mobilenet' => 'MobileNet (Image embeddings as a a Unit Length Vector)',
         '/text/bert' => 'Bert (text embeddings as a Unit Length Vector)',
-        '/image/insightface' => 'InsightFace (Detection only as MiniOCR Annotations)',
+        '/image/insightface' => 'InsightFace (Detection as MiniOCR Annotations and embedding as a Unit Length Vector)',
       ],
       '#default_value' => $this->getConfiguration()['ml_method'],
       '#description' => $this->t('The ML endpoint/Model. Depending on the choice the actual value/size of data ingested will vary.'),
@@ -260,8 +260,6 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
           && is_array($capabilities)
           && is_array($capabilities['web64']['endpoints'])
           && in_array($config['ml_method'], $capabilities['web64']['endpoints'])) {
-
-
           if (in_array($config['source_type'], ['asstructure']) && isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
             $mloutput = $this->runImageMLfromIIIF($io, $nlp);
             $io->output = $mloutput ?? $output;

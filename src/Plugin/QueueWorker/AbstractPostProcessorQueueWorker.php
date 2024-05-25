@@ -237,11 +237,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       return;
     }
 
-
     // Get the whole processing chain
     $childprocessorschain = $this->getChildProcessorIds($data->plugin_config_entity_id ?? '', true);
 
-    $needs_localfile_cleanup = FALSE;
     // If a child processor at any level will eventually chain up to a leaf (means generate queue items again)
     $will_chain_future = FALSE;
     // Just in case someone decides to avoid setting this one up
