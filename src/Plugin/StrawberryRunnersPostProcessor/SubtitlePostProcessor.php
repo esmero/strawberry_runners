@@ -244,6 +244,7 @@ class SubtitlePostProcessor extends TextPostProcessor {
     $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default'] ?? '') : 'eng'];
     if ($file_path && $file_uuid && $node_uuid) {
       $output = new \stdClass();
+      $output->plugin = NULL;
       // Let's see if we need an output path or not
       $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
       $out_file_path = NULL;
@@ -266,7 +267,6 @@ class SubtitlePostProcessor extends TextPostProcessor {
 
           $output->searchapi['fulltext']
             = $miniocr ?? StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
-          $output->plugin = $text_content;
           $output->searchapi['plaintext'] = $page_text;
         }
         else {
@@ -413,6 +413,7 @@ class SubtitlePostProcessor extends TextPostProcessor {
       $output->searchapi['ts'] = date("c");
       $output->searchapi['label'] = $this->t("Sequence") . ' '
         . $sequence_number;
+      $output->plugin['searchapi'] = $output->searchapi;
       $io->output = $output;
     }
     else {

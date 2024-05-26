@@ -286,7 +286,6 @@ class TextPostProcessor extends OcrPostProcessor {
           }
           $output->searchapi['fulltext']
             = StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
-          $output->plugin = $text_content;
           $output->searchapi['plaintext'] = $page_text;
         }
         else {
@@ -433,6 +432,7 @@ class TextPostProcessor extends OcrPostProcessor {
       $output->searchapi['ts'] = date("c");
       $output->searchapi['label'] = $this->t("Sequence") . ' '
         . $sequence_number;
+      $output->plugin['searchapi'] = $output->searchapi;
       $io->output = $output;
     }
     else {

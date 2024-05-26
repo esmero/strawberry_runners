@@ -291,7 +291,7 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
         $output->searchapi['processlang'] = [];
         $output->searchapi['label'] = $page_title;
         $output->searchapi['ts'] = $page_ts;
-        $output->plugin = $output->searchapi;
+        $output->plugin['searchapi'] = $output->searchapi;
       }
       else {
         throw new \Exception("WebPage Text was not a valid JSON.");
