@@ -58,10 +58,10 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
     return $element;
   }
 
-  protected function runTextMLfromMetadata($io, NlpClient $nlpClient): \stdClass {
+  protected function runTextMLfromJSON($io, NlpClient $nlpClient): \stdClass {
     $output = new \stdClass();
     return $output;
-    // TODO: Implement runTextMLfromMetadata() method.
+    // TODO: Implement runTextMLfromJSON() method.
   }
 
   protected function runImageMLfromIIIF($io, NlpClient $nlpClient): \stdClass {
@@ -98,7 +98,6 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
     if (isset($ML['yolo']['objects']) && is_array($ML['yolo']['objects']) && count($ML['yolo']['objects']) > 0 ) {
       $miniocr = $this->yoloToMiniOCR($ML['yolo']['objects'], $width, $height, $sequence_number);
       $output->searchapi['fulltext'] = $miniocr;
-      $output->plugin = $miniocr;
       $page_text = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>",
         PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
       // What is a good confidence ratio here?
@@ -114,6 +113,7 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
     $output->searchapi['processlang'] = $file_languages;
     $output->searchapi['ts'] = date("c");
     $output->searchapi['label'] = $this->t("ML Image Embeddings & Vectors") . ' ' . $sequence_number;
+    $output->plugin['searchapi'] = $output->searchapi;
     return $output;
   }
 

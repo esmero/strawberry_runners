@@ -58,7 +58,7 @@ class MLInsightfacePostProcessor extends abstractMLPostProcessor {
     return $element;
   }
 
-  protected function runTextMLfromMetadata($io, NlpClient $nlpClient): \stdClass {
+  protected function runTextMLfromJSON($io, NlpClient $nlpClient): \stdClass {
     $output = new \stdClass();
     return $output;
   }
@@ -97,7 +97,6 @@ class MLInsightfacePostProcessor extends abstractMLPostProcessor {
     if (isset($ML['insightface']['objects']) && is_array($ML['insightface']['objects']) && count($ML['insightface']['objects']) > 0 ) {
       $miniocr = $this->insightfacenetToMiniOCR($ML['insightface']['objects'], $width, $height, $sequence_number);
       $output->searchapi['fulltext'] = $miniocr;
-      $output->plugin = $miniocr;
       $page_text = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>",
         PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
       // What is a good confidence ratio here?
@@ -111,6 +110,7 @@ class MLInsightfacePostProcessor extends abstractMLPostProcessor {
     $output->searchapi['processlang'] = $file_languages;
     $output->searchapi['ts'] = date("c");
     $output->searchapi['label'] = $this->t("Insightface ML Image Embeddings & Vectors") . ' ' . $sequence_number;
+    $output->plugin['searchapi'] = $output->searchapi;
     return $output;
   }
 

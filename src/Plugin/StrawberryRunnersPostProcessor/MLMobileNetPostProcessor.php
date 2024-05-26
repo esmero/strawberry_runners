@@ -58,10 +58,10 @@ class MLMobileNetPostProcessor extends abstractMLPostProcessor {
     return $element;
   }
 
-  protected function runTextMLfromMetadata($io, NlpClient $nlpClient): \stdClass {
+  protected function runTextMLfromJSON($io, NlpClient $nlpClient): \stdClass {
     $output = new \stdClass();
     return $output;
-    // TODO: Implement runTextMLfromMetadata() method.
+    // TODO: Implement runTextMLfromJSON() method.
   }
 
   protected function runImageMLfromIIIF($io, NlpClient $nlpClient): \stdClass {
@@ -98,7 +98,6 @@ class MLMobileNetPostProcessor extends abstractMLPostProcessor {
     if (isset($ML['mobilenet']['objects']) && is_array($ML['mobilenet']['objects']) && count($ML['mobilenet']['objects']) > 0 ) {
       $miniocr = $this->mobilenetToMiniOCR($ML['mobilenet']['objects'], $width, $height, $sequence_number);
       $output->searchapi['fulltext'] = $miniocr;
-      $output->plugin = $miniocr;
       $page_text = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>",
         PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
       // What is a good confidence ratio here?
@@ -116,6 +115,7 @@ class MLMobileNetPostProcessor extends abstractMLPostProcessor {
     $output->searchapi['processlang'] = $file_languages;
     $output->searchapi['ts'] = date("c");
     $output->searchapi['label'] = $this->t("MobileNet ML Image Embeddings & Vectors") . ' ' . $sequence_number;
+    $output->plugin['searchapi'] = $output->searchapi;
     return $output;
   }
 
