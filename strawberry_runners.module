@@ -21,6 +21,7 @@ function strawberry_runners_views_data_alter(array &$data) {
       $table = &$data[$key];
 
       $ml_image_filter = _search_api_views_find_field_alias('sbr_imageml_filter', $table);
+      $ml_text_filter = _search_api_views_find_field_alias('sbr_textml_filter', $table);
       $table[$ml_image_filter] = [
         'title'  => t('Image Similarity Filter via KNN (Experimental)'),
         'group' => t('Search'),
@@ -39,6 +40,19 @@ function strawberry_runners_views_data_alter(array &$data) {
       ];
       if ($ml_image_filter != 'sbr_imageml_filter') {
         $table[$ml_image_filter]['real field'] = 'sbr_imageml_filter';
+      }
+      $table[$ml_text_filter] = [
+        'title'  => t('Text Similarity Filter via KNN (Experimental)'),
+        'group' => t('Search'),
+        'help' => t('Filters one Query Phrases to the Corresponding Vector in a Strawberry Flavor Document generating on the Fly an Embedding Vector.'),
+        'filter' => [
+          'title' => t('Text Similarity Filter via KNN '),
+          'field' => 'id',
+          'id'    => 'sbr_textml_filter',
+        ],
+      ];
+      if ($ml_text_filter != 'sbr_textml_filter') {
+        $table[$ml_image_filter]['real field'] = 'sbr_textml_filter';
       }
     }
     catch (\Exception $e) {
