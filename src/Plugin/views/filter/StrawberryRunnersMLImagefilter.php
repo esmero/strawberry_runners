@@ -208,7 +208,7 @@ JSON;
     return $options;
   }
 
-  public function setSbrEntityStorage(EntityStorageInterface $sbrEntityStorage): StrawberryRunnersMLImagefilter
+  public function setSbrEntityStorage(EntityStorageInterface $sbrEntityStorage)
   {
     $this->sbrEntityStorage = $sbrEntityStorage;
     return $this;

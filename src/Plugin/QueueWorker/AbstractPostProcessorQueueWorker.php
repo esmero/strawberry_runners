@@ -319,7 +319,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           $translations = $entity->getTranslationLanguages();
           foreach ($translations as $translation_id => $translation) {
             // checksum and file->uuid apply even if the source is not a local-ized/ensure local file.
-            // But we will have to change this if we plan on indexing JSON RAW directly as an vector embedding.
+            // But we might want to review this if we plan on indexing JSON RAW/metadata directly as an vector embedding.
             $item_id = $entity->id() . ':' . $sequence_key . ':' . $translation_id . ':' . $file->uuid() . ':' . $data->plugin_config_entity_id;
             // a single 0 as return will force us to reindex.
             $inindex = $inindex * $this->flavorInSolrIndex($item_id, $data->metadata['checksum'], $indexes);
@@ -329,7 +329,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
         // Check if we already have this entry in Solr
         if ($inindex !== 0 && !$data->force) {
-          $this->logger->log(LogLevel::INFO, 'Flavor already in index for @plugin on ADO Node ID @nodeid, not forced, so skipping.',
+          $this->logger->log(LogLevel::INFO, 'Flavor already in index for @plugin on ADO Node ID @nodeid, not forced, so skipping or chaining.',
             [
               '@plugin' => $processor_instance->getPluginId(),
               '@nodeid' => $data->nid,
@@ -337,6 +337,12 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           );
         }
         $inkeystore = TRUE;
+
+        // For now keeping a single language. Processor might not be aware of other languages for chaining indexed?
+        // Reason is even if we iterate over each language, $toindex == 1. Always the same.
+        // @TODO May 2024. Re-Review this in Flavor Data Source provider. We could save ourself a lot of KeyStore element.s
+        $processed_data_for_chaining = NULL;
+
         // Skip file if element for every language is found in key_value collection.
         foreach ($item_ids as $item_id) {
           $processed_data = $this->keyValue->get($keyvalue_collection)
@@ -346,7 +352,36 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             $processed_data->checksum != $data->metadata['checksum']) {
             $inkeystore = $inkeystore && FALSE;
           }
+          else {
+            // I am keeping a single one here. Should we discern by language for chaining?
+            // @TODO analize what it means for us.
+            $processed_data_for_chaining = $processed_data;
+          }
         }
+        // May 2024. Allow a Processor that is to be indexed, already was processed and has data in the key store
+        // To use that data as input for a child one, if chained too. But only if nothing has set $io->output->plugin before
+        // This is needed for Processors (e.g OCR) that have already processed everything and then get a new chained
+        // Child that was never processed before. Would be terrible to have to re-process OCR completely just to get
+        // A Child to trigger. We will only provide only $io->input->plugin['searchapi'] bc that is what we know
+        // Any other type of child won't be able to feed from pre-existing.
+        if ($inkeystore && $tobechained && !$data->force && $processed_data_for_chaining!=NULL && (!isset($io->output->plugin) || !empty($io->output->plugin))) {
+          // Since we don't know at all what $io->output->plugin should contain
+          // We will pass the keystore value into $io->output->plugin and let the Processor itself (needs to have that logic)
+          // Deal with this use case.
+          $this->logger->log(LogLevel::INFO, 'Chaining @plugin on ADO Node ID @nodeid with preexisting data to the next one.',
+            [
+              '@plugin' => $processor_instance->getPluginId(),
+              '@nodeid' => $data->nid,
+            ]
+          );
+          if (!$io) {
+            $io=  new \stdClass();
+            $io->output = new \stdClass();
+            $io->output->plugin = [];
+          }
+          $io->output->plugin['searchapi'] = $processed_data_for_chaining;
+        }
+
         // Allows a force in case of corrupted key value? Partial output
         // External/weird data?
 
@@ -443,10 +478,19 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           continue ;
         }
         $childdata = clone $data; // So we do not touch original data
+        //@TODO. What if we want to force a child object only?
+        // We could IF the Child Object depends only on searchapi.
+        // Requires a Change in our SBR Trigger VBO plugin
+        // @TODO ask Allison. We might need a VBO processor to delete, selectively Flavors from Key/Solr too.
+        // Only way of A) removing Bias/bad vectors/Even bad OCR> And the processor should be also be able to mark
+        // ap:task no ML etc
+        /* if ($plugin_info['plugin_definition']['id'] ?? NULL == 'ml_sentence_transformer') {
+          $childdata->force = TRUE;
+        }*/
         /* @var  $strawberry_runners_postprocessor_config \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity */
         $postprocessor_config_entity = $plugin_info['config_entity'];
-        $input_property = $plugin_info['plugin_definition']['input_property'];
-        $input_argument = $plugin_info['plugin_definition']['input_argument'];
+        $input_property = $plugin_info['plugin_definition']['input_property'] ?? NULL;
+        $input_argument = $plugin_info['plugin_definition']['input_argument'] ?? NULL;
         //@TODO check if this are here and not null!
         // $io->output will contain whatever the output is
         // We will check if the child processor
@@ -457,7 +501,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // - Can come from the original Data (most likely)
         // - May be overridden by the $io->output, e.g when a processor generates a file that is not part of any node
         $input_property_value_from_plugin = TRUE;
-        $input_property_value = isset($io->output->plugin) && isset($io->output->plugin[$input_property]) ? $io->output->plugin[$input_property] : NULL;
+        $input_property_value = $input_property && isset($io->output->plugin) && isset($io->output->plugin[$input_property]) ? $io->output->plugin[$input_property] : NULL;
         // If was not defined by the previous processor try from the main data.
         if ($input_property_value == NULL) {
           $input_property_value_from_plugin = FALSE;
@@ -477,31 +521,44 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // Warning Diego. This may lead to a null?
         $childdata->{$input_property} = $input_property_value;
         $childdata->plugin_config_entity_id = $postprocessor_config_entity->id();
-        $input_argument_value = isset($io->output->plugin) && isset($io->output->plugin[$input_argument]) ?
-          $io->output->plugin[$input_argument] : $data->{$input_argument};
-        // This is a must: Solr indexing requires a list of sequences. A single one
-        // will not be enqueued.
-        if (is_array($input_argument_value)) {
-          foreach ($input_argument_value as $value) {
-            // Here is the catch.
-            // Output properties may be many
-            // Input Properties matching always need to be one
-            if (!is_array($value)) {
-              $childdata->{$input_argument} = $value;
-              // The count will always be relative to this call
-              // Means count of how many children are being called.
-              $childdata->siblings = count($input_argument_value);
-              // In case the $input_property_value is an array coming from a plugin we may want to know if it has the same amount of values of $input_argument_value
-              // If so, it is many to one, and we only need the corresponding entry to this sequence
-              if ($input_property_value_from_plugin &&
-                is_array($input_property_value) &&
-                count($input_property_value) == $childdata->siblings &&
-                isset($input_property_value[$value])) {
-                $childdata->{$input_property} = $input_property_value[$value];
+        $input_argument_value = $input_argument && isset($io->output->plugin) && isset($io->output->plugin[$input_argument]) ?
+          $io->output->plugin[$input_argument] : ($input_argument && isset($data->{$input_argument}) ? $data->{$input_argument} : NULL);
+
+        // May 2024, Most cases, like Pagers (PDF page extractors) $input_argument_value will be an array, a sequence
+        // Leading to many children.
+        // But for chained processors like ML ones, e.g each OCR will generate exactly ONE ML
+        // using the same input property of OCR.
+        // So we can no longer assume/not depend on $input_argument_value as we did until 0.7.0
+        if ($input_argument_value) {
+          if (is_array($input_argument_value)) {
+            foreach ($input_argument_value as $value) {
+              // Here is the catch.
+              // Output properties may be many
+              // Input Properties matching always need to be one
+              if (!is_array($value)) {
+                $childdata->{$input_argument} = $value;
+                // The count will always be relative to this call
+                // Means count of how many children are being called.
+                $childdata->siblings = count($input_argument_value);
+                // In case the $input_property_value is an array coming from a plugin we may want to know if it has the same amount of values of $input_argument_value
+                // If so, it is many to one, and we only need the corresponding entry to this sequence
+                if ($input_property_value_from_plugin &&
+                  is_array($input_property_value) &&
+                  count($input_property_value) == $childdata->siblings &&
+                  isset($input_property_value[$value])) {
+                  $childdata->{$input_property} = $input_property_value[$value];
+                }
+                Drupal::queue('strawberryrunners_process_background', TRUE)
+                  ->createItem($childdata);
               }
-              Drupal::queue('strawberryrunners_process_background', TRUE)
-                ->createItem($childdata);
             }
+          } elseif (!empty($input_argument_value) && $input_property_value) {
+            // WE Have a single one. E.g Generated by a Double chaining. For 0.8.0 we will accept this option
+            $childdata->{$input_argument} = $input_argument_value;
+            $childdata->{$input_property} = $input_property_value;
+            $childdata->siblings = $childdata->siblings ?? 1;
+            Drupal::queue('strawberryrunners_process_background', TRUE)
+              ->createItem($childdata);
           }
         }
       }

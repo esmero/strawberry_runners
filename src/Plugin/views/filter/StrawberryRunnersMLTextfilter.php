@@ -131,7 +131,7 @@ class StrawberryRunnersMLTextfilter extends FilterPluginBase /* FilterPluginBase
     return $options;
   }
 
-  public function setSbrEntityStorage(EntityStorageInterface $sbrEntityStorage): StrawberryRunnersMLImagefilter
+  public function setSbrEntityStorage(EntityStorageInterface $sbrEntityStorage)
   {
     $this->sbrEntityStorage = $sbrEntityStorage;
     return $this;
@@ -283,7 +283,7 @@ class StrawberryRunnersMLTextfilter extends FilterPluginBase /* FilterPluginBase
         $sbr_config = $plugin_config_entity->getPluginconfig();
         // Note, we could also restrict to the same image mimetypes that the processor is setup to handle?
         if (isset($sbr_config['ml_method'])) {
-          $vector_size = abstractMLPostProcessor::ML_IMAGE_VECTOR_SIZE[$sbr_config['ml_method']] ?? '';
+          $vector_size = abstractMLPostProcessor::ML_TEXT_VECTOR_SIZE[$sbr_config['ml_method']] ?? '';
           $field_info = $this->getSbfDenseVectorFieldSource($field_id);
           if ($field_info) {
             // We do allow mixed data sources. One can be a node of course even if the source is a flavor. This is because each source could inherit properties from the other.
@@ -414,7 +414,7 @@ class StrawberryRunnersMLTextfilter extends FilterPluginBase /* FilterPluginBase
           }
           $all_knns = $this->getQuery()->getOption('sbf_knn') ?? [];
           foreach ($response as $endpoint_key => $values) {
-            if (isset($values['vector']) && is_array($values['vector']) && count($values['vector']) == abstractMLPostProcessor::ML_IMAGE_VECTOR_SIZE[$sbr_config['ml_method']]) {
+            if (isset($values['vector']) && is_array($values['vector']) && count($values['vector']) == abstractMLPostProcessor::ML_TEXT_VECTOR_SIZE[$sbr_config['ml_method']]) {
               $all_knns[] = $this->buildKNNQuery($this->getQuery(), $values['vector']);
             }
           }
