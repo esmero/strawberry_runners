@@ -185,7 +185,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
       '#options' => [
         '/image/yolo' => 'yolov8 (Image Object detection (as MiniOCR Annotations) & embedding as a Unit Length Vector)',
         '/image/mobilenet' => 'MobileNet (Image embeddings as a a Unit Length Vector)',
-        '/text/bert' => 'Bert (text embeddings as a Unit Length Vector)',
+        '/text/sentence_transformer' => 'SBert Sentence Transformer (text embeddings as a Unit Length Vector)',
         '/image/insightface' => 'InsightFace (Detection as MiniOCR Annotations and embedding as a Unit Length Vector)',
       ],
       '#default_value' => $this->getConfiguration()['ml_method'],
@@ -265,7 +265,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
             $io->output = $mloutput ?? $output;
           }
           elseif (in_array($config['source_type'], ['ado', 'json']) && $node_uuid) {
-            $mloutput = $this->runTextMLfromMetadata($io, $nlp);
+            $mloutput = $this->runTextMLfromJSON($io, $nlp);
             $io->output = $mloutput ?? $output;
           }
           else {
@@ -287,7 +287,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
 
   abstract protected function runImageMLfromIIIF($io, NlpClient $nlpClient): \stdClass;
 
-  abstract protected function runTextMLfromMetadata($io, NlpClient $nlpClient) :\stdClass;
+  abstract protected function runTextMLfromJSON($io, NlpClient $nlpClient) :\stdClass;
 
   // Mime types supported as input to Tesseract.
   // See https://github.com/tesseract-ocr/tessdoc/blob/main/InputFormats.md
