@@ -95,6 +95,7 @@ class MLInsightfacePostProcessor extends abstractMLPostProcessor {
     $ML = $this->callImageML($iiif_image_url,$labels);
     $output->searchapi['vector_512'] = isset($ML['insightface']['vector']) && is_array($ML['insightface']['vector']) && count($ML['insightface']['vector'])== 512 ? $ML['insightface']['vector'] : NULL;
     if (isset($ML['insightface']['objects']) && is_array($ML['insightface']['objects']) && count($ML['insightface']['objects']) > 0 ) {
+      // Don't do anything if no detection.
       $miniocr = $this->insightfacenetToMiniOCR($ML['insightface']['objects'], $width, $height, $sequence_number);
       $output->searchapi['fulltext'] = $miniocr;
       $page_text = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>",
@@ -103,14 +104,14 @@ class MLInsightfacePostProcessor extends abstractMLPostProcessor {
       // based on the % of the bounding box?
       // Just the value?
       $labels['Face'] = 'Face';
+      $output->searchapi['metadata'] = $labels;
+      $output->searchapi['service_md5'] = isset($ML['insightface']['modelinfo']) ? md5(json_encode($ML['insightface']['modelinfo'])) : NULL;
+      $output->searchapi['plaintext'] = $page_text ?? '';
+      $output->searchapi['processlang'] = $file_languages;
+      $output->searchapi['ts'] = date("c");
+      $output->searchapi['label'] = $this->t("Insightface ML Image Embeddings & Vectors") . ' ' . $sequence_number;
+      $output->plugin['searchapi'] = $output->searchapi;
     }
-    $output->searchapi['metadata'] = $labels;
-    $output->searchapi['service_md5'] = isset($ML['insightface']['modelinfo']) ? md5(json_encode($ML['insightface']['modelinfo'])) : NULL;
-    $output->searchapi['plaintext'] = $page_text ?? '';
-    $output->searchapi['processlang'] = $file_languages;
-    $output->searchapi['ts'] = date("c");
-    $output->searchapi['label'] = $this->t("Insightface ML Image Embeddings & Vectors") . ' ' . $sequence_number;
-    $output->plugin['searchapi'] = $output->searchapi;
     return $output;
   }
 
@@ -140,13 +141,13 @@ class MLInsightfacePostProcessor extends abstractMLPostProcessor {
         $miniocr->startElement("l");
         $x0 = (float)$object['bbox'][0];
         $y0 = (float)$object['bbox'][1];
-        $w = (float)$object['bbox'][2]- $x0;
-        $h = (float)$object['bbox'][3] -$y0;
+        $w = (float)$object['bbox'][2] - $x0;
+        $h = (float)$object['bbox'][3] - $y0;
         $l = ltrim(sprintf('%.3f', $x0) ?? '', 0);
         $t = ltrim(sprintf('%.3f', $y0) ?? '', 0);
         $w = ltrim(sprintf('%.3f', $w) ?? '', 0);
         $h = ltrim(sprintf('%.3f', $h) ?? '', 0);
-        $text .= (string)('Face') . ' ~ ' . (string)sprintf('%.3f', $object['score'] ?? 0);
+        $text = (string)('Face') . ' ~ ' . (string)sprintf('%.3f', $object['score'] ?? 0);
 
         if ($notFirstWord) {
           $miniocr->text(' ');

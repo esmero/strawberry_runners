@@ -374,7 +374,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
               '@nodeid' => $data->nid,
             ]
           );
-          if (!$io) {
+          if (!isset($io)) {
             $io=  new \stdClass();
             $io->output = new \stdClass();
             $io->output->plugin = [];
