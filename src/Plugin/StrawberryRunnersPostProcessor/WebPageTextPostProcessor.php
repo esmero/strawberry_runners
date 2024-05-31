@@ -188,7 +188,7 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
         $page_text = preg_replace('/[\x0D]/', '', $page_text);
         $page_ts = $page_info['ts'] ?? date("c");
         // Check if NPL processing is enabled and if so do it.
-        if ($config['nlp'] && !empty($config['nlp_url']) && strlen(trim($page_text)) > 0 ) {
+        if ($config['nlp'] && !empty($config['nlp_url']) && strlen(trim($page_text ?? '')) > 0 ) {
           $nlp = new NlpClient($config['nlp_url']);
           if ($nlp) {
             $languages_enabled = [];

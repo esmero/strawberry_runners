@@ -77,6 +77,8 @@ interface StrawberryRunnersPostProcessorPluginInterface extends PluginInspection
    *    StrawberryRunnersPostProcessorPluginInterface::BENCHMARK
    *  Each plugin needs to know how to deal with this.
    *
+   * @throws \Exception
+   *
    */
   public function run(\stdClass $io, $context = StrawberryRunnersPostProcessorPluginInterface::PROCESS);
 

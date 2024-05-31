@@ -75,7 +75,7 @@ function strawberry_runners_update_8904() {
   $pdfalto_executable = `which pdfalto`;
   if ($pdfalto_executable) {
     // Remove trailing newline.
-    $pdfalto_executable = trim($pdfalto_executable);
+    $pdfalto_executable = trim($pdfalto_executable ?? '');
     $plugin_config_defaults = [
       'path_pdfalto' => $pdfalto_executable,
       'arguments_pdfalto' => '%file',
