@@ -221,18 +221,20 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
         $form['pre_query'] = [
             '#type' => 'checkbox',
             '#default_value' => $this->options['pre_query'],
-            '#title' => $this->t('Treat previous filters to this as prequeries'),
+            '#title' => $this->t('Treat previous filters to this as pre queries (Future Feature)'),
             '#description'=> $this->t(
                 'If any other filter setup before this one will be treated as pre-queries to the actual KNN query.'
             ),
+          '#disabled' => TRUE,
         ];
         $form['pre_query_facets'] = [
             '#type' => 'checkbox',
             '#default_value' => $this->options['pre_query_facets'],
-            '#title' => $this->t('Treat also facets, if any, as prequeries'),
+            '#title' => $this->t('Treat also facets, if any, as pre queries (Future Feature)'),
             '#description'=> $this->t(
                 'If any other facets will be treated as pre-queries to the actual KNN query.'
             ),
+          '#disabled' => TRUE,
         ];
         $form['topk'] = [
             '#type' => 'number',
