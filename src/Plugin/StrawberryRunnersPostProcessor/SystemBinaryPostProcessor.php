@@ -142,7 +142,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
         'searchapi' => 'In a Search API Document using the Strawberryfield Flavor Data Source (e.g used for HOCR highlight)',
       ],
       '#default_value' => (!empty($this->getConfiguration()['output_destination']) && is_array($this->getConfiguration()['output_destination'])) ? $this->getConfiguration()['output_destination'] : [],
-      '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this ouput.'),
+      '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this output.'),
       '#required' => TRUE,
     ];
 

@@ -10,7 +10,6 @@ namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
@@ -206,7 +205,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         'searchapi' => 'In a Search API Document using the Strawberryfield Flavor Data Source (e.g used for HOCR highlight)',
       ],
       '#default_value' => (!empty($this->getConfiguration()['output_destination']) && is_array($this->getConfiguration()['output_destination'])) ? $this->getConfiguration()['output_destination'] : [],
-      '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this ouput.'),
+      '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this output. This plugin always generates also search API output data.'),
       '#required' => TRUE,
     ];
 
@@ -301,12 +300,12 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $input_argument = $this->pluginDefinition['input_argument'];
     $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
     $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
-
     $config = $this->getConfiguration();
     $timeout = $config['timeout']; // in seconds
     $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default'] ?? '') : 'eng'];
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       $output = new \stdClass();
+      $output->plugin = NULL;
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
       $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
       setlocale(LC_CTYPE, 'en_US.UTF-8');
@@ -340,12 +339,14 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
               ]);
           }
           $output->searchapi['fulltext'] = $miniocr;
-          $output->plugin = $miniocr;
+          // This is temporary.
           $io->output = $output;
         }
       }
-      //if not searchable run try to load the ADO, check if there is a as:text HOCR with the same size
+      //if not searchable try to load the ADO, check if there is an as:text HOCR with the same size
       //as the current Image and try to process, if not, run, tesseract
+      // @TODO. Ask Allison. If PDFAlto worked out, do we still need to check if there is an attached HOCR?
+      // Or does an attached HOCR always wins over PDFtoAlto?
       $width = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['width'] ?? NULL;
       $height = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['height'] ?? NULL;
       // In case identify failed, we can try with flv:exif (e.g JP2s might not pass the identify test)
@@ -433,7 +434,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
                               ]);
                           }
                           $output->searchapi['fulltext'] = $miniocr;
-                          $output->plugin = $miniocr;
+
                           $io->output = $output;
                           $external_found = TRUE;
                         }
@@ -449,9 +450,9 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           }
         }
       }
-      // At this stage only run Tesseract if we are still without $output->plugin
+      // At this stage only run Tesseract if we are still without $output->searchapi['fulltext']
 
-      if (!isset($output->plugin) || $output->plugin == NULL) {
+      if (!isset($output->searchapi['fulltext']) || $output->searchapi['fulltext'] == NULL) {
         setlocale(LC_CTYPE, 'en_US.UTF-8');
         $execstring = $this->buildExecutableCommand($io);
         if ($execstring) {
@@ -483,11 +484,10 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
               ]);
           }
           $output->searchapi['fulltext'] = $miniocr;
-          $output->plugin = $miniocr;
         }
       }
 
-      if (!isset($output->plugin) || $output->plugin == NULL) {
+      if (!isset($output->searchapi['fulltext']) || $output->searchapi['fulltext'] == NULL) {
         // If we still have no OCR at this state it is time to bail out
         $this->logger->warning("@sbr_processor: HOCR to miniOCR processing from Tesseract failed for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
           [
@@ -605,6 +605,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       $output->searchapi['processlang'] = $file_languages;
       $output->searchapi['ts'] = date("c");
       $output->searchapi['label'] = $this->t("Sequence") . ' ' . $sequence_number;
+      $output->plugin['searchapi'] = $output->searchapi;
       $io->output = $output;
     }
     else {
@@ -696,7 +697,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
       return $command;
-      error_log($command);
     }
     return NULL;
   }

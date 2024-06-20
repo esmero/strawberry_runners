@@ -1,0 +1,6 @@
+'execute Image ML queries':
+  title: 'Execute Image ML queries (KNN). This permission is enforced by the ML Image Views Argument Plugin and Filter Plugin'
+  description: 'Only users with this permission will have Image based ML Views queries executed when using ML Image Views Argument(s). For security/performance reasons, this permission has no effect on Anonymous Users.'
+'execute Text ML queries':
+  title: 'Execute Text ML queries (KNN). This permission is enforced by the ML Text Views Filter Plugin'
+  description: 'Only users with this permission will have Text based ML Views queries executed when using the ML Text Views Filter. For security/performance reasons, this permission has no effect on Anonymous Users.'

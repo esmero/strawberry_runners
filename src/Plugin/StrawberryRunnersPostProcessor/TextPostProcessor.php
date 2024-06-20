@@ -141,7 +141,7 @@ class TextPostProcessor extends OcrPostProcessor {
         'searchapi' => 'In a Search API Document using the Strawberryfield Flavor Data Source (e.g used for HOCR highlight)',
       ],
       '#default_value' => (!empty($this->getConfiguration()['output_destination']) && is_array($this->getConfiguration()['output_destination'])) ? $this->getConfiguration()['output_destination'] : [],
-      '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this ouput.'),
+      '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this output.'),
       '#required' => TRUE,
     ];
 
@@ -286,7 +286,6 @@ class TextPostProcessor extends OcrPostProcessor {
           }
           $output->searchapi['fulltext']
             = StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
-          $output->plugin = $text_content;
           $output->searchapi['plaintext'] = $page_text;
         }
         else {
@@ -433,6 +432,7 @@ class TextPostProcessor extends OcrPostProcessor {
       $output->searchapi['ts'] = date("c");
       $output->searchapi['label'] = $this->t("Sequence") . ' '
         . $sequence_number;
+      $output->plugin['searchapi'] = $output->searchapi;
       $io->output = $output;
     }
     else {
