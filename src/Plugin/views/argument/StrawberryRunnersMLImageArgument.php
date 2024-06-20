@@ -316,6 +316,10 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
 
 
     public function query($group_by = FALSE) {
+        // if the User has not this permission simply return as nothing was sent.
+        if ($this->currentUser->isAnonymous() || (!$this->currentUser->hasPermission('execute Image ML queries') && !$this->currentUser->hasRole('administrator'))) {
+          return;
+        }
         $this->argument_validated;
         if (empty($this->expanded_argument) || ! $this->query) {
             // basically not validated, not present as a value and also someone cancelled/nuklled the query before?
