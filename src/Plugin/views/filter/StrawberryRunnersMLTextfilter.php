@@ -309,23 +309,33 @@ class StrawberryRunnersMLTextfilter extends FilterPluginBase /* FilterPluginBase
     );
   }
 
+  /**
+   * @inheritDoc
+   */
+  public function isExposed()
+  {
+    return parent::isExposed() && ((!$this->currentUser->isAnonymous() && $this->currentUser->hasPermission('execute Text ML queries')) || $this->currentUser->hasRole('administrator'));
+  }
+
+
   protected function valueForm(&$form, FormStateInterface $form_state) {
     // At this stage  $this->value is not set?
     $this->value = is_array($this->value) ? $this->value : (array) $this->value;
     if (!$form_state->get('exposed')) {
       $form['value'] = [
         '#type' => 'textarea',
-        '#title' => t('JSON used to query internal form'),
+        '#title' => t('Text query to be Vectorized'),
         '#prefix' => '<div class="views-group-box">',
         '#suffix' => '</div>'
       ];
     }
-    elseif ($this->isExposed()) {
+    elseif ($this->isExposed() ) {
       $form['value'] = [
         '#type' => 'textarea',
-        '#title' => t('JSON used to query public form'),
+        '#title' => t('Text query to be vectorized'),
         '#prefix' => '<div class="views-group-box">',
-        '#suffix' => '</div>'
+        '#suffix' => '</div>',
+        '#access' => !$this->currentUser->isAnonymous() && $this->currentUser->hasPermission('execute Text ML queries') || $this->currentUser->hasRole('administrator'),
       ] ;
     }
   }
@@ -352,19 +362,13 @@ class StrawberryRunnersMLTextfilter extends FilterPluginBase /* FilterPluginBase
 
 
   public function query() {
-    if (empty($this->value) || empty($this->validated_exposed_input) || !$this->getQuery()) {
-      // basically not validated, not present as a value and also someone cancelled/nuklled the query before?
+    if (empty($this->value) || empty($this->validated_exposed_input) || !$this->getQuery() ||
+      ($this->currentUser->isAnonymous() || (!$this->currentUser->hasPermission('execute Text ML queries') && !$this->currentUser->hasRole('administrator')))
+    ) {
+      // basically not validated, not present as a value or not the right permisisons.
       return;
     }
-    /*
-     * $this->value = {stdClass}
- iiif_image_id = "s3://3b9%2Fimage-dcpl-p034-npsncr-00015-rexported-f2c69aeb-7bcb-434a-a781-e580cb3695b7.tiff"
- bbox = {stdClass}
-  x = {float} 0.0
-  y = {float} 0.0
-  w = {float} 1.0
-  h = {float} 1.0
-     */
+
     // Just to be sure here bc we have our own way. Who knows if some external code decides to alter the value
     $this->value = $this->validated_exposed_input;
     // We should only be at this stage if we have validation

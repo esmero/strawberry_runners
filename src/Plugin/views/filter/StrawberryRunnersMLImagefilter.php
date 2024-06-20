@@ -384,6 +384,11 @@ JSON;
     );
   }
 
+  public function isExposed()
+  {
+    return parent::isExposed() && ((!$this->currentUser->isAnonymous() && $this->currentUser->hasPermission('execute Image ML queries')) || $this->currentUser->hasRole('administrator'));
+  }
+
   protected function valueForm(&$form, FormStateInterface $form_state) {
     // At this stage  $this->value is not set?
     $this->value = is_array($this->value) ? $this->value : (array) $this->value;
@@ -400,7 +405,8 @@ JSON;
         '#type' => 'textarea',
         '#title' => t('JSON used to query public form'),
         '#prefix' => '<div class="views-group-box">',
-        '#suffix' => '</div>'
+        '#suffix' => '</div>',
+        '#access' => !$this->currentUser->isAnonymous() && $this->currentUser->hasPermission('execute Image ML queries') || $this->currentUser->hasRole('administrator'),
       ] ;
     }
   }
@@ -427,6 +433,10 @@ JSON;
 
 
   public function query() {
+    if ($this->currentUser->isAnonymous() || (!$this->currentUser->hasPermission('execute Image ML queries') && !$this->currentUser->hasRole('administrator'))) {
+      return;
+    }
+
     if (empty($this->value) || empty($this->validated_exposed_input) || !$this->getQuery()) {
       // basically not validated, not present as a value and also someone cancelled/nuklled the query before?
       return;
