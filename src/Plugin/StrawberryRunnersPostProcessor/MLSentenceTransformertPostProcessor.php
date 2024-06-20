@@ -60,7 +60,7 @@ class MLSentenceTransformertPostProcessor extends abstractMLPostProcessor {
       '#type' => 'select',
       '#title' => $this->t('The type of source data this processor works on'),
       '#options' => [
-        'json' => 'JSON passed by a parent Processor',
+        'json' => 'JSON passed by a parent Processor.This processor needs to be chained to another one that generates Text. e.g OCR.',
       ],
       '#default_value' => $this->getConfiguration()['source_type'],
       '#description' => $this->t('Select from where the source file  this processor needs is fetched'),
@@ -86,6 +86,17 @@ class MLSentenceTransformertPostProcessor extends abstractMLPostProcessor {
       '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this output. This plugin always generates also search API output data.'),
       '#required' => TRUE,
     ];
+    $element['ml_method'] = [
+      '#type' => 'radios',
+      '#title' => $this->t('ML endpoint to use (fixed)'),
+      '#options' => [
+        '/text/sentence_transformer' => 'SBert Sentence Transformer (text embeddings as a Unit Length Vector)',
+      ],
+      '#default_value' => $this->getConfiguration()['ml_method'],
+      '#description' => $this->t('The ML endpoint/Model. This is fixed for this processor.'),
+      '#required' => TRUE,
+    ];
+
     return $element;
   }
 

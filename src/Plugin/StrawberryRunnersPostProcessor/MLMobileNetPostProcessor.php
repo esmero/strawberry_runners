@@ -55,6 +55,29 @@ class MLMobileNetPostProcessor extends abstractMLPostProcessor {
 
   public function settingsForm(array $parents, FormStateInterface $form_state) {
     $element = parent::settingsForm($parents, $form_state);
+    $element['source_type'] = [
+      '#type' => 'select',
+      '#title' => $this->t('The type of source data this processor works on'),
+      '#options' => [
+        'asstructure' => 'File entities referenced in the as:filetype JSON structure',
+      ],
+      '#default_value' => $this->getConfiguration()['source_type'],
+      '#description' => $this->t('Select from where the source data this processor needs is fetched'),
+      '#required' => TRUE,
+    ];
+    $element['ml_method'] = [
+      '#type' => 'radios',
+      '#title' => $this->t('ML endpoint to use (fixed)'),
+      '#options' => [
+        '/image/mobilenet' => 'MobileNet (Image embeddings as a a Unit Length Vector)',
+      ],
+      '#default_value' => $this->getConfiguration()['ml_method'],
+      '#description' => $this->t('The ML endpoint/Model. This is fixed for this processor.'),
+      '#required' => TRUE,
+    ];
+    // Only Images for now.
+    $element['jsonkey']['#options'] = [ 'as:image' => 'as:image'];
+
     return $element;
   }
 

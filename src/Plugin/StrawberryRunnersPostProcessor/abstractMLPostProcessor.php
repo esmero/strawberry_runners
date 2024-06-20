@@ -105,7 +105,6 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
       '#states' => [
         'visible' => [
           ':input[name="pluginconfig[source_type]"]' => ['value' => 'ado'],
-          ':input[name="pluginconfig[source_type]"]' => ['value' => 'json'],
         ],
       ],
     ];
@@ -183,7 +182,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
       '#type' => 'radios',
       '#title' => $this->t('Which ML endpoint to use'),
       '#options' => [
-        '/image/yolo' => 'yolov8 (Image Object detection (as MiniOCR Annotations) & embedding as a Unit Length Vector)',
+        '/image/yolo' => 'YOLO (Image Object detection (as MiniOCR Annotations) & embedding as a Unit Length Vector)',
         '/image/mobilenet' => 'MobileNet (Image embeddings as a a Unit Length Vector)',
         '/text/sentence_transformer' => 'SBert Sentence Transformer (text embeddings as a Unit Length Vector)',
         '/image/insightface' => 'InsightFace (Detection as MiniOCR Annotations and embedding as a Unit Length Vector)',
