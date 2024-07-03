@@ -113,17 +113,22 @@ class MLSentenceTransformertPostProcessor extends abstractMLPostProcessor {
 
     setlocale(LC_CTYPE, 'en_US.UTF-8');
     if (isset($io->input->{$input_property})) {
-      $page_text = $io->input->{$input_property}->plaintext ?? NULL;
+      // depending on the sources of $io->input->{$input_property}.
+      // If generated/enqueued directly by a parent or recycled from pre-generated data found at the SBflavor storage
+      // this might be either an object or an array.
+      // So we are going to normalize here
+      $input_normalized = (object) $io->input->{$input_property};
+      $page_text = $input_normalized->plaintext ?? NULL;
       if ($page_text) {
         $labels = [];
         $output->plugin = NULL;
         $labels = [];
         $ML = $this->callTextML($page_text, false);
         $output->searchapi['vector_384'] = isset($ML['sentence_transformer']['vector']) && is_array($ML['sentence_transformer']['vector']) && count($ML['sentence_transformer']['vector']) == 384 ? $ML['sentence_transformer']['vector'] : NULL;
-        $output->searchapi['metadata'] = $io->input->{$input_property}->metadata ?? [];
+        $output->searchapi['metadata'] = $input_normalized->metadata ?? [];
         $output->searchapi['service_md5'] = isset($ML['mobilenet']['modelinfo']) ? md5(json_encode($ML['mobilenet']['modelinfo'])) : NULL;
         $output->searchapi['plaintext'] = $page_text ?? '';
-        $output->searchapi['fulltext'] = $io->input->{$input_property}->fulltext ?? [];
+        $output->searchapi['fulltext'] = $input_normalized->fulltext ?? [];
         $output->searchapi['processlang'] = $file_languages;
         $output->searchapi['ts'] = date("c");
         $output->searchapi['label'] = $this->t("Sentence Transformer ML Text Embeddings & Vectors") . ' ' . $sequence_number;
