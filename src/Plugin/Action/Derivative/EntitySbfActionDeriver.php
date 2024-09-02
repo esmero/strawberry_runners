@@ -19,5 +19,4 @@ class EntitySbfActionDeriver extends EntityActionDeriverBase {
   protected function isApplicable(EntityTypeInterface $entity_type) {
     return $entity_type->entityClassImplements(NodeInterface::class);
   }
-
 }
