@@ -30,8 +30,7 @@ use Drupal\search_api\ParseMode\ParseModePluginManager;
  *
  * @QueueWorker(
  *   id = "strawberryrunners_process_index",
- *   title = @Translation("Strawberry Runners Process via Cron Queue Worker"),
- *   cron = {"time" = 180}
+ *   title = @Translation("Strawberry Runners Process via Cron Queue Worker")
  * )
  */
 class IndexPostProcessorQueueWorker extends AbstractPostProcessorQueueWorker {
