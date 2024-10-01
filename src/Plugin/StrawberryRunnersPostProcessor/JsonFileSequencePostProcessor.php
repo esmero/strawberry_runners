@@ -182,7 +182,7 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
         // We use the actual file UUID to as part of the ID
         // e.g default_solr_index-strawberryfield_flavor_datasource/5801:1:en:1e9f687c-e29e-4c23-91ba-655d9c5cdfe6:ocr
         // For the general ID we will use this number when there are multiple siblings
-        // or 1 if the File is a single ouput
+        // or 1 if the File is a single output
         $sequence_number[] = $io->input->metadata['sequence'];
       }
 

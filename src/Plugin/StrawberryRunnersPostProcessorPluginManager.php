@@ -39,5 +39,4 @@ class StrawberryRunnersPostProcessorPluginManager extends DefaultPluginManager{
     $this->setCacheBackend($cache_backend,'strawberry_runners_strawberryrunnerspostprocessor_plugins');
   }
 
-
 }

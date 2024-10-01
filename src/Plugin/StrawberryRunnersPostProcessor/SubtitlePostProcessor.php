@@ -12,23 +12,26 @@ use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
+use Drupal\strawberry_runners\VTTLine;
+use Drupal\strawberry_runners\VTTProcessor;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
+use Laracasts\Transcriptions\Transcription;
 
 
 /**
  *
- * System Binary Post processor Plugin Implementation
+ * Sub title (VTT) Plugin Implementation
  *
  * @StrawberryRunnersPostProcessor(
- *    id = "text",
- *    label = @Translation("Post processor that extracts text from Files"),
+ *    id = "subtitle",
+ *    label = @Translation("Post processor that extracts subtitles and generates time/space transmutated OCR"),
  *    input_type = "entity:file",
  *    input_property = "filepath",
  *    input_argument = NULL
  * )
  */
-class TextPostProcessor extends OcrPostProcessor {
+class SubtitlePostProcessor extends TextPostProcessor {
 
   public $pluginDefinition;
 
@@ -38,7 +41,7 @@ class TextPostProcessor extends OcrPostProcessor {
   public function defaultConfiguration() {
     return [
         'source_type' => 'asstructure',
-        'mime_type' => ['application/pdf'],
+        'mime_type' => ['text/vtt'],
         'output_type' => 'json',
         'output_destination' => 'searchapi',
         'processor_queue_type' => 'background',
@@ -68,7 +71,7 @@ class TextPostProcessor extends OcrPostProcessor {
         'filepath' => 'Full file paths passed by another processor',
       ],
       '#default_value' => $this->getConfiguration()['source_type'],
-      '#description' => $this->t('Select from where the source file  this processor needs is fetched'),
+      '#description' => $this->t('Select from where the source file this processor needs is fetched'),
       '#required' => TRUE,
     ];
 
@@ -83,9 +86,7 @@ class TextPostProcessor extends OcrPostProcessor {
       '#type' => 'checkboxes',
       '#title' => $this->t('The JSON key that contains the desired source files.'),
       '#options' => [
-        'as:document' => 'as:document',
         'as:text' => 'as:text',
-        'as:application' => 'as:application',
       ],
       '#default_value' => (!empty($this->getConfiguration()['jsonkey']) && is_array($this->getConfiguration()['jsonkey'])) ? $this->getConfiguration()['jsonkey'] : [],
       '#states' => [
@@ -238,9 +239,12 @@ class TextPostProcessor extends OcrPostProcessor {
     $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
     $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
     $config = $this->getConfiguration();
+    // For subtitles we might have to use NLP in the actual Solr DOC for the language. The ADO might not be enough,
+    // But still OK  to have as a fallback.
     $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default'] ?? '') : 'eng'];
     if ($file_path && $file_uuid && $node_uuid) {
       $output = new \stdClass();
+      $output->plugin = NULL;
       // Let's see if we need an output path or not
       $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
       $out_file_path = NULL;
@@ -251,46 +255,23 @@ class TextPostProcessor extends OcrPostProcessor {
         $text_content = file_get_contents($file_path);
         if (!$this->isBinary($text_content)) {
           if ($this->isTextMime($file_mime)) {
+            $miniocr = $this->SubtitletoMiniOCR($text_content, $sequence_number);
             $page_text = $text_content;
+
+            // Quick decision to be share with @alliomera. I won't match the VTT to the Audio or Video here
+            // Let's deal with that at the discovery side. That way we can still use Highlights even IF
+            // the how the user wants to match these is not clear.
+            // For IIIF, we will let the manifest drive the need OR add an option at the Content Search Config
+            // To match always (and there we can make the choice)
           }
-          elseif ($this->isXmlMime($file_mime)) {
-            // Lastly plain text version of the XML
-            // Try first with HOCR
-            $page_text = $this->hOCRtoMiniOCR($text_content, $sequence_number);
-            if ($page_text) {
-              $page_text = strip_tags(str_replace("<l>",
-                PHP_EOL . "<l> ", $page_text)) ;
-            }
-            else {
-              // Simple remove all
-              $page_text = strip_tags(
-                str_replace(
-                  ["<br>", "</br>"],
-                  PHP_EOL, $text_content
-                )
-              );
-              $page_text = html_entity_decode($page_text);
-              $page_text = preg_replace(
-                ['/\h{2,}|(\h*\v{1,})/umi', '/\v{2,}/uim', '/\h{2,}/uim'],
-                [" \n", " \n", ' '], $page_text
-              );
-            }
-          }
-          elseif ($this->isJsonMime($file_mime)) {
-            $page_array = json_decode($text_content, TRUE);
-            if (json_last_error() == JSON_ERROR_NONE) {
-              $page_text = '';
-              array_walk_recursive($page_array, function ($item, $key) use (&$page_text){$page_text .= $key.' '. $item .' ';});
-              $page_text = trim($page_text ?? '');
-            }
-          }
+
           $output->searchapi['fulltext']
-            = StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
+            = $miniocr ?? StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
           $output->searchapi['plaintext'] = $page_text;
         }
         else {
           $this->logger->warning(
-            "Text processing was not possible because binary data was found"
+            "Subitlte Text processing was not possible because binary data was found"
           );
           throw new \Exception(
             "Could not execute text extraction on binary data"
@@ -440,49 +421,70 @@ class TextPostProcessor extends OcrPostProcessor {
     }
   }
 
-  // Mime types that might contain JSON.
-  // See https://github.com/tesseract-ocr/tessdoc/blob/main/InputFormats.md
-  public function isJsonMime($mime_type): bool {
-    $mime_types = [
-      'application/json',
-      'application/json+ld',
-    ];
-    return in_array($mime_type, $mime_types);
-  }
+  protected function SubtitletoMiniOCR($text_content, $pageid) {
+    $miniocr = new \XMLWriter();
+    $miniocr->openMemory();
+    $miniocr->startDocument('1.0', 'UTF-8');
+    $miniocr->startElement("ocr");
+    $atleastone_word = FALSE;
+    $transcription = New VTTProcessor($text_content);
 
-  // Mime types that might contain Text.
-  // See https://github.com/tesseract-ocr/tessdoc/blob/main/InputFormats.md
-  public function isTextMime($mime_type): bool {
-    $file_type_parts = explode('/', $mime_type);
-    if (count($file_type_parts) == 2) {
-      return $file_type_parts[0] == 'text' &&
-        $file_type_parts[1] !== 'xml' &&
-        $file_type_parts[1] !== 'html'
-      ;
+    // X is arbitrary // O - width
+    // Y becomes time // Just because that is how a human would read.
+
+    // let's get how much time we will cover.
+    $last_line = NULL;
+    if ($transcription->getMaxTime()) {
+
+      // Rough refence is 250 words to a page, 30 minute == 3000/3600 words: So we will try to fit that.
+      // How. Option 1. Measure accumulated time. 15 minutes per page (basically the diference between
+      // How many lines can we fit in a single page? with a 12 pixel heigh per line
+      $pageWidthPts = 2480;
+      $pageHeightPts = round($transcription->getMaxTime() * StrawberryfieldFlavorDatasource::PIXELS_PER_SECOND); // 15 minutes = 3508 pixles
+      $miniocr->startElement("p");
+      $miniocr->writeAttribute("xml:id", 'timesequence_' . $pageid);
+      $miniocr->writeAttribute("wh", $pageWidthPts . " " . $pageHeightPts);
+      $miniocr->startElement("b"); // Testing with a single Block first
+      /** @var VTTLine $line */
+      foreach ($transcription as $line) {
+        $miniocr->startElement("l");
+        $hpos_rel = 0.010;
+        $vpos_rel = (float)($line->getStarttime() * StrawberryfieldFlavorDatasource::PIXELS_PER_SECOND) / $pageHeightPts;
+        $width_rel = 0.990;
+        $height_rel = (float)(($line->getEndstime() - $line->getStarttime()) * StrawberryfieldFlavorDatasource::PIXELS_PER_SECOND) / $pageHeightPts;
+
+        $l = ltrim(sprintf('%.3f', $hpos_rel) ?? '', 0);
+        $t = ltrim(sprintf('%.3f', $vpos_rel) ?? '', 0);
+        $w = ltrim(sprintf('%.3f', $width_rel) ?? '', 0);
+        $h = ltrim(sprintf('%.3f', $height_rel) ?? '', 0);
+
+        // New OCR Highlight > 0.71 does not like empty <w> tags at all
+        if (strlen(trim($line->getBody() ?? "")) > 0) {
+          $miniocr->startElement("w");
+          $miniocr->writeAttribute("x",
+            $l . ' ' . $t . ' ' . $w . ' ' . $h);
+          $miniocr->text($line->getBody());
+          // Only assume we have at least one word for <w> tags
+          // Since lines? could end empty?
+          $atleastone_word = TRUE;
+          $miniocr->endElement();
+        }
+        $miniocr->endElement(); // Closes line
+      }
+
+      $miniocr->endElement(); // Closes "b"
+      $miniocr->endElement(); // Closes "p""
+    }
+    $miniocr->endElement(); // Closes "ocr"
+    $miniocr->endDocument();
+
+    unset($transcription);
+    if ($atleastone_word) {
+      return $miniocr->outputMemory(TRUE);
     }
     else {
-      return FALSE;
+      unset($miniocr);
+      return StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
     }
-  }
-
-  // Mime types supported as input to GS.
-  // See https://github.com/tesseract-ocr/tessdoc/blob/main/InputFormats.md
-  public function isXmlMime($mime_type): bool {
-    $mime_types = [
-      'application/xml',
-      'text/xml',
-    ];
-    return in_array($mime_type, $mime_types);
-  }
-
-  /**
-   * Determine whether the given value is a binary string. From Symfony DB debug.
-   *
-   * @param string $value
-   *
-   * @return bool
-   */
-  public function isBinary($value): bool {
-    return !preg_match('//u', $value);
   }
 }

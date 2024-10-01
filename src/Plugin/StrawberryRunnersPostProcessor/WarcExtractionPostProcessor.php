@@ -112,7 +112,7 @@ class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBa
         'plugin' => 'As Input for another processor Plugin',
       ],
       '#default_value' => (!empty($this->getConfiguration()['output_destination']) && is_array($this->getConfiguration()['output_destination']))? $this->getConfiguration()['output_destination']: [],
-      '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this ouput.'),
+      '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this output.'),
       '#required' => TRUE,
     ];
 

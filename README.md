@@ -1,12 +1,10 @@
-# Disclaimer
-This is an experimental module, use at your own risk 
 
 # Strawberry Runners
 
-A Drupal 8 module that provides a set of post processing capabilities for JSON based metadata, files and entities, based on Dispatched 
+A Drupal 9/10 module that provides a set of post processing capabilities for JSON based metadata, files and entities, based on Dispatched 
 events, direct http calls and invoked webhooks from partner services (e.g Min.io, AWS S3 or self invoked). This is part of the Archipelago Commons Project.
 
-This module adds to each D8/Archipelago instance headless processing services (something like embeded services instead of microservice) that can be invoked
+This module adds to each Drupal/Archipelago instance headless processing services (something like embeded services instead of microservice) that can be invoked
 internally or externally to make use of multiple concurrent HTTP services via reactphp.
 
 ## Help

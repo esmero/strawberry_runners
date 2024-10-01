@@ -63,7 +63,7 @@ class StrawberryRunnersPostProcessor extends Plugin {
   public $input_argument;
 
   /**
-   * Processing stage: can be Entity PreSave or PostSave
+   * Processing stage: can be Entity PreSave or PostSave. Pre save is good for ADO/Metadata. Implementation to follow.
    *
    * @var string $when;
    *
