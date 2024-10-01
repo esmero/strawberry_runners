@@ -39,6 +39,10 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implements ContainerFactoryPluginInterface {
 
+  const QUEUES = [
+    'background' => 'strawberryrunners_process_background',
+    'realtime' => 'strawberryrunners_process_index'
+  ];
   /**
    * Drupal\Core\Entity\EntityTypeManager definition.
    *
@@ -362,7 +366,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // To use that data as input for a child one, if chained too. But only if nothing has set $io->output->plugin before
         // This is needed for Processors (e.g OCR) that have already processed everything and then get a new chained
         // Child that was never processed before. Would be terrible to have to re-process OCR completely just to get
-        // A Child to trigger. We will only provide only $io->input->plugin['searchapi'] bc that is what we know
+        // A Child to trigger. We will only provide $io->input->plugin['searchapi'] bc that is what we know
         // Any other type of child won't be able to feed from pre-existing.
         if ($inkeystore && $tobechained && !$data->force && $processed_data_for_chaining!=NULL && (!isset($io->output->plugin) || !empty($io->output->plugin))) {
           // Since we don't know at all what $io->output->plugin should contain
@@ -451,7 +455,11 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         }
         if ($data->extract_attempts < 3) {
           $data->extract_attempts++;
-          Drupal::queue('strawberryrunners_process_index', TRUE)
+          // Re-enqueue in the same Queue it came from. Not so great to have round robin
+
+          $queue_name = $processor_config['processor_queue_type'] ?? static::QUEUES['realtime'];
+          error_log($queue_name);
+          Drupal::queue($queue_name, TRUE)
             ->createItem($data);
         }
         else {
@@ -529,6 +537,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // But for chained processors like ML ones, e.g each OCR will generate exactly ONE ML
         // using the same input property of OCR.
         // So we can no longer assume/not depend on $input_argument_value as we did until 0.7.0
+        $queue_name = $processor_config['processor_queue_type'] ?? static::QUEUES['realtime'];
         if ($input_argument_value) {
           if (is_array($input_argument_value)) {
             foreach ($input_argument_value as $value) {
@@ -548,7 +557,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
                   isset($input_property_value[$value])) {
                   $childdata->{$input_property} = $input_property_value[$value];
                 }
-                Drupal::queue('strawberryrunners_process_background', TRUE)
+
+                Drupal::queue($queue_name, TRUE)
                   ->createItem($childdata);
               }
             }
@@ -557,7 +567,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             $childdata->{$input_argument} = $input_argument_value;
             $childdata->{$input_property} = $input_property_value;
             $childdata->siblings = $childdata->siblings ?? 1;
-            Drupal::queue('strawberryrunners_process_background', TRUE)
+
+            Drupal::queue($queue_name, TRUE)
               ->createItem($childdata);
           }
         }
@@ -577,7 +588,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       $data_cleanup = new \stdClass();
       $data_cleanup->filepath_to_clean = [$filelocation];
       $data_cleanup->sbr_cleanup = TRUE;
-      Drupal::queue('strawberryrunners_process_background', TRUE)
+      Drupal::queue($queue_name, TRUE)
        ->createItem($data_cleanup);
     }
   }
@@ -726,7 +737,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ),
        */
       // Another solution would be to make our conditions all together an OR
-      // But no post processing here is also good, faster and we just want
+      // But no post-processing here is also good, faster and we just want
       // to know if its there or not.
       $query->setProcessingLevel(QueryInterface::PROCESSING_NONE);
       $results = $query->execute();
@@ -736,9 +747,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       $count = $count + (int) $results->getResultCount();
 
     }
-    // This is a good one. If i have multiple indexes, but one is missing the i assume
+    // This is a good one. If I have multiple indexes, but one is missing the I assume
     // reprocessing is needed
-    // But if not, then i return 1, which means we have them all
+    // But if not, then I return 1, which means we have them all
     // FUTURE thinking is the best.
     return ($count == count($indexes)) ? 1 : 0;
     // Keys we need in the Search API
@@ -797,7 +808,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           '@nodeuuid' => $input->nuuid,
         ]
       );
-      throw new RequeueException('I am not done yet. Will re-enqueu myself');
+      throw new RequeueException('I am not done yet. Will re-enqueue myself');
     }
     return $io;
   }
@@ -847,8 +858,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $jsonkey = $data->asstructure_key;
 
     // check 'flv:' . $data->plugin_config_entity_id for empty
-    // If there means this was enqueued many times and we do not need to add it again
-    // We can not stop the actual runner to execute but we can at least avoid
+    // If there means this was enqueued many times, and we do not need to add it again
+    // We can not stop the actual runner to execute, but we can at least avoid
     // creating multiple temporal anomalies
     // The same processor will not create more than a single file per source.
     if (empty($field_content[$jsonkey][$uniqueid]['flv:' . $data->plugin_config_entity_id])) {
@@ -924,7 +935,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    * @param string $plugin_config_entity_id
    *
    * @param bool   $wholechain
-   *     If we will keep getting children up and accumulating the whole tree to a leaf
+   *     If we keep getting children up and accumulating the whole tree to a leaf
    * @return array
    */
   private function getChildProcessorIds(string $plugin_config_entity_id, $wholechain = FALSE): array {
@@ -960,7 +971,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    *   The URI of the file, e.g. public://directory/file.jpg.
    *
    * @return mixed
-   *   The real path to the file if it is a local file. An URL otherwise.
+   *   The real path to the file if it is a local file. A URL otherwise.
    */
   public function getRealpath(string $uri) {
     $wrapper = $this->streamWrapperManager->getViaUri($uri);
