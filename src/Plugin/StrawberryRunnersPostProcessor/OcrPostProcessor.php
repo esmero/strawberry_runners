@@ -789,7 +789,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           ltrim($pwidth ?? '', 0) . " " . ltrim($pheight ?? '', 0));
         $miniocr->startElement("b");
         $page->registerXPathNamespace('ns', 'http://www.w3.org/1999/xhtml');
-        foreach ($page->xpath('.//ns:span[@class="ocr_line"]') as $line) {
+        foreach ($page->xpath('.//ns:span[@class="ocr_line"] | .//ns:span[@class="ocr_textfloat"]') as $line) {
           $notFirstWord = FALSE;
           $miniocr->startElement("l");
           foreach ($line->children() as $word) {
