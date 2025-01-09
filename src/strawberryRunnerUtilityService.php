@@ -14,6 +14,7 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
 use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager;
+use Drupal\strawberry_runners\Plugin\QueueWorker\AbstractPostProcessorQueueWorker;
 
 class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceInterface {
 
@@ -251,6 +252,8 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                               $asstructure["dr:mimetype"], $valid_mimes
                             )))
                       ) {
+                        $config['processor_queue_type'] = $config['processor_queue_type'] ?? 'realtime';
+                        $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$config['processor_queue_type']] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
                         $data = new \stdClass();
                         $data->fid = $asstructure['dr:fid'];
                         $data->nid = $entity->id();
@@ -302,15 +305,17 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         // Issue with JSON passed property is that we can no longer
 
                         $data->force = $force_from_metadata_or_arg;
+                        $data->force = TRUE;
                         $data->plugin_config_entity_id = $activePluginId;
                         // See https://github.com/esmero/strawberry_runners/issues/10
                         // Since the destination Queue can be a modal thing
                         // And really what defines is the type of worker we want
                         // But all at the end will eventually feed the ::run() method
                         // We want to make this a full blown service.
-                        $this->queueFactory->get(
-                          'strawberryrunners_process_index', TRUE
+                        $success = $this->queueFactory->get(
+                          $queue_name, TRUE
                         )->createItem($data);
+                        error_log($success);
                       }
                     }
                   }
@@ -347,7 +352,8 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                     array_intersect($valid_ado_type, $sbf_type)
                   ) > 0
                 ) {
-
+                  $config['processor_queue_type'] = $config['processor_queue_type'] ?? 'realtime';
+                  $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$config['processor_queue_type']] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
                   $data = new \stdClass();
                   $data->fid = NULL;
                   $data->nid = $entity->id();
@@ -383,7 +389,7 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                   $data->force = $force_from_metadata_or_arg;
                   $data->plugin_config_entity_id = $activePluginId;
                   $this->queueFactory->get(
-                    'strawberryrunners_process_index', TRUE
+                    $queue_name, TRUE
                   )->createItem($data);
                 }
               }

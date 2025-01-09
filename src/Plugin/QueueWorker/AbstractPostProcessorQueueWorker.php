@@ -259,6 +259,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $will_chain_future = $will_chain_future || $chains;
       }
     }
+
+    $queue_name = $processor_config['processor_queue_type'] ?? 'realtime';
+    $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$queue_name] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
+
     // When to clean up?
     // If not cleaned up before
     // AND won't chain in the future
@@ -301,7 +305,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
         // If argument is not there we will assume there is a mistake and that it is
         // a single one.
-        if ($input_argument) {
+        // New ot 0.9.0. Since ML chained might have as input argument 'annotation'
+        // But still need a sequence_number, we will check if data contains either one
+        // or a FIXED ->sequence_number
+        if ($input_argument && $input_argument == "sequence_number") {
           $data->{$input_argument} = $data->{$input_argument} ?? 1;
           // In case $data->{$input_argument} is an array/data we will use the key as "sequence"
           // Each processor needs to be sure it passes a single item and with a unique key
@@ -311,6 +318,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           else {
             $sequence_key = (int) $data->{$input_argument} ?? 1;
           }
+        }
+        else {
+          // See fixed. ML processors will always set this in their output.
+          $sequence_key = $data->sequence_number ?? 1;
         }
         // Here goes the main trick for making sure out $sequence_key in the Solr ID
         // Is the right now (relative to its own, 1 if single file, or an increasing number if a pdf
@@ -427,7 +438,12 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           // enqueued for a single Processor chain.
           $toindex->sequence_total = !empty($data->siblings) ? $data->siblings : 1;
           // Be implicit about this one. No longer depend on the Solr DOC ID splitting.
-          $toindex->sequence_id = $data->{$input_argument} ?? 1;
+          if ($input_argument == "sequence_number") {
+            $toindex->sequence_id = $data->sequence_number ?? 1;
+          }
+          else {
+            $toindex->sequence_id = $data->{$input_argument} ?? 1;
+          }
           $toindex->checksum = $data->metadata['checksum'];
 
           $datasource_id = 'strawberryfield_flavor_datasource';
@@ -456,9 +472,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         if ($data->extract_attempts < 3) {
           $data->extract_attempts++;
           // Re-enqueue in the same Queue it came from. Not so great to have round robin
-
-          $queue_name = $processor_config['processor_queue_type'] ?? static::QUEUES['realtime'];
-          error_log($queue_name);
           Drupal::queue($queue_name, TRUE)
             ->createItem($data);
         }
@@ -497,6 +510,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         }*/
         /* @var  $strawberry_runners_postprocessor_config \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity */
         $postprocessor_config_entity = $plugin_info['config_entity'];
+        $queue_name = $postprocessor_config_entity_chain->getPluginconfig()['processor_queue_type'] ?? 'realtime';
+        $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$queue_name] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
         $input_property = $plugin_info['plugin_definition']['input_property'] ?? NULL;
         $input_argument = $plugin_info['plugin_definition']['input_argument'] ?? NULL;
         //@TODO check if this are here and not null!
@@ -537,10 +552,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // But for chained processors like ML ones, e.g each OCR will generate exactly ONE ML
         // using the same input property of OCR.
         // So we can no longer assume/not depend on $input_argument_value as we did until 0.7.0
-        $queue_name = $processor_config['processor_queue_type'] ?? static::QUEUES['realtime'];
+
         if ($input_argument_value) {
           if (is_array($input_argument_value)) {
-            foreach ($input_argument_value as $value) {
+            foreach ($input_argument_value as $input_argument_index => $value) {
               // Here is the catch.
               // Output properties may be many
               // Input Properties matching always need to be one
@@ -557,6 +572,11 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
                   isset($input_property_value[$value])) {
                   $childdata->{$input_property} = $input_property_value[$value];
                 }
+                if ($input_argument != "sequence_number") {
+                  // Uses the internal iterator based on the number of arguments passed plus one
+                  // Used by Chained ML where $input_argument == "annotation"
+                  $childdata->sequence_id = $input_argument_index + 1;
+                }
 
                 Drupal::queue($queue_name, TRUE)
                   ->createItem($childdata);
@@ -567,7 +587,12 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             $childdata->{$input_argument} = $input_argument_value;
             $childdata->{$input_property} = $input_property_value;
             $childdata->siblings = $childdata->siblings ?? 1;
-
+            if ($input_argument != "sequence_number") {
+              // Uses the internal iterator based on the number of arguments passed plus one
+              // Used by Chained ML where $input_argument == "annotation"
+              // Reuse of single entry double chained.
+              $childdata->sequence_id = $childdata->sequence_id ?? 1;
+            }
             Drupal::queue($queue_name, TRUE)
               ->createItem($childdata);
           }
@@ -770,8 +795,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    */
   private function invokeProcessor(StrawberryRunnersPostProcessorPluginInterface $processor_instance, stdClass $data): stdClass {
 
-    $input_property = $processor_instance->getPluginDefinition()['input_property'];
-    $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
+    $input_property = $processor_instance->getPluginDefinition()['input_property'] ?? NULL;
+    $input_argument = $processor_instance->getPluginDefinition()['input_argument'] ?? NULL;
 
     // CHECK IF $input_argument even exists!
 
