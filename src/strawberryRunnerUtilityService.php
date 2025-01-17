@@ -315,7 +315,6 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         $success = $this->queueFactory->get(
                           $queue_name, TRUE
                         )->createItem($data);
-                        error_log($success);
                       }
                     }
                   }
