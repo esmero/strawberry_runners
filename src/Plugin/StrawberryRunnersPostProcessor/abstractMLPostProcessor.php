@@ -20,6 +20,8 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
 
   public $pluginDefinition;
 
+  protected $bb_margin = 50;
+
   /**
    * {@inheritdoc}
    */
@@ -43,6 +45,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
     '/image/yolo' => 576,
     '/image/mobilenet' => 1024,
     '/image/insightface' => 512,
+    '/image/vision_transformer' => 768,
   ];
 
   public const ML_TEXT_VECTOR_SIZE = [
