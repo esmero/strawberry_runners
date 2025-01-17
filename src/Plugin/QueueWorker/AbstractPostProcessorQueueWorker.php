@@ -329,6 +329,11 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         if (!isset($data->siblings) || isset($data->siblings) && $data->siblings == 1) {
           $sequence_key = 1;
         }
+        // Now the strange case of a PDF, page 2, with annotations.
+        if (isset($data->internal_sequence_id) && is_numeric($data->internal_sequence_id) && $data->internal_sequence_id !=1 ) {
+          $sequence_key = $sequence_key . '-' . $data->internal_sequence_id;
+          // So Second Page of a PDF, first ML annotation will be 1 : 2-1
+        }
 
         if (is_a($entity, TranslatableInterface::class)) {
           $translations = $entity->getTranslationLanguages();
@@ -432,18 +437,16 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           $toindex->vector_512 = $io->output->searchapi['vector_512'] ?? NULL;
           $toindex->vector_576 = $io->output->searchapi['vector_576'] ?? NULL;
           $toindex->vector_1024 = $io->output->searchapi['vector_1024'] ?? NULL;
+          $toindex->vector_768 = $io->output->searchapi['vector_768'] ?? NULL;
           $toindex->service_md5 = $io->output->searchapi['service_md5'] ?? '';
 
           // $siblings will be the amount of total children processors that were
           // enqueued for a single Processor chain.
           $toindex->sequence_total = !empty($data->siblings) ? $data->siblings : 1;
           // Be implicit about this one. No longer depend on the Solr DOC ID splitting.
-          if ($input_argument == "sequence_number") {
-            $toindex->sequence_id = $data->sequence_number ?? 1;
-          }
-          else {
-            $toindex->sequence_id = $data->{$input_argument} ?? 1;
-          }
+
+          $toindex->sequence_id = $data->sequence_number ?? 1;
+          $toindex->internal_sequence_id = $data->internal_sequence_id ?? $toindex->sequence_id ;
           $toindex->checksum = $data->metadata['checksum'];
 
           $datasource_id = 'strawberryfield_flavor_datasource';
@@ -572,11 +575,14 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
                   isset($input_property_value[$value])) {
                   $childdata->{$input_property} = $input_property_value[$value];
                 }
-                if ($input_argument != "sequence_number") {
-                  // Uses the internal iterator based on the number of arguments passed plus one
-                  // Used by Chained ML where $input_argument == "annotation"
-                  $childdata->sequence_id = $input_argument_index + 1;
-                }
+
+                $childdata->sequence_id =  $childdata->sequence_id ?? 1;
+                // I know sequence_number and sequence_id are the same. But we have been using this silly mapping
+                // for years.
+                $childdata->sequence_number = $childdata->sequence_number ?? $childdata->sequence_id;
+
+                $childdata->internal_sequence_id = $input_argument_index + 1;
+
 
                 Drupal::queue($queue_name, TRUE)
                   ->createItem($childdata);
@@ -587,12 +593,11 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             $childdata->{$input_argument} = $input_argument_value;
             $childdata->{$input_property} = $input_property_value;
             $childdata->siblings = $childdata->siblings ?? 1;
-            if ($input_argument != "sequence_number") {
-              // Uses the internal iterator based on the number of arguments passed plus one
-              // Used by Chained ML where $input_argument == "annotation"
-              // Reuse of single entry double chained.
-              $childdata->sequence_id = $childdata->sequence_id ?? 1;
-            }
+
+            $childdata->sequence_id = $childdata->sequence_id ?? 1;
+            $childdata->sequence_number = $childdata->sequence_number ?? $childdata->sequence_id;
+            $childdata->internal_sequence_id = $childdata->internal_sequence_id ?? 1;
+
             Drupal::queue($queue_name, TRUE)
               ->createItem($childdata);
           }
