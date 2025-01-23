@@ -305,7 +305,12 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         // Issue with JSON passed property is that we can no longer
 
                         $data->force = $force_from_metadata_or_arg;
-                        $data->force = TRUE;
+                        if ($global_config = $this->configFactory->get('strawberry_runners.general')) {
+                          if ($global_config->get('force_processing')) {
+                            $data->force = TRUE;
+                            $this->loggerFactory->get('strawberry_runners')->warning('Global Forced Processing is enabled.');
+                          }
+                        }
                         $data->plugin_config_entity_id = $activePluginId;
                         // See https://github.com/esmero/strawberry_runners/issues/10
                         // Since the destination Queue can be a modal thing
@@ -386,6 +391,12 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                   // key. Same if it generates data for a nested processor.
                   $data->metadata = ["json" => $metadata_from_json, "checksum" => md5($metadata_from_json)];
                   $data->force = $force_from_metadata_or_arg;
+                  if ($global_config = $this->configFactory->get('strawberry_runners.general')) {
+                    if ($global_config->get('force_processing')) {
+                      $data->force = TRUE;
+                      $this->loggerFactory->get('strawberry_runners')->warning('Global Forced Processing is enabled.');
+                    }
+                  }
                   $data->plugin_config_entity_id = $activePluginId;
                   $this->queueFactory->get(
                     $queue_name, TRUE

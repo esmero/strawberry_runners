@@ -293,3 +293,11 @@ strawberryfield_runners.strawberry_runners_postprocessor.webpage:
     nlp_method:
       type: string
       label: 'The NLP method, spaCy or Polyglot'
+strawberry_runners.general:
+  type: config_object
+  label: General SBR Module settings
+  mapping:
+    force_processing:
+      type: boolean
+      label: 'When true, any Processor will be forced to run on any ADO change independently of individual configurations. Meant for testing or re-storing wrongly executed processing. Do not enable on production if you do not know what you are doing'
+      default: false
