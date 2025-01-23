@@ -8,6 +8,9 @@
 
 namespace Drupal\strawberry_runners\Plugin;
 
+use Drupal\Core\Ajax\AjaxResponse;
+use Drupal\Core\Ajax\InvokeCommand;
+use Drupal\Core\Ajax\MessageCommand;
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Datetime\DrupalDateTime;
@@ -24,6 +27,9 @@ use Psr\Log\LoggerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Plugin\PluginWithFormsTrait;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Symfony\Component\Process\Process;
+use Symfony\Component\Process\Exception\ProcessFailedException;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 
 
 abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase implements StrawberryRunnersPostProcessorPluginInterface, ContainerFactoryPluginInterface {
@@ -144,6 +150,8 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       'weight' => 0,
       // The id of the config entity from where these values came from.
       'configEntity' => '',
+      'uses_timeout_executable' => FALSE,
+      'timeout_path' => '/usr/bin/timeout'
     ];
   }
 
@@ -195,40 +203,132 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
   }
 
   protected function proc_execute($command, $timeout = 5) {
-    $handle = proc_open($command, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipe);
-    $startTime = microtime(true);
     $read = NULL;
-    if(!is_resource($handle)) {
-      return $read;
-    }
-    fclose($pipe[0]);
-    /* Read the command output and kill it if the process surpassed the timeout */
-    while(!feof($pipe[1])) {
-      $read .= fread($pipe[1], 8192);
-      if($startTime + $timeout < microtime(true)) {
-        $read = NULL;
-        break;
-      }
-    }
-
-    $status = proc_get_status($handle);
-    if($status['running'] == true) {
-      fclose($pipe[1]); //stdout
-      fclose($pipe[2]); //stderr
-      $ppid = $status['pid'];
-      exec('ps -o pid,ppid', $ps_out);
-      for($i = 1; $i <= count($ps_out) - 1; $i++) {
-        $pid_row = preg_split('/\s+/', trim($ps_out[$i] ?? ''));
-        if (((int)$pid_row[1] ?? '') == $ppid && is_numeric(($pid_row[0] ?? ''))) {
-          $pid_to_kill = (int) $pid_row[0];
-          $this->kill($pid_to_kill);
+    if (($this->getConfiguration()['uses_timeout_executable'] ?? NULL) && ($this->getConfiguration()['timeout_path'] ?? NULL)) {
+      // New way. Depends on the timeout binary
+      $timeout_path = $this->getConfiguration()['timeout_path'] ?? "timeout";
+      $ppid = NULL;
+      $failed = FALSE;
+      $pids = [];
+      // This is very tricky sorry:
+      $command_parts = explode("&&", $command);
+      $timeout_with_spare = $timeout + 10;
+      $_TAG = md5('sbr');
+      foreach ($command_parts as &$command_part) {
+        if (!strstr(PHP_OS, 'WIN')) {
+          $command_part = "{$timeout_path} {$timeout_with_spare} " . trim($command_part);
         }
       }
-      // Also kill the main one.
-      $this->kill($ppid);
-      proc_close($handle);
+      $command = implode(" && ", $command_parts);
+      try {
+        $process = Process::fromShellCommandline($command, NULL, NULL, NULL, $timeout);
+        $process->mustRun(function($type, $buffer) use ($process, &$pids): void {});
+      }
+      catch (ProcessFailedException $e) {
+        $this->logger->warning("Command @command Failed executing", [
+          '@command' => $command
+        ]);
+        $failed = TRUE;
+      }
+      catch (ProcessTimedOutException $e) {
+        $this->logger->warning("Command @command timed out", [
+          '@command' => $command
+        ]);
+        $failed = TRUE;
+      }
+
+      if (!$process->isSuccessful() || $failed) {
+        if ($process->getErrorOutput() !== '' && $process->getExitCode() !== 0) {
+          $this->logger->warning("Command @command Failed with exception and message @message", [
+            '@command' => $command,
+            '@message' => $process->getErrorOutput(),
+          ]);
+        }
+        $failed = TRUE;
+      }
+      if ($process->isSuccessful() && !$failed) {
+        return $process->getOutput();
+      }
+      elseif ($ppid) {
+        foreach ($pids as $pid) {
+          $this->kill($pid);
+        }
+      }
+      return $read;
+    }
+    else {
+      $this->logger->info("running legacy timout");
+      // Legacy way. Uses PHP mechanic
+      $handle = proc_open($command, [['pipe', 'r'], ['pipe', 'w'], ['pipe', 'w']], $pipe);
+      $startTime = microtime(true);
+      if(!is_resource($handle)) {
+        return $read;
+      }
+      fclose($pipe[0]);
+      /* Read the command output and kill it if the process surpassed the timeout */
+      while(!feof($pipe[1])) {
+        $read .= fread($pipe[1], 8192);
+        if($startTime + $timeout < microtime(true)) {
+          $read = NULL;
+          break;
+        }
+      }
+      $status = proc_get_status($handle);
+      if($status['running'] == true) {
+        fclose($pipe[1]); //stdout
+        fclose($pipe[2]); //stderr
+        $ppid = $status['pid'];
+        exec('ps -o pid,ppid', $ps_out);
+        for($i = 1; $i <= count($ps_out) - 1; $i++) {
+          $pid_row = preg_split('/\s+/', trim($ps_out[$i] ?? ''));
+          if (((int)$pid_row[1] ?? '') == $ppid && is_numeric(($pid_row[0] ?? ''))) {
+            $pid_to_kill = (int) $pid_row[0];
+            $this->kill($pid_to_kill);
+          }
+        }
+        // Also kill the main one.
+        $this->kill($ppid);
+        proc_close($handle);
+      }
+      return $read;
     }
     return $read;
+  }
+
+
+  /**
+   * Validate an Exec Path generically
+   * @param array $form
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *
+   * @return \Drupal\Core\Ajax\AjaxResponse
+   */
+  public function validatepath(array $form, FormStateInterface $form_state) {
+    $response = new AjaxResponse();
+    $triggering = $form_state->getTriggeringElement();
+    $selector = $triggering['#attributes']['data-drupal-selector'] ?? NULL;
+
+    // Triggering is
+   if ($selector) {
+     $canrun = \Drupal::service('strawberryfield.utility')->verifyCommand($form_state->getValue($triggering['#parents']));
+     if (!$canrun) {
+       $response->addCommand(new InvokeCommand("[data-drupal-selector='{$selector}']", 'addClass', ['error']));
+       $response->addCommand(new InvokeCommand("[data-drupal-selector='{$selector}']", 'removeClass', ['ok']));
+       $response->addCommand(new MessageCommand('Path is not valid.', NULL, [
+         'type' => 'error',
+         'announce' => 'Path is not valid.'
+       ]));
+     }
+     else {
+       $response->addCommand(new InvokeCommand("[data-drupal-selector='{$selector}']", 'removeClass', ['error']));
+       $response->addCommand(new InvokeCommand("[data-drupal-selector='{$selector}']", 'addClass', ['ok']));
+       $response->addCommand(new MessageCommand('Path is valid!', NULL, [
+         'type' => 'status',
+         'announce' => 'Path is valid!'
+       ]));
+     }
+   }
+    return $response;
   }
 
   /* The proc_terminate() function doesn't end proccess properly on Windows */
