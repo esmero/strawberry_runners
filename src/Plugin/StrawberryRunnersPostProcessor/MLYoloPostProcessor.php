@@ -160,7 +160,7 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
             $object['box']['x1'] = (($current_pixel_x1 + $json_annotation['x']) / ($width ?? 1));
             $object['box']['x2'] = (($current_pixel_x2 + $json_annotation['x']) / ($width ?? 1));
             $object['box']['y1'] = (($current_pixel_y1 + $json_annotation['y']) / ($height ?? 1));
-            $object['box']['y2'] = (($current_pixel_y2 + $json_annotation['h']) / ($height ?? 1));
+            $object['box']['y2'] = (($current_pixel_y2 + $json_annotation['y']) / ($height ?? 1));
           }
         }
         else {
