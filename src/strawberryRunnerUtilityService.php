@@ -308,7 +308,7 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         if ($global_config = $this->configFactory->get('strawberry_runners.general')) {
                           if ($global_config->get('force_processing')) {
                             $data->force = TRUE;
-                            $this->loggerFactory->get('strawberry_runners')->warning('Global Forced Processing is enabled.');
+                            $this->loggerFactory->get('strawberry_runner')->warning('Global Forced Processing is enabled.');
                           }
                         }
                         $data->plugin_config_entity_id = $activePluginId;
@@ -394,7 +394,7 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                   if ($global_config = $this->configFactory->get('strawberry_runners.general')) {
                     if ($global_config->get('force_processing')) {
                       $data->force = TRUE;
-                      $this->loggerFactory->get('strawberry_runners')->warning('Global Forced Processing is enabled.');
+                      $this->loggerFactory->get('strawberry_runner')->warning('Global Forced Processing is enabled.');
                     }
                   }
                   $data->plugin_config_entity_id = $activePluginId;
