@@ -279,7 +279,7 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
       $i++;
       $x0 = (int) ($object['box']['x1'] * $width) ;
       $y0 = (int) ($object['box']['y1'] * $height);
-      $l = $x0  - $margin < 0 ?xww 0 : $x0 - $margin ;
+      $l = $x0  - $margin < 0 ? 0 : $x0 - $margin ;
       $t = $y0  - $margin < 0 ? 0 : $y0 - $margin ;
       $x1 = (int) ($object['box']['x2']  * $width);
       $y1 = (int) ($object['box']['y2']  * $height);
