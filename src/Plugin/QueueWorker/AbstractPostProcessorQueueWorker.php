@@ -513,7 +513,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         }*/
         /* @var  $strawberry_runners_postprocessor_config \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity */
         $postprocessor_config_entity = $plugin_info['config_entity'];
-        $queue_name = $postprocessor_config_entity_chain->getPluginconfig()['processor_queue_type'] ?? 'realtime';
+        $queue_name = $postprocessor_config_entity->getPluginconfig()['processor_queue_type'] ?? 'realtime';
         $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$queue_name] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
         $input_property = $plugin_info['plugin_definition']['input_property'] ?? NULL;
         $input_argument = $plugin_info['plugin_definition']['input_argument'] ?? NULL;
