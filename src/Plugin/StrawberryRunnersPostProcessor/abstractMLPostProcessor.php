@@ -48,6 +48,14 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
     '/image/vision_transformer' => 768,
   ];
 
+
+  public const ML_IMAGE_INPUT_SIZE = [
+    '/image/yolo' => 640,
+    '/image/mobilenet' => 480,
+    '/image/insightface' => 640,
+    '/image/vision_transformer' => 224,
+  ];
+
   public const ML_TEXT_VECTOR_SIZE = [
     '/text/sentence_transformer' => 384,
   ];
