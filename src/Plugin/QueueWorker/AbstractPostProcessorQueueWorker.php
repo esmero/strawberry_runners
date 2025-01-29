@@ -332,7 +332,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // Now the strange case of a PDF, page 2, with annotations.
         if (isset($data->internal_sequence_id) && is_numeric($data->internal_sequence_id) && $data->internal_sequence_id !=1 ) {
           $sequence_key = $sequence_key . '-' . $data->internal_sequence_id;
-          // So Second Page of a PDF, first ML annotation will be 1 : 2-1
+          // So Second Page of a PDF, first ML annotation will be 2-1
         }
 
         if (is_a($entity, TranslatableInterface::class)) {
