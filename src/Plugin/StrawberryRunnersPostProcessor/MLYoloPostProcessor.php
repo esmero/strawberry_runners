@@ -124,20 +124,35 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
     if ($iiifidentifier == NULL || empty($iiifidentifier) || empty($width) || empty($height)) {
       return $output;
     }
-    //@TODO we know yolov8 takes 640px. We could pass just that to make it faster.
-    // But requires us to call info.json and pre-process the sizes.
+
+    //@TODO make this a method?
     if (!$iiif_image_url_region) {
       $iiif_image_url_region = 'full';
     }
 
-    $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/{$iiif_image_url_region}/full/0/default.jpg";
+    $max_dimension = max($width, $height);
+    if ($max_dimension <= static::ML_IMAGE_INPUT_SIZE['/image/yolo']) {
+      $iiif_image_url_size = 'full';
+    }
+    else {
+      $hratio = ($width/$max_dimension);
+      $vratio = ($height/$max_dimension);
+      $iiif_image_url_size = '!'. round(floor(static::ML_IMAGE_INPUT_SIZE['/image/yolo'] * $hratio),0).','.round(floor(static::ML_IMAGE_INPUT_SIZE['/image/yolo'] * $vratio),0);
+    }
+
+    $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/{$iiif_image_url_region}/{$iiif_image_url_size}/0/default.jpg";
     //@TODO we are not filtering here by label yet. Next release.
     $labels = [];
     $page_text = NULL;
     $output->plugin = NULL;
     $labels = [];
     $ML = $this->callImageML($iiif_image_url,$labels);
+
     $annotations = [];
+
+    // If we are chaining. And YOLO detects nothing. We should still pass a NO detection annotation. Even if we get no Vector here.
+
+
     $output->searchapi['vector_576'] = isset($ML['yolo']['vector']) && is_array($ML['yolo']['vector']) && count($ML['yolo']['vector'])== 576 ? $ML['yolo']['vector'] : NULL;
     if (isset($ML['yolo']['objects']) && is_array($ML['yolo']['objects']) && count($ML['yolo']['objects']) > 0 ) {
       if (!empty($json_annotation)) {
