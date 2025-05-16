@@ -34,6 +34,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
         'processor_queue_type' => 'background',
         'language_key' => 'language_iso639_3',
         'language_default' => 'eng',
+        'iif_server_image_type' => 'default.jpg',
         'timeout' => 300,
         'nlp_url' => 'http://esmero-nlp:6400',
         'ml_method' => NULL,
@@ -212,6 +213,21 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
       '#description' => $this->t('The IIIF Server to use. By default we will use the Internal (esmero-cantaloupe) endpoint'),
       '#required' => TRUE,
     ];
+
+    $element['iiif_server_image_type'] = [
+      '#type' => 'radios',
+      '#title' => $this->t('What type of IIIF Image API Quality to request'),
+      '#options' => [
+        'default.jpg' => 'The image is returned using the server’s default quality (e.g. color, gray or bitonal) for the image.',
+        'gray.jpg' => 'The image is returned in grayscale, where each pixel is black, white or any shade of gray in between.',
+        'bitonal.jpg' => 'The image returned is bitonal, where each pixel is either black or white.',
+        'color.jpg' => 'The image is returned with all of its color information.',
+      ],
+      '#default_value' => $this->getConfiguration()['iiif_server_image_type'] ?? 'default.jpg',
+      '#description' => $this->t('The quality parameter determines whether the IIIF image is delivered in color, grayscale or black and white. For certain ML models forcing grey might help skip a strongly opinionated vector component/feature.'),
+      '#required' => TRUE,
+    ];
+
 
     $element['timeout'] = [
       '#type' => 'number',

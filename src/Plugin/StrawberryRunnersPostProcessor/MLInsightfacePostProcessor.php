@@ -105,10 +105,9 @@ class MLInsightfacePostProcessor extends abstractMLPostProcessor {
     if ($iiifidentifier == NULL || empty($iiifidentifier)) {
       return $output;
     }
-    /// Mobilenet does its own (via mediapipe) image scalling. So we can pass a smaller if needed. Internally
-    /// it uses 480 x 480 but not good to pass square bc it makes % bbox calculation harder.
-    // But requires us to call info.json and pre-process the sizes.
-    $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/full/max/0/default.jpg";
+
+    $quality = $config['iiif_server_image_type'] ?? 'default.jpg';
+    $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/full/max/0/{$quality}";
     //@TODO we are not filtering here by label yet. Next release.
     $labels = [];
     $page_text = NULL;

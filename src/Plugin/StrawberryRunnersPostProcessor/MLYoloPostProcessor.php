@@ -132,15 +132,15 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
 
     $max_dimension = max($width, $height);
     if ($max_dimension <= static::ML_IMAGE_INPUT_SIZE['/image/yolo']) {
-      $iiif_image_url_size = 'full';
+      $iiif_image_url_size = 'max';
     }
     else {
       $hratio = ($width/$max_dimension);
       $vratio = ($height/$max_dimension);
       $iiif_image_url_size = '!'. round(floor(static::ML_IMAGE_INPUT_SIZE['/image/yolo'] * $hratio),0).','.round(floor(static::ML_IMAGE_INPUT_SIZE['/image/yolo'] * $vratio),0);
     }
-
-    $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/{$iiif_image_url_region}/{$iiif_image_url_size}/0/default.jpg";
+    $quality = $config['iiif_server_image_type'] ?? 'default.jpg';
+    $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/{$iiif_image_url_region}/{$iiif_image_url_size}/0/{$quality}";
     //@TODO we are not filtering here by label yet. Next release.
     $labels = [];
     $page_text = NULL;
