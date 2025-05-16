@@ -582,8 +582,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
                 $childdata->sequence_number = $childdata->sequence_number ?? $childdata->sequence_id;
 
                 $childdata->internal_sequence_id = $input_argument_index + 1;
-
-
                 Drupal::queue($queue_name, TRUE)
                   ->createItem($childdata);
               }
@@ -1066,7 +1064,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   }
 
   public function __destruct() {
-
     /* foreach($this->instanceFiles as $instanceFile) {
       $event_type = StrawberryfieldEventType::TEMP_FILE_CREATION;
       $current_timestamp = (new DrupalDateTime())->getTimestamp();

@@ -359,7 +359,7 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
                 if (isset($this->value->bbox->x)) {
                     $region = 'pct:'.($this->value->bbox->x).','.($this->value->bbox->y).','.($this->value->bbox->w).','.($this->value->bbox->h);
                 }
-                $iiif_image_url =  $sbr_config['iiif_server']."/{$iiifidentifier}/{$region}/!640,640/0/default.jpg";
+                $iiif_image_url =  $sbr_config['iiif_server']."/{$iiifidentifier}/{$region}/max/0/default.jpg";
                 try {
                     $response = $plugin_instance->callImageML($iiif_image_url, []);
                 }

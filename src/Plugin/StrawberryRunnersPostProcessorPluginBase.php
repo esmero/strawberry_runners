@@ -273,6 +273,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
           break;
         }
       }
+
       $status = proc_get_status($handle);
       if($status['running'] == true) {
         fclose($pipe[1]); //stdout
