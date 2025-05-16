@@ -5,6 +5,7 @@ namespace Drupal\strawberry_runners\Entity\Controller;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Config\Entity\DraggableListBuilder;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntityInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\EntityStorageInterface;
@@ -106,6 +107,47 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
     return $build;
   }
 
+  /**
+   * {@inheritdoc}
+   */
+  public function load() {
+    $entity_ids = $this->getEntityIds();
+    /* @var $entities strawberryRunnerPostprocessorEntityInterface[] */
+    $entities = $this->storage->loadMultipleOverrideFree($entity_ids);
+
+    // Sort the entities using the entity class's sort() method.
+    // See \Drupal\Core\Config\Entity\ConfigEntityBase::sort().
+    uasort($entities, [$this->entityType->getClass(), 'sort']);
+    foreach ($entities as $key => $entity) {
+      $hash[$entity->id()] = $key;
+    }
+    $hash_inverse = array_flip($hash);
+
+    $hierarchical = [];
+
+    foreach ($hash as $entity_id => $original_numeric_id) {
+      $id_of_parent = $entities[$original_numeric_id]->getParent();
+      if ($id_of_parent !== '') {
+          $hierarchical[$hash[$id_of_parent]] = $hierarchical[$hash[$id_of_parent]] ?? [];
+          $hierarchical[$hash[$id_of_parent]][$hash[$entity_id]]  = $hash[$entity_id];
+      }
+      else {
+        $hierarchical[$hash[$entity_id]] = $hierarchical[$hash[$entity_id]] ?? [];
+      }
+    }
+    $added = [];
+    foreach($hierarchical as $entity_id => $all_children) {
+      $this->sortTreeByChildren($entity_id, $hierarchical, $added);
+    }
+    $added = array_flip($added);
+    uksort($entities,
+      function ($a, $b) use ($added) {
+        return $added[$a] <=> $added[$b];
+      });
+
+    return $entities;
+  }
+
   public function buildForm(array $form, FormStateInterface $form_state) {
     $form = parent::buildForm($form, $form_state);
     $form[$this->entitiesKey]['#tabledrag'][] =
@@ -125,7 +167,7 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
           'group' => 'tabledrag-postprocessor-depth',
           'hidden' => TRUE,
         ];
-    return $form; 
+    return $form;
   }
 
   /**
@@ -137,8 +179,7 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
    * and inserts the 'edit' and 'delete' links as defined for the entity type.
    */
   public function buildHeader() {
-    $header['Title'] = $this->t('Post ID');
-    $header['label'] = $this->t('Post Processor Label');
+    $header['title'] = $this->t('Post Processor Label');
     $header['id'] = $this->t('ID');
     $header['parent'] = $this->t('Parent');
     $header['depth'] = $this->t('Depth');
@@ -156,24 +197,40 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
           '#theme' => 'indentation',
           '#size' => $entity->getDepth(),
         ],
-        '#plain_text' => $entity->id(),
+        '#plain_text' => $entity->label(),
     ];
-    $row['label'] = $entity->label();
     $row['id'] = [
+      'hidden' => [
       '#type' => 'hidden',
       '#value' => $entity->id(),
+        '#parents' => [$this->entitiesKey, $entity->id(), 'id'],
       '#attributes' => ['class' => ['tabledrag-postprocessor-id']],
+        ],
+      'text' => [
+        '#markup' =>  $entity->id(),
+      ]
     ];
     $row['parent'] =  [
+      'hidden' => [
           '#type' => 'hidden',
           '#default_value' => $entity->getParent(),
           '#parents' => [$this->entitiesKey, $entity->id(), 'parent'],
           '#attributes' => ['class' => ['tabledrag-postprocessor-parent']],
+      ],
+      'text' => [
+            '#markup' => $entity->getParent(),
+      ]
     ];
     $row['depth'] = [
+      'hidden' => [
         '#type' => 'hidden',
         '#default_value' =>  $entity->getDepth(),
+        '#parents' => [$this->entitiesKey, $entity->id(), 'depth'],
         '#attributes' => ['class' => ['tabledrag-postprocessor-depth']],
+        ],
+       'text' => [
+      '#markup' =>  $entity->getDepth(),
+    ]
     ];
     $row['active'] = $entity->isActive() ? [ '#markup' => $this->t('Yes')] : [ '#markup' =>$this->t('No')];
 
@@ -182,7 +239,6 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
 
   public function submitForm(array &$form, FormStateInterface $form_state) {
     foreach ($form_state->getValue($this->entitiesKey) as $id => $value) {
-
       if (isset($this->entities[$id]) && (
         $this->entities[$id]->get($this->weightKey) != $value['weight'] ||
         $this->entities[$id]->getDepth() != $value['depth'] ||
@@ -200,6 +256,37 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
 
   public function validateForm(array &$form, FormStateInterface $form_state) {
     parent::validateForm($form, $form_state); // TODO: Change the autogenerated stub
+  }
+
+  protected function sortTreeByChildren($row_id, $tree, &$ordered) {
+    if (isset($tree[$row_id]) && !in_array($row_id, $ordered)) {
+      $subtree[] = $row_id;
+      $offset = NULL;
+      foreach ($tree[$row_id] as $child_id) {
+        if (in_array($child_id, $ordered)) {
+          // When a child is found, we don't add it again to the main order.
+          // Maybe we should delete it?
+          $child_offset = array_search($child_id, $ordered, TRUE);
+          // When multiple offsets are present we take the one that inserts the subtree earlier.
+          if ($offset !== NULL) {
+            $offset = min($offset, $child_offset);
+          }
+          else {
+            $offset = $child_offset;
+          }
+        }
+        else {
+          // Only add of course if not there already.
+          $subtree[] = $child_id;
+        }
+      }
+      if ($offset !== NULL) {
+        array_splice($ordered, $offset,0, $subtree);
+      }
+      else {
+        $ordered = array_merge($ordered, $subtree);
+      }
+    }
   }
 
 

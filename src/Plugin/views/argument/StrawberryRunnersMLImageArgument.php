@@ -311,6 +311,7 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
      */
     public function setArgument($arg) {
         $this->argument = $arg;
+        $this->setOrGetArgumentSession($arg);
         return $this->validateArgument($arg);
     }
 
@@ -359,7 +360,8 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
                 if (isset($this->value->bbox->x)) {
                     $region = 'pct:'.($this->value->bbox->x).','.($this->value->bbox->y).','.($this->value->bbox->w).','.($this->value->bbox->h);
                 }
-                $iiif_image_url =  $sbr_config['iiif_server']."/{$iiifidentifier}/{$region}/!640,640/0/default.jpg";
+                $quality = $sbr_config['iiif_server_image_type'] ?? 'default.jpg';
+                $iiif_image_url =  $sbr_config['iiif_server']."/{$iiifidentifier}/{$region}/max/0/{$quality}";
                 try {
                     $response = $plugin_instance->callImageML($iiif_image_url, []);
                 }
@@ -539,4 +541,34 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
         }
         return $solr_query_string;
     }
+
+  public function setOrGetArgumentSession(&$arg) {
+
+    // Check if we store exposed value for current user.
+    $user = \Drupal::currentUser();
+
+    // Figure out which display id is responsible for the argument, so we
+    // know where to look for session stored values.
+    $display_id = ($this->view->display_handler->isDefaulted('filters')) ? 'default' : $this->view->current_display;
+
+    $session = $this->view->getRequest()->getSession();
+    $views_session = $session->get('views', []);
+    if (!isset($views_session[$this->view->storage->id()][$display_id])) {
+        $views_session[$this->view->storage->id()][$display_id] = [];
+    }
+    $session_ref = &$views_session[$this->view->storage->id()][$display_id];
+    if (($this->options['exception']['value'] ?? NULL) == $arg) {
+      // Means fetch it.. and also invalidate so we re-process
+      $arg = $session_ref['args'][$this->position] ?? $arg;
+      if ($arg != $this->options['exception']['value'] ?? NULL) {
+         unset($this->argument_validated);
+      }
+    }
+    else {
+      $session_ref['args'][$this->position] = $arg;
+      if (!empty($views_session)) {
+        $session->set('views', $views_session);
+      }
+    }
+  }
 }

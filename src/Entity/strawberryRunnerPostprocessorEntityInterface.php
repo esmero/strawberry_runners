@@ -29,4 +29,14 @@ interface strawberryRunnerPostprocessorEntityInterface extends ConfigEntityInter
    */
   public function setPluginconfig(array $pluginconfig): void;
 
+  /**
+   * @return string
+   */
+  public function getParent(): string;
+
+  /**
+   * @return int
+   */
+  public function getDepth(): int;
+
 }

@@ -27,7 +27,6 @@ strawberryfield_runners.strawberry_runners_postprocessor.*:
     parent:
       type: integer
       label: 'Parent ID of the Post processor Plugin'
-
 strawberryfield_runners.strawberry_runners_postprocessor.binary:
   type: config_object
   label: 'Strawberry Runners Post Processor Config Entity Binary specific config'
@@ -48,7 +47,7 @@ strawberryfield_runners.strawberry_runners_postprocessor.binary:
       label: 'Mimetypes(s) to limit this Processor to'
     path:
       type: string
-      label: 'The path for he binary to execute'
+      label: 'The path for the binary to execute'
     arguments:
       type: string
       label: 'Any additional argument your executable binary requires'
@@ -60,6 +59,12 @@ strawberryfield_runners.strawberry_runners_postprocessor.binary:
       label: 'Where and how the output will be used'
       sequence:
         - type: string
+    uses_timeout_executable:
+      type: boolean
+      label: 'if timeout host binary is to be used to control executable binary timeouts'
+    timeout_path:
+      type: string
+      label: 'The path for the timeout binary to execute'
     timeout:
       type: integer
       label: 'Timeout in seconds for this process'
@@ -141,6 +146,12 @@ strawberryfield_runners.strawberry_runners_postprocessor.ocr:
     processor_queue_type:
       type: string
       label: 'The queue to use for this processor'
+    uses_timeout_executable:
+      type: boolean
+      label: 'if timeout host binary is to be used to control executable binary timeouts'
+    timeout_path:
+      type: string
+      label: 'The path for the timeout binary to execute'
     timeout:
       type: integer
       label: 'Timeout in seconds for this process'
@@ -182,6 +193,12 @@ strawberryfield_runners.strawberry_runners_postprocessor.filesequence:
       label: 'Where and how the output will be used'
       sequence:
         - type: string
+    uses_timeout_executable:
+      type: boolean
+      label: 'if timeout host binary is to be used to control executable binary timeouts'
+    timeout_path:
+      type: string
+      label: 'The path for the timeout binary to execute'
     timeout:
       type: integer
       label: 'Timeout in seconds for this process'
@@ -214,6 +231,12 @@ strawberryfield_runners.strawberry_runners_postprocessor.waczpages:
       label: 'Where and how the output will be used'
       sequence:
         - type: string
+    uses_timeout_executable:
+      type: boolean
+      label: 'if timeout host binary is to be used to control executable binary timeouts'
+    timeout_path:
+      type: string
+      label: 'The path for the timeout binary to execute'
     timeout:
       type: integer
       label: 'Timeout in seconds for this process'
@@ -246,6 +269,12 @@ strawberryfield_runners.strawberry_runners_postprocessor.webpage:
       label: 'Where and how the output will be used'
       sequence:
         - type: string
+    uses_timeout_executable:
+      type: boolean
+      label: 'if timeout host binary is to be used to control executable binary timeouts'
+    timeout_path:
+      type: string
+      label: 'The path for the timeout binary to execute'
     timeout:
       type: integer
       label: 'Timeout in seconds for this process'
@@ -264,3 +293,11 @@ strawberryfield_runners.strawberry_runners_postprocessor.webpage:
     nlp_method:
       type: string
       label: 'The NLP method, spaCy or Polyglot'
+strawberry_runners.general:
+  type: config_object
+  label: General SBR Module settings
+  mapping:
+    force_processing:
+      type: boolean
+      label: 'When true, any Processor will be forced to run on any ADO change independently of individual configurations. Meant for testing or re-storing wrongly executed processing. Do not enable on production if you do not know what you are doing'
+      default: false

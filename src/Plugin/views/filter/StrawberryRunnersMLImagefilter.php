@@ -486,10 +486,11 @@ JSON;
         // pct:x,y,w,h
         // !w,h
         $region = 'full';
-        if (isset($this->validated_exposed_input->bbox->x)) {
+        if (isset($this->validated_exposed_input->bbox->x) && ((int)$this->validated_exposed_input->bbox->w ?? 0) > 0 ) {
           $region = 'pct:'.($this->validated_exposed_input->bbox->x * 100).','.($this->validated_exposed_input->bbox->y * 100).','.($this->validated_exposed_input->bbox->w * 100).','.($this->validated_exposed_input->bbox->h * 100);
         }
-        $iiif_image_url =  $sbr_config['iiif_server']."/{$iiifidentifier}/{$region}/!640,640/0/default.jpg";
+        $quality = $sbr_config['iiif_server_image_type'] ?? 'default.jpg';
+        $iiif_image_url =  $sbr_config['iiif_server']."/{$iiifidentifier}/{$region}/max/0/{$quality}";
         try {
           $response = $plugin_instance->callImageML($iiif_image_url, []);
         }

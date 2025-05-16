@@ -189,21 +189,13 @@ class strawberryRunnerPostprocessorEntity extends ConfigEntityBase implements st
    */
   public static function sort(ConfigEntityInterface $a, ConfigEntityInterface $b) {
 
-    // Check if the entities are flags, if not go with the default.
     if ($a instanceof strawberryRunnerPostprocessorEntityInterface && $b instanceof strawberryRunnerPostprocessorEntityInterface) {
-
-      if ($a->isActive() && $b->isActive()) {
-        return static::hierarchicalSort($a, $b);
-      }
-      elseif (!$a->isActive()) {
-        return -1;
-      }
-      elseif (!$b->isActive()) {
-        return 1;
-      }
+      return static::hierarchicalSort($a, $b);
+    }
+    else {
+      return static::sort($a, $b);
     }
 
-    return parent::sort($a, $b);
   }
 
   /**
@@ -216,17 +208,28 @@ class strawberryRunnerPostprocessorEntity extends ConfigEntityBase implements st
     $a_weight = isset($a->weight) ? $a->weight : 0;
     $b_weight = isset($b->weight) ? $b->weight : 0;
     if ($a_parent == $b->id()) {
-      return 1;
-    }
-    if ($b_parent == $a->id()) {
       return -1;
     }
+    if ($b_parent == $a->id()) {
+      return 1;
+    }
+   if ($a_parent == '' && $b_parent !== '') {
+     return 1;
+   }
+    if ($a_parent !== '' && $b_parent == '') {
+      return -1;
+    }
+
     if ($a_weight == $b_weight) {
       $a_label = $a->label();
       $b_label = $b->label();
       return strnatcasecmp($a_label, $b_label);
     }
-    return ($a_weight < $b_weight) ? -1 : 1;
+    if ($a->depth != $b->depth) {
+      return (($a->depth ?? 0) * -1) <=> (($b->depth ?? 0) * -1);
+    }
+
+    return $a_weight <=> $b_weight;
   }
 
 }

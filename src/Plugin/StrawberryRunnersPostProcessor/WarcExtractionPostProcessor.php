@@ -33,13 +33,13 @@ class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBa
    */
   public function defaultConfiguration() {
     return [
-      'source_type' => 'asstructure',
-      'mime_type' => ['application/pdf'],
-      'path' => '',
-      'arguments' => '',
-      'output_type' => 'json',
-      'output_destination' => 'subkey',
-    ] + parent::defaultConfiguration();
+        'source_type' => 'asstructure',
+        'mime_type' => ['application/pdf'],
+        'path' => '',
+        'arguments' => '',
+        'output_type' => 'json',
+        'output_destination' => 'subkey',
+      ] + parent::defaultConfiguration();
   }
 
 
@@ -81,8 +81,8 @@ class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBa
       '#states' => [
         'visible' => [
           ':input[name="pluginconfig[source_type]"]' => ['value' => 'asstructure'],
-          ],
         ],
+      ],
       '#required' => TRUE,
     ];
 
@@ -115,16 +115,45 @@ class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBa
       '#description' => t('As Input for another processor Plugin will only have an effect if another Processor is setup to consume this output.'),
       '#required' => TRUE,
     ];
-
-     $element['timeout'] = [
-       '#type' => 'number',
-       '#title' => $this->t('Timeout in seconds for this process.'),
-       '#default_value' => $this->getConfiguration()['timeout'],
-       '#description' => $this->t('If the process runs out of time it can still be processed again.'),
-       '#size' => 3,
-       '#maxlength' => 3,
-       '#min' => 1,
-     ];
+    $element['timeout'] = [
+      '#type' => 'number',
+      '#title' => $this->t('Timeout in seconds for this process.'),
+      '#default_value' => $this->getConfiguration()['timeout'],
+      '#description' => $this->t('If the process runs out of time it can still be processed again.'),
+      '#size' => 3,
+      '#maxlength' => 3,
+      '#min' => 1,
+    ];
+    $element['uses_timeout_executable'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Use the Host\'s timeout binary to control process timeout.'),
+      '#default_value' => $this->getConfiguration()['uses_timeout_executable'],
+      '#description' => t('timeout allows a PHP independent way of controlling stuck or unresponsive binary processes. Recommended.'),
+      '#required' => FALSE,
+    ];
+    $element['timeout_path'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('The system path to the timeout binary.'),
+      '#default_value' => $this->getConfiguration()['timeout_path'],
+      '#description' => t('full system path to the "timeout" binary present in the same environment your PHP runs, e.g. if docker (esmero-php), it will be at <em>/usr/bin/timeout</em>'),
+      '#required' => FALSE,
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[uses_timeout_executable]"]' => ['checked' => TRUE],
+        ],
+        'required' => [
+          ':input[name="pluginconfig[uses_timeout_executable]"]' => ['checked' => TRUE],
+        ],
+      ],
+      '#prefix' => '<span class="timeout-path-validation"></span>',
+      '#ajax' => [
+        'callback' => [$this, 'validatePath'],
+        'effect' => 'fade',
+        'wrapper' => 'timeout-path-validation',
+        'method' => 'replace',
+        'event' => 'change'
+      ]
+    ];
     $element['weight'] = [
       '#type' => 'number',
       '#title' => $this->t('Order or execution in the global chain.'),
@@ -158,20 +187,20 @@ class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBa
     // Needed since this executes locally on the server via SHELL.
     $input_property =  $this->pluginDefinition['input_property'];
     if (isset($io->input->{$input_property})) {
-       $warc_reader = new WarcReader($io->input->{$input_property});
-       $output = NULL;
-       while(($record = $warc_reader->nextRecord()) != FALSE){
+      $warc_reader = new WarcReader($io->input->{$input_property});
+      $output = NULL;
+      while(($record = $warc_reader->nextRecord()) != FALSE){
         // A WARC record is broken into two parts: header and content.
         // header contains metadata about content, while content is the actual resource captured.
-         $output[] = $record['header'];
+        $output[] = $record['header'];
         //print_r($record['content']);
       }
-        if (is_null($output)) {
-          throw new \Exception("Could not execute WarcReader");
-        }
-        $io->output =  $output;
-
+      if (is_null($output)) {
+        throw new \Exception("Could not execute WarcReader");
       }
+      $io->output =  $output;
+
+    }
     else {
       throw new \InvalidArgumentException(\sprintf("Invalid arguments passed to %s",$this->getPluginId()));
     }
