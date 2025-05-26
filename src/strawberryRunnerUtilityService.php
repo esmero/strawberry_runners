@@ -82,6 +82,16 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
   protected $account;
 
   /**
+   * @var \Drupal\Core\Messenger\MessengerInterface
+   */
+  private MessengerInterface $messenger;
+
+  /**
+   * @var \Drupal\Core\StringTranslation\TranslationInterface
+   */
+  private TranslationInterface $stringTranslation;
+
+  /**
    * StrawberryRunnersEventInsertPostProcessingSubscriber constructor.
    *
    * @param \Drupal\Core\StringTranslation\TranslationInterface $string_translation
