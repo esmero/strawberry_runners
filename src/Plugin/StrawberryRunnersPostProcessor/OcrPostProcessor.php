@@ -560,6 +560,16 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           }
           else {
             if ($capabilities && is_array($capabilities) && isset($capabilities['polyglot_lang_models']) && is_array($capabilities['polyglot_lang_models'])) {
+              if (empty($capabilities['polyglot_lang_models'])) {
+                // Running 1.4.2, since polyglot is down we will give it a default
+                $capabilities['polyglot_lang_models'] = [
+                  "en:en" => "en",
+                  "es:es" => "es",
+                  "it:it" => "it",
+                  "hi:hi" => "hi",
+                  "pt:pt" => "pt"
+                ];
+              }
               $languages_enabled = array_keys($capabilities['polyglot_lang_models']);
               $languages_enabled = array_map(function ($languages_enabled) {
                 $parts = explode(':', $languages_enabled);
