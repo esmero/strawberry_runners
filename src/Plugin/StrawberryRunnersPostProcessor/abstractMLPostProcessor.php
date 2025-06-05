@@ -278,7 +278,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
     if (!empty($config['nlp_url']) && !empty($config['ml_method'])) {
       $nlp = $this->getNLPClient();
       if ($nlp) {
-        $capabilities = $nlp->get_call('/status', NULL);
+        $capabilities = $nlp->get_call('/status', NULL, 3);
         $languages_enabled = [];
         $detected_lang = NULL;
         //@TODO Should cache this too. Or deprecate ::language for 0.5.0
