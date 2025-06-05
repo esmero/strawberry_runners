@@ -144,7 +144,7 @@ class StrawberryRunnersPostProcess extends StrawberryfieldJsonPatch implements V
     $active_plugins = $this->strawberryRunnerUtilityService->getActivePluginConfigs();
     $options = [];
     foreach ($active_plugins as $source => $processors) {
-      $options = array_combine(array_keys($processors), array_keys($processors));
+      $options = array_merge($options, array_combine(array_keys($processors), array_keys($processors)));
     }
     $options = array_unique($options);
     $form['plugins'] = [

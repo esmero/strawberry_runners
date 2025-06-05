@@ -107,7 +107,7 @@ class MLInsightfacePostProcessor extends abstractMLPostProcessor {
     }
 
     $quality = $config['iiif_server_image_type'] ?? 'default.jpg';
-    $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/full/max/0/{$quality}";
+    $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/full/!1024,1024/0/{$quality}";
     //@TODO we are not filtering here by label yet. Next release.
     $labels = [];
     $page_text = NULL;
@@ -206,7 +206,8 @@ class MLInsightfacePostProcessor extends abstractMLPostProcessor {
     $arguments['iiif_image_url'] =  $image_url;
     //@TODO we are not filtering here by label yet. Next release.
     $arguments['labels'] = $labels;
-    $ML = $nlpClient->get_call($config['ml_method'],  $arguments, 1);
+    $ML = $nlpClient->get_call($config['ml_method'],  $arguments, 3);
+    error_log('Insight called');
     return $ML;
   }
 

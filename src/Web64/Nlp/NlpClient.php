@@ -28,6 +28,25 @@ class NlpClient extends Web64NlpClient {
     return NULL;
   }
 
+  protected function file_get_contents_curl($url) {
+    $ch = curl_init();
+
+    curl_setopt($ch, CURLOPT_AUTOREFERER, TRUE);
+    curl_setopt($ch, CURLOPT_HEADER, 0);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_FOLLOWLOCATION, TRUE);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, FALSE); 
+
+    $data = curl_exec($ch);
+    $info = curl_getinfo($ch,CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    return [$data,$info];
+  }
+
+
+
   public function get_call($path, $params, $retry = 0) {
     $url = $this->api_url . $path;
 
@@ -37,19 +56,32 @@ class NlpClient extends Web64NlpClient {
       $url .= '?' . http_build_query($params);
     }
 
-    $result = @file_get_contents($url, FALSE);
+    $result = $this->file_get_contents_curl($url);
 
-    $response = isset($http_response_header) && isset($http_response_header[0])
-      ? $this->isValidResponse($http_response_header[0]) : FALSE;
-    if ($response && !empty($result)) {
-      return json_decode($result, 1);
+
+    $response = isset($result[1])
+      ? $this->isValidResponseCurl($result[1]) : FALSE;
+    if ($response && !empty($result[0])) {
+      return json_decode($result[0], 1);
     }
     else {
-      if ($retry >= static::MAX_RETRY_HOST) {
+      if ($retry > static::MAX_RETRY_HOST) {
         return NULL;
       }
-      $this->chooseHost();
-      return $this->post_call($path, $params, $retry);
+      if (empty($params) || $retry <  static::MAX_RETRY_HOST) {
+        // If the server went down sleep  for number of retries.
+        // Will will mostly apply to /status
+        error_log('retrying');
+
+        sleep($retry * 2);
+        return $this->get_call($path, $params, $retry);
+      }
+      else {
+        // Try with post, but only once.
+        $retry = 1;
+        error_log('retrying with POST');
+        return $this->post_call($path, $params, $retry);
+      }
     }
   }
 
@@ -82,6 +114,7 @@ class NlpClient extends Web64NlpClient {
       if ($retry >= static::MAX_RETRY_HOST) {
         return NULL;
       }
+      sleep($retry * 2);
       $this->chooseHost();
       return $this->post_call($path, $params, $retry);
     }
@@ -117,6 +150,22 @@ class NlpClient extends Web64NlpClient {
         return TRUE;
       }
     }
+    return FALSE;
+  }
+
+  /**
+   * Checks if a Python Webserver Response CODE is valid (CURL)
+   *
+   * @param $response_code
+   *   THECODE
+   *
+   * @return bool
+   */
+  protected function isValidResponseCURL($response_code) {
+      $response_code = (int) $response_code;
+      if ($response_code >= 200 && $response_code <= 299) {
+        return TRUE;
+      }
     return FALSE;
   }
 }

@@ -143,7 +143,7 @@ class MLViTPostProcessor extends abstractMLPostProcessor {
     }
 
     $quality = $config['iiif_server_image_type'] ?? 'default.jpg';
-    $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/{$iiif_image_url_region}/max/0/{$quality}";
+    $iiif_image_url =  $config['iiif_server']."/{$iiifidentifier}/{$iiif_image_url_region}/!1024,1024/0/{$quality}";
 
     //@TODO we are not filtering here by label yet. Next release.
     $labels = [];
