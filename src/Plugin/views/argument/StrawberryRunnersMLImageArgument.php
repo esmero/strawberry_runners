@@ -313,7 +313,7 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
   public function setArgument($arg) {
     $this->argument = $arg;
     $this->setOrGetArgumentSession($arg);
-    return $this->validateArgument($arg);
+    return  $this->argument_validated;
   }
 
 
@@ -357,47 +357,53 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
           $sbr_config
         );
         if ($plugin_instance instanceof abstractMLPostProcessor) {
-          $iiifidentifier = urlencode(
-            StreamWrapperManager::getTarget($this->value->iiif_image_id) ?? NULL
-          );
-          if ($iiifidentifier == NULL || empty($iiifidentifier)) {
-            return;
+          // Now we need to only call the ML backend if no vector is present in the value
+          // Means a region, a file was passed.
+          if ($this->value->vector ?? NULL) {
+            // We don't need to cache this bc there is no heavy backend work done.
+            $response[] = ['vector' => $this->value->vector] ;
           }
-          // basically the whole image if no bbox will be used as default
-          // Now prep the image for fetching. First pass, just an ID, then deal with the UUID for the file option
-          $region = 'full';
-          if (isset($this->value->bbox->x)) {
-            $region = 'pct:' . ($this->value->bbox->x) . ',' . ($this->value->bbox->y) . ',' . ($this->value->bbox->w) . ',' . ($this->value->bbox->h);
-          }
-          $quality = $sbr_config['iiif_server_image_type'] ?? 'default.jpg';
-          // Eventually we will need to put a config for the size sent to processing. max was too large
-          // Crashing the ViT processor memory
-          $iiif_image_url = $sbr_config['iiif_server'] . "/{$iiifidentifier}/{$region}/!640,640/0/{$quality}";
-          try {
-            error_log('calling for $iiif_image_url');
-            $response = $plugin_instance->callImageML($iiif_image_url, []);
-            if (isset($response['message'])) {
-              // Now here is an issue. Each endpoint will return the vector inside a yolo/etc.
-              // We should change that and make it generic (requires new python code/rebuilding NLP container)
-              // so for now we will use the ml method config split/last to get the right key.
-              foreach (["error", "message", "web64"] as $remove) {
-                unset($response[$remove]);
-              }
-              $tags = Cache::mergeTags($this->view->getCacheTags(), $plugin_config_entity->getCacheTags());
-              $this->cache->set($cache_id, $response,  (\Drupal::time()->getRequestTime() + 7200), $tags);
+          else {
+            $iiifidentifier = urlencode(
+              StreamWrapperManager::getTarget($this->value->iiif_image_id) ?? NULL
+            );
+            if ($iiifidentifier == NULL || empty($iiifidentifier)) {
+              return;
             }
-          }
-          catch (\Exception $exception) {
-            // Give user feedback
-            return;
+            // basically the whole image if no bbox will be used as default
+            // Now prep the image for fetching. First pass, just an ID, then deal with the UUID for the file option
+            $region = 'full';
+            if (isset($this->value->bbox->x)) {
+              $region = 'pct:' . ($this->value->bbox->x) . ',' . ($this->value->bbox->y) . ',' . ($this->value->bbox->w) . ',' . ($this->value->bbox->h);
+            }
+            $quality = $sbr_config['iiif_server_image_type'] ?? 'default.jpg';
+            // Eventually we will need to put a config for the size sent to processing. max was too large
+            // Crashing the ViT processor memory
+            $iiif_image_url = $sbr_config['iiif_server'] . "/{$iiifidentifier}/{$region}/!640,640/0/{$quality}";
+            try {
+              error_log('calling for $iiif_image_url');
+              $response = $plugin_instance->callImageML($iiif_image_url, []);
+              if (isset($response['message'])) {
+                // Now here is an issue. Each endpoint will return the vector inside a yolo/etc.
+                // We should change that and make it generic (requires new python code/rebuilding NLP container)
+                // so for now we will use the ml method config split/last to get the right key.
+                foreach (["error", "message", "web64"] as $remove) {
+                  unset($response[$remove]);
+                }
+                $tags = Cache::mergeTags($this->view->getCacheTags(), $plugin_config_entity->getCacheTags());
+                $this->cache->set($cache_id, $response, (\Drupal::time()
+                    ->getRequestTime() + 7200), $tags);
+              }
+            }
+            catch (\Exception $exception) {
+              // Give user feedback
+              return;
+            }
           }
         }
       }
 
       if (!empty($response)) {
-        // Now here is an issue. Each endpoint will return the vector inside a yolo/etc.
-        // We should change that and make it generic (requires new python code/rebuilding NLP container)
-        // so for now we will use the ml method config split/last to get the right key.
         $all_knns =  $this->query->getOption('sbf_knn') ?? [];
         foreach ($response as $values) {
           if (isset($values['vector']) && is_array($values['vector']) && count($values['vector']) == abstractMLPostProcessor::ML_IMAGE_VECTOR_SIZE[$sbr_config['ml_method']]) {
@@ -409,7 +415,6 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
           $this->query->setOption('sbf_knn', $all_knns);
         }
       }
-
     }
   }
 
@@ -426,6 +431,7 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
     if ($this->isException($arg)) {
       return $this->argument_validated = TRUE;
     }
+
 
     $plugin = $this->getPlugin('argument_validator');
     if ($arg && $this->is_base64(urldecode($arg))) {
@@ -451,7 +457,27 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
       if ($decoded) {
         $decoded_object = json_decode($decoded);
         if ($decoded_object) {
-          if (!empty($decoded_object->fileuuid ?? NULL) &&
+          // Deals with a pre-computed/pre-existing/provided Vector and processor combo
+          // Will only validate if this exposed arg plugin conf matches the vector source
+          // Allow a single Payload to hold vectors for multiple processors
+          if (!empty($decoded_object->vectors ?? NULL) &&
+            ($this->options['ml_strawberry_postprocessor'] ?? NULL) &&
+            ($decoded_object->vectors ?? NULL) &&
+            ($decoded_object->vectors->{$this->options['ml_strawberry_postprocessor']} ?? NULL)) {
+            $vector = $decoded_object->vectors->{$this->options['ml_strawberry_postprocessor']};
+            // We should validate that vector is an actual vector and matches the dimensions of the field
+            // But since we have the processor plugin data in the query method we will defer to there for a
+            // final decision.
+            if (is_array($vector) && !StrawberryfieldJsonHelper::arrayIsMultiIterative($vector)) {
+              $vector = array_values($vector);
+              if (count($vector)) {
+                $this->expanded_argument = new \stdClass;
+                $this->argument_validated = TRUE;
+                $this->expanded_argument->vector = $vector;
+              }
+            }
+          }
+          elseif (!empty($decoded_object->fileuuid ?? NULL) &&
             !empty($decoded_object->nodeuuid ?? NULL) &&
             !empty($decoded_object->fragment ?? NULL)) {
             $files = $this->fileEntityStorage->loadByProperties(['uuid' => $decoded_object->fileuuid]);
@@ -479,6 +505,7 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
       "fragment": annotation.target.selector.value,
       "textualbody": annotation.body?.value
       "flavorid" => groupssetting.flavorid
+      "vectors_ => processor_id => vector   OPTIONAL if a vector has been processed already. But has priority.
     } */
       }
     }
@@ -500,9 +527,6 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
 
     $fields_info = $index->getFields();
     foreach ($fields_info as $field_id => $field) {
-      //if (($field->getDatasourceId() == 'strawberryfield_flavor_datasource') && ($field->getType() == "integer")) {
-      // Anything except text, fulltext or any solr_text variations. Also skip direct node id and UUIDs which would
-      // basically return the same ADO as input filtered, given that those are unique.
       $property_path = $field->getPropertyPath();
       $datasource_id = $field->getDatasourceId();
       if (str_starts_with($field->getType(), 'densevector_') === TRUE) {
@@ -514,16 +538,16 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
   }
 
   protected function getSbfDenseVectorFieldSource($field_id) {
-    $fields = [];
     /** @var \Drupal\search_api\IndexInterface $index */
     $index = Index::load(substr($this->table, 17));
     $fields_info = $index->getField($field_id);
     return $fields_info;
   }
 
-  protected function getExistingDenseVectorForImage($uri, $field) {
-
+  protected function getExistingDenseVectorsForImage($uri, $field) {
+    // Future.
   }
+
 
   protected function is_base64($s){
     // Check if there are valid base64 characters
@@ -565,24 +589,62 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
     // Figure out which display id is responsible for the argument, so we
     // know where to look for session stored values.
     $display_id = ($this->view->display_handler->isDefaulted('filters')) ? 'default' : $this->view->current_display;
-
+    $this->argument_validated = NULL;
     $session = $this->view->getRequest()->getSession();
     $views_session = $session->get('views', []);
     if (!isset($views_session[$this->view->storage->id()][$display_id])) {
       $views_session[$this->view->storage->id()][$display_id] = [];
     }
     $session_ref = &$views_session[$this->view->storage->id()][$display_id];
+    // Deals with no argument at all (e.g 'all');
     if (($this->options['exception']['value'] ?? NULL) == $arg) {
       // Means fetch it.. and also invalidate so we re-process
+      $passed_arg = $arg;
       $arg = $session_ref['args'][$this->position] ?? $arg;
       if ($arg != $this->options['exception']['value'] ?? NULL) {
-        unset($this->argument_validated);
+        if (!$this->validateArgument($arg)) {
+          // restore original $arg;
+          $arg = $passed_arg;
+          $this->argument_validated = NULL;
+        }
+      }
+      else {
+        // means 'all'
+        $this->argument_validated = TRUE;
       }
     }
-    else {
-      $session_ref['args'][$this->position] = $arg;
-      if (!empty($views_session)) {
-        $session->set('views', $views_session);
+    // Views Session is being set by default every 180 seconds.
+    // That is once every 3 minutes.
+    // Totally useless if we want to use session storage to keep
+
+    // TRUE if either the session had wrong data/not for this View data
+    // Or the passed value is actual input
+    if (!isset($this->argument_validated) || $this->argument_validated == FALSE) {
+      // Validate here. Since we could now get Arguments broadcasted not meant for us
+      if ($this->validateArgument($arg)) {
+        $session_ref['args'][$this->position] = $arg;
+        error_log('setting session to arg from'. $display_id);
+        if (!empty($views_session)) {
+          $session->set('views', $views_session);
+        }
+      }
+      else {
+        $this->argument_validated = NULL;
+        // Was not for me or invalid. To avoid breaking stuff, check if the session had a different value that was valid
+        error_log('not for me '.$display_id);
+        if ($this->validateArgument($session_ref['args'][$this->position])) {
+          error_log('saved in session is valid so restoring');
+          $arg = $session_ref['args'][$this->position];
+        }
+        else {
+          error_log('saved in session INvalid, unsetting from session.');
+          if (($this->options['exception']['value'] ?? NULL)) {
+            $this->argument_validated = TRUE;
+            $arg = $this->options['exception']['value'];
+            unset($session_ref['args'][$this->position]);
+            $session->set('views', $views_session);
+          }
+        }
       }
     }
   }
