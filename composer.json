@@ -1,6 +1,6 @@
 {
     "name": "strawberryfield/strawberry_runners",
-    "description": "Strawberryfield post processing module for Drupal 10/11 using PHP React",
+    "description": "Strawberryfield post processing module for Drupal 11 using PHP React",
     "type": "drupal-module",
     "license": "GPL-2.0+",
     "homepage": "https://github.com/esmero/strawberry_runners",
@@ -22,8 +22,8 @@
         "php": ">=8.1",
         "ext-zip": "*",
         "ext-json": "*",
-        "drupal/views_bulk_operations": "^4.2",
-        "drupal/core": "^10.3",
+        "drupal/views_bulk_operations": ">=4.4.1",
+        "drupal/core": "^11",
         "drupal/search_api_solr": "~4.1",
         "strawberryfield/strawberryfield": "1.5.0.x-dev",
         "react/event-loop": "^1.1",
