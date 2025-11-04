@@ -36,6 +36,6 @@
         "ext-xmlwriter": "*"
     },
     "conflict": {
-        "drupal/views_bulk_operations": ">4.3.4"
+        "drupal/views_bulk_operations": "<4.4.1"
     }
 }
