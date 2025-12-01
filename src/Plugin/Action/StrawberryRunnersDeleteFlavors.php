@@ -10,7 +10,7 @@ use Drupal\search_api\SearchApiException;
 use Drupal\search_api\Utility\Utility;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\views\ViewExecutable;
-use Drupal\views_bulk_operations\Action\ViewsBulkOperationsActionCompletedTrait;
+use Drupal\views_bulk_operations\Traits\ViewsBulkOperationsActionCompletedTrait;
 use Drupal\views_bulk_operations\Action\ViewsBulkOperationsActionInterface;
 use Drupal\Core\Plugin\PluginFormInterface;
 use Drupal\strawberryfield\Plugin\Action\StrawberryfieldJsonPatch;
