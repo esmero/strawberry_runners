@@ -20,8 +20,8 @@ function strawberry_runners_views_data_alter(array &$data) {
       $key = 'search_api_index_' . $index->id();
       $table = &$data[$key];
 
-      $ml_image_filter = _search_api_views_find_field_alias('sbr_imageml_filter', $table);
-      $ml_text_filter = _search_api_views_find_field_alias('sbr_textml_filter', $table);
+      $ml_image_filter = format_strawberryfield_findFieldAlias('sbr_imageml_filter', $table);
+      $ml_text_filter = format_strawberryfield_findFieldAlias('sbr_textml_filter', $table);
       $table[$ml_image_filter] = [
         'title'  => t('Image Similarity Filter via KNN (Experimental)'),
         'group' => t('Search'),
