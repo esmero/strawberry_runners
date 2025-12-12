@@ -8,15 +8,13 @@ class VTTProcessor implements \Iterator
   protected $maxTime = NULL;
   protected $position = 0;
 
-  public function __construct(string $transcriptOrPath)
+  public function __construct(string $fulltranscript)
   {
-    if (preg_match('/WEBVTT/', $transcriptOrPath)) {
-      $transcript = explode("\n", $transcriptOrPath);
-    } else {
-      $transcript = file($transcriptOrPath);
+    if (preg_match('/WEBVTT/', $fulltranscript)) {
+      $transcript = explode("\n", $fulltranscript);
+      $this->position = 0;
+      $this->lines = is_array($transcript) ? $this->normalizeLines($transcript) : [];
     }
-    $this->position = 0;
-    $this->lines = $this->normalizeLines($transcript);
   }
 
   protected function normalizeLines(array $lines): array
@@ -54,9 +52,13 @@ class VTTProcessor implements \Iterator
     /**
      * @inheritDoc
      */
-    public function current(): mixed
-    {
-      return $this->lines[$this->position];
+    public function current(): mixed {
+      if (isset($this->lines[$this->position])) {
+        return $this->lines[$this->position];
+      }
+     else {
+       return NULL;
+     }
     }
 
     /**
