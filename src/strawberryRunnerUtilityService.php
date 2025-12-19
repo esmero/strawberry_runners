@@ -14,6 +14,7 @@ use Drupal\Core\Session\AccountInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
 use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager;
+use Drupal\strawberry_runners\Plugin\QueueWorker\AbstractPostProcessorQueueWorker;
 
 class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceInterface {
 
@@ -79,6 +80,16 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
    * @var \Drupal\Core\Session\AccountInterface
    */
   protected $account;
+
+  /**
+   * @var \Drupal\Core\Messenger\MessengerInterface
+   */
+  private MessengerInterface $messenger;
+
+  /**
+   * @var \Drupal\Core\StringTranslation\TranslationInterface
+   */
+  private TranslationInterface $stringTranslation;
 
   /**
    * StrawberryRunnersEventInsertPostProcessingSubscriber constructor.
@@ -251,6 +262,8 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                               $asstructure["dr:mimetype"], $valid_mimes
                             )))
                       ) {
+                        $config['processor_queue_type'] = $config['processor_queue_type'] ?? 'realtime';
+                        $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$config['processor_queue_type']] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
                         $data = new \stdClass();
                         $data->fid = $asstructure['dr:fid'];
                         $data->nid = $entity->id();
@@ -302,14 +315,20 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         // Issue with JSON passed property is that we can no longer
 
                         $data->force = $force_from_metadata_or_arg;
+                        if ($global_config = $this->configFactory->get('strawberry_runners.general')) {
+                          if ($global_config->get('force_processing')) {
+                            $data->force = TRUE;
+                            $this->loggerFactory->get('strawberry_runner')->warning('Global Forced Processing is enabled.');
+                          }
+                        }
                         $data->plugin_config_entity_id = $activePluginId;
                         // See https://github.com/esmero/strawberry_runners/issues/10
                         // Since the destination Queue can be a modal thing
                         // And really what defines is the type of worker we want
                         // But all at the end will eventually feed the ::run() method
                         // We want to make this a full blown service.
-                        $this->queueFactory->get(
-                          'strawberryrunners_process_index', TRUE
+                        $success = $this->queueFactory->get(
+                          $queue_name, TRUE
                         )->createItem($data);
                       }
                     }
@@ -347,7 +366,8 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                     array_intersect($valid_ado_type, $sbf_type)
                   ) > 0
                 ) {
-
+                  $config['processor_queue_type'] = $config['processor_queue_type'] ?? 'realtime';
+                  $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$config['processor_queue_type']] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
                   $data = new \stdClass();
                   $data->fid = NULL;
                   $data->nid = $entity->id();
@@ -381,9 +401,15 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                   // key. Same if it generates data for a nested processor.
                   $data->metadata = ["json" => $metadata_from_json, "checksum" => md5($metadata_from_json)];
                   $data->force = $force_from_metadata_or_arg;
+                  if ($global_config = $this->configFactory->get('strawberry_runners.general')) {
+                    if ($global_config->get('force_processing')) {
+                      $data->force = TRUE;
+                      $this->loggerFactory->get('strawberry_runner')->warning('Global Forced Processing is enabled.');
+                    }
+                  }
                   $data->plugin_config_entity_id = $activePluginId;
                   $this->queueFactory->get(
-                    'strawberryrunners_process_index', TRUE
+                    $queue_name, TRUE
                   )->createItem($data);
                 }
               }

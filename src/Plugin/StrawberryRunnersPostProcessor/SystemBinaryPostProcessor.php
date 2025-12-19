@@ -155,6 +155,36 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
       '#maxlength' => 3,
       '#min' => 1,
     ];
+    $element['uses_timeout_executable'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Use the Host\'s timeout binary to control process timeout.'),
+      '#default_value' => $this->getConfiguration()['uses_timeout_executable'],
+      '#description' => t('timeout allows a PHP independent way of controlling stuck or unresponsive binary processes. Recommended.'),
+      '#required' => FALSE,
+    ];
+    $element['timeout_path'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('The system path to the timeout binary.'),
+      '#default_value' => $this->getConfiguration()['timeout_path'],
+      '#description' => t('full system path to the "timeout" binary present in the same environment your PHP runs, e.g. if docker (esmero-php), it will be at <em>/usr/bin/timeout</em>'),
+      '#required' => FALSE,
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[uses_timeout_executable]"]' => ['checked' => TRUE],
+        ],
+        'required' => [
+          ':input[name="pluginconfig[uses_timeout_executable]"]' => ['checked' => TRUE],
+        ],
+      ],
+      '#prefix' => '<span class="timeout-path-validation"></span>',
+      '#ajax' => [
+        'callback' => [$this, 'validatePath'],
+        'effect' => 'fade',
+        'wrapper' => 'timeout-path-validation',
+        'method' => 'replace',
+        'event' => 'change'
+      ]
+    ];
     $element['weight'] = [
       '#type' => 'number',
       '#title' => $this->t('Order or execution in the global chain.'),
@@ -258,7 +288,8 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
     // So one of the output types and output destinations can operate or not
     if (($file_path) && ($output_type == 'entity:file') && in_array('file', $output_destination)) {
       $extension = '';
-      $pos = strpos(utf8_encode($arguments), utf8_encode('%outfile'));
+      $arguments = function_exists('mb_convert_encoding') ? mb_convert_encoding($arguments, 'UTF-8', mb_list_encodings()) : utf8_encode($arguments);
+      $pos = strpos($arguments,  function_exists('mb_convert_encoding') ? mb_convert_encoding('%outfile', 'UTF-8', 'ISO-8859-1') : utf8_encode('%outfile'));
       if ($pos === FALSE) {
         // No input, returning
         return NULL;

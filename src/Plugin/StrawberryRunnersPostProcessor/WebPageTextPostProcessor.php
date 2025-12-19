@@ -142,6 +142,36 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
       '#maxlength' => 4,
       '#min' => 1,
     ];
+    $element['uses_timeout_executable'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Use the Host\'s timeout binary to control process timeout.'),
+      '#default_value' => $this->getConfiguration()['uses_timeout_executable'],
+      '#description' => t('timeout allows a PHP independent way of controlling stuck or unresponsive binary processes. Recommended.'),
+      '#required' => FALSE,
+    ];
+    $element['timeout_path'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('The system path to the timeout binary.'),
+      '#default_value' => $this->getConfiguration()['timeout_path'],
+      '#description' => t('full system path to the "timeout" binary present in the same environment your PHP runs, e.g. if docker (esmero-php), it will be at <em>/usr/bin/timeout</em>'),
+      '#required' => FALSE,
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[uses_timeout_executable]"]' => ['checked' => TRUE],
+        ],
+        'required' => [
+          ':input[name="pluginconfig[uses_timeout_executable]"]' => ['checked' => TRUE],
+        ],
+      ],
+      '#prefix' => '<span class="timeout-path-validation"></span>',
+      '#ajax' => [
+        'callback' => [$this, 'validatePath'],
+        'effect' => 'fade',
+        'wrapper' => 'timeout-path-validation',
+        'method' => 'replace',
+        'event' => 'change'
+      ]
+    ];
 
     $element['weight'] = [
       '#type' => 'number',
@@ -213,6 +243,16 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
             }
             else {
               if ($capabilities && is_array($capabilities) && isset($capabilities['polyglot_lang_models']) && is_array($capabilities['polyglot_lang_models'])) {
+                if (empty($capabilities['polyglot_lang_models'])) {
+                  // Running 1.4.2, since polyglot is down we will give it a default
+                  $capabilities['polyglot_lang_models'] = [
+                    "en:en" => "en",
+                    "es:es" => "es",
+                    "it:it" => "it",
+                    "hi:hi" => "hi",
+                    "pt:pt" => "pt"
+                  ];
+                }
                 $languages_enabled = array_keys($capabilities['polyglot_lang_models']);
                 $languages_enabled = array_map(function ($languages_enabled) {
                   $parts = explode(':', $languages_enabled);

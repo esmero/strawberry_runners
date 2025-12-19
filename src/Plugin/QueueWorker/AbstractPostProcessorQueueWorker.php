@@ -39,6 +39,10 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implements ContainerFactoryPluginInterface {
 
+  const QUEUES = [
+    'background' => 'strawberryrunners_process_background',
+    'realtime' => 'strawberryrunners_process_index'
+  ];
   /**
    * Drupal\Core\Entity\EntityTypeManager definition.
    *
@@ -255,6 +259,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $will_chain_future = $will_chain_future || $chains;
       }
     }
+
+    $queue_name = $processor_config['processor_queue_type'] ?? 'realtime';
+    $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$queue_name] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
+
     // When to clean up?
     // If not cleaned up before
     // AND won't chain in the future
@@ -297,7 +305,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
         // If argument is not there we will assume there is a mistake and that it is
         // a single one.
-        if ($input_argument) {
+        // New ot 0.9.0. Since ML chained might have as input argument 'annotation'
+        // But still need a sequence_number, we will check if data contains either one
+        // or a FIXED ->sequence_number
+        if ($input_argument && $input_argument == "sequence_number") {
           $data->{$input_argument} = $data->{$input_argument} ?? 1;
           // In case $data->{$input_argument} is an array/data we will use the key as "sequence"
           // Each processor needs to be sure it passes a single item and with a unique key
@@ -308,11 +319,20 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             $sequence_key = (int) $data->{$input_argument} ?? 1;
           }
         }
+        else {
+          // See fixed. ML processors will always set this in their output.
+          $sequence_key = $data->sequence_number ?? 1;
+        }
         // Here goes the main trick for making sure out $sequence_key in the Solr ID
         // Is the right now (relative to its own, 1 if single file, or an increasing number if a pdf
         // We check if the current item has siblings!
         if (!isset($data->siblings) || isset($data->siblings) && $data->siblings == 1) {
           $sequence_key = 1;
+        }
+        // Now the strange case of a PDF, page 2, with annotations.
+        if (isset($data->internal_sequence_id) && is_numeric($data->internal_sequence_id) && $data->internal_sequence_id !=1 ) {
+          $sequence_key = $sequence_key . '-' . $data->internal_sequence_id;
+          // So Second Page of a PDF, first ML annotation will be 2-1
         }
 
         if (is_a($entity, TranslatableInterface::class)) {
@@ -362,7 +382,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // To use that data as input for a child one, if chained too. But only if nothing has set $io->output->plugin before
         // This is needed for Processors (e.g OCR) that have already processed everything and then get a new chained
         // Child that was never processed before. Would be terrible to have to re-process OCR completely just to get
-        // A Child to trigger. We will only provide only $io->input->plugin['searchapi'] bc that is what we know
+        // A Child to trigger. We will only provide $io->input->plugin['searchapi'] bc that is what we know
         // Any other type of child won't be able to feed from pre-existing.
         if ($inkeystore && $tobechained && !$data->force && $processed_data_for_chaining!=NULL && (!isset($io->output->plugin) || !empty($io->output->plugin))) {
           // Since we don't know at all what $io->output->plugin should contain
@@ -417,13 +437,16 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           $toindex->vector_512 = $io->output->searchapi['vector_512'] ?? NULL;
           $toindex->vector_576 = $io->output->searchapi['vector_576'] ?? NULL;
           $toindex->vector_1024 = $io->output->searchapi['vector_1024'] ?? NULL;
+          $toindex->vector_768 = $io->output->searchapi['vector_768'] ?? NULL;
           $toindex->service_md5 = $io->output->searchapi['service_md5'] ?? '';
 
           // $siblings will be the amount of total children processors that were
           // enqueued for a single Processor chain.
           $toindex->sequence_total = !empty($data->siblings) ? $data->siblings : 1;
           // Be implicit about this one. No longer depend on the Solr DOC ID splitting.
-          $toindex->sequence_id = $data->{$input_argument} ?? 1;
+
+          $toindex->sequence_id = $data->sequence_number ?? 1;
+          $toindex->internal_sequence_id = $data->internal_sequence_id ?? $toindex->sequence_id ;
           $toindex->checksum = $data->metadata['checksum'];
 
           $datasource_id = 'strawberryfield_flavor_datasource';
@@ -451,7 +474,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         }
         if ($data->extract_attempts < 3) {
           $data->extract_attempts++;
-          Drupal::queue('strawberryrunners_process_index', TRUE)
+          // Re-enqueue in the same Queue it came from. Not so great to have round robin
+          Drupal::queue($queue_name, TRUE)
             ->createItem($data);
         }
         else {
@@ -489,6 +513,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         }*/
         /* @var  $strawberry_runners_postprocessor_config \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity */
         $postprocessor_config_entity = $plugin_info['config_entity'];
+        $queue_name = $postprocessor_config_entity->getPluginconfig()['processor_queue_type'] ?? 'realtime';
+        $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$queue_name] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
         $input_property = $plugin_info['plugin_definition']['input_property'] ?? NULL;
         $input_argument = $plugin_info['plugin_definition']['input_argument'] ?? NULL;
         //@TODO check if this are here and not null!
@@ -529,9 +555,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         // But for chained processors like ML ones, e.g each OCR will generate exactly ONE ML
         // using the same input property of OCR.
         // So we can no longer assume/not depend on $input_argument_value as we did until 0.7.0
+
         if ($input_argument_value) {
           if (is_array($input_argument_value)) {
-            foreach ($input_argument_value as $value) {
+            foreach ($input_argument_value as $input_argument_index => $value) {
               // Here is the catch.
               // Output properties may be many
               // Input Properties matching always need to be one
@@ -548,7 +575,14 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
                   isset($input_property_value[$value])) {
                   $childdata->{$input_property} = $input_property_value[$value];
                 }
-                Drupal::queue('strawberryrunners_process_background', TRUE)
+
+                $childdata->sequence_id =  $childdata->sequence_id ?? 1;
+                // I know sequence_number and sequence_id are the same. But we have been using this silly mapping
+                // for years.
+                $childdata->sequence_number = $childdata->sequence_number ?? $childdata->sequence_id;
+
+                $childdata->internal_sequence_id = $input_argument_index + 1;
+                Drupal::queue($queue_name, TRUE)
                   ->createItem($childdata);
               }
             }
@@ -557,7 +591,12 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             $childdata->{$input_argument} = $input_argument_value;
             $childdata->{$input_property} = $input_property_value;
             $childdata->siblings = $childdata->siblings ?? 1;
-            Drupal::queue('strawberryrunners_process_background', TRUE)
+
+            $childdata->sequence_id = $childdata->sequence_id ?? 1;
+            $childdata->sequence_number = $childdata->sequence_number ?? $childdata->sequence_id;
+            $childdata->internal_sequence_id = $childdata->internal_sequence_id ?? 1;
+
+            Drupal::queue($queue_name, TRUE)
               ->createItem($childdata);
           }
         }
@@ -577,7 +616,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       $data_cleanup = new \stdClass();
       $data_cleanup->filepath_to_clean = [$filelocation];
       $data_cleanup->sbr_cleanup = TRUE;
-      Drupal::queue('strawberryrunners_process_background', TRUE)
+      Drupal::queue($queue_name, TRUE)
        ->createItem($data_cleanup);
     }
   }
@@ -726,7 +765,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ),
        */
       // Another solution would be to make our conditions all together an OR
-      // But no post processing here is also good, faster and we just want
+      // But no post-processing here is also good, faster and we just want
       // to know if its there or not.
       $query->setProcessingLevel(QueryInterface::PROCESSING_NONE);
       $results = $query->execute();
@@ -736,9 +775,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       $count = $count + (int) $results->getResultCount();
 
     }
-    // This is a good one. If i have multiple indexes, but one is missing the i assume
+    // This is a good one. If I have multiple indexes, but one is missing the I assume
     // reprocessing is needed
-    // But if not, then i return 1, which means we have them all
+    // But if not, then I return 1, which means we have them all
     // FUTURE thinking is the best.
     return ($count == count($indexes)) ? 1 : 0;
     // Keys we need in the Search API
@@ -759,8 +798,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    */
   private function invokeProcessor(StrawberryRunnersPostProcessorPluginInterface $processor_instance, stdClass $data): stdClass {
 
-    $input_property = $processor_instance->getPluginDefinition()['input_property'];
-    $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
+    $input_property = $processor_instance->getPluginDefinition()['input_property'] ?? NULL;
+    $input_argument = $processor_instance->getPluginDefinition()['input_argument'] ?? NULL;
 
     // CHECK IF $input_argument even exists!
 
@@ -797,7 +836,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           '@nodeuuid' => $input->nuuid,
         ]
       );
-      throw new RequeueException('I am not done yet. Will re-enqueu myself');
+      throw new RequeueException('I am not done yet. Will re-enqueue myself');
     }
     return $io;
   }
@@ -847,8 +886,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $jsonkey = $data->asstructure_key;
 
     // check 'flv:' . $data->plugin_config_entity_id for empty
-    // If there means this was enqueued many times and we do not need to add it again
-    // We can not stop the actual runner to execute but we can at least avoid
+    // If there means this was enqueued many times, and we do not need to add it again
+    // We can not stop the actual runner to execute, but we can at least avoid
     // creating multiple temporal anomalies
     // The same processor will not create more than a single file per source.
     if (empty($field_content[$jsonkey][$uniqueid]['flv:' . $data->plugin_config_entity_id])) {
@@ -924,7 +963,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    * @param string $plugin_config_entity_id
    *
    * @param bool   $wholechain
-   *     If we will keep getting children up and accumulating the whole tree to a leaf
+   *     If we keep getting children up and accumulating the whole tree to a leaf
    * @return array
    */
   private function getChildProcessorIds(string $plugin_config_entity_id, $wholechain = FALSE): array {
@@ -960,7 +999,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    *   The URI of the file, e.g. public://directory/file.jpg.
    *
    * @return mixed
-   *   The real path to the file if it is a local file. An URL otherwise.
+   *   The real path to the file if it is a local file. A URL otherwise.
    */
   public function getRealpath(string $uri) {
     $wrapper = $this->streamWrapperManager->getViaUri($uri);
@@ -1025,7 +1064,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   }
 
   public function __destruct() {
-
     /* foreach($this->instanceFiles as $instanceFile) {
       $event_type = StrawberryfieldEventType::TEMP_FILE_CREATION;
       $current_timestamp = (new DrupalDateTime())->getTimestamp();

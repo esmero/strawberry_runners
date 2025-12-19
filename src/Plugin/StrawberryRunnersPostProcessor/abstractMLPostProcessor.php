@@ -20,6 +20,8 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
 
   public $pluginDefinition;
 
+  protected $bb_margin = 50;
+
   /**
    * {@inheritdoc}
    */
@@ -32,6 +34,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
         'processor_queue_type' => 'background',
         'language_key' => 'language_iso639_3',
         'language_default' => 'eng',
+        'iif_server_image_type' => 'default.jpg',
         'timeout' => 300,
         'nlp_url' => 'http://esmero-nlp:6400',
         'ml_method' => NULL,
@@ -43,6 +46,15 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
     '/image/yolo' => 576,
     '/image/mobilenet' => 1024,
     '/image/insightface' => 512,
+    '/image/vision_transformer' => 768,
+  ];
+
+
+  public const ML_IMAGE_INPUT_SIZE = [
+    '/image/yolo' => 640,
+    '/image/mobilenet' => 480,
+    '/image/insightface' => 640,
+    '/image/vision_transformer' => 224,
   ];
 
   public const ML_TEXT_VECTOR_SIZE = [
@@ -202,6 +214,21 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
       '#required' => TRUE,
     ];
 
+    $element['iiif_server_image_type'] = [
+      '#type' => 'radios',
+      '#title' => $this->t('What type of IIIF Image API Quality to request'),
+      '#options' => [
+        'default.jpg' => 'The image is returned using the server’s default quality (e.g. color, gray or bitonal) for the image.',
+        'gray.jpg' => 'The image is returned in grayscale, where each pixel is black, white or any shade of gray in between.',
+        'bitonal.jpg' => 'The image returned is bitonal, where each pixel is either black or white.',
+        'color.jpg' => 'The image is returned with all of its color information.',
+      ],
+      '#default_value' => $this->getConfiguration()['iiif_server_image_type'] ?? 'default.jpg',
+      '#description' => $this->t('The quality parameter determines whether the IIIF image is delivered in color, grayscale or black and white. For certain ML models forcing grey might help skip a strongly opinionated vector component/feature.'),
+      '#required' => TRUE,
+    ];
+
+
     $element['timeout'] = [
       '#type' => 'number',
       '#title' => $this->t('Timeout in seconds for this process.'),
@@ -251,7 +278,7 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
     if (!empty($config['nlp_url']) && !empty($config['ml_method'])) {
       $nlp = $this->getNLPClient();
       if ($nlp) {
-        $capabilities = $nlp->get_call('/status', NULL);
+        $capabilities = $nlp->get_call('/status', NULL, 3);
         $languages_enabled = [];
         $detected_lang = NULL;
         //@TODO Should cache this too. Or deprecate ::language for 0.5.0

@@ -4,7 +4,7 @@ namespace Drupal\strawberry_runners\Plugin\Action;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
 use Drupal\views\ViewExecutable;
-use Drupal\views_bulk_operations\Action\ViewsBulkOperationsActionCompletedTrait;
+use Drupal\views_bulk_operations\Traits\ViewsBulkOperationsActionCompletedTrait;
 use Drupal\views_bulk_operations\Action\ViewsBulkOperationsActionInterface;
 use Drupal\Core\Plugin\PluginFormInterface;
 use Drupal\strawberryfield\Plugin\Action\StrawberryfieldJsonPatch;
@@ -18,6 +18,7 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  * @Action(
  *   id = "entity:sbr_posstprocess_action",
  *   action_label = @Translation("Trigger Strawberrry Runners process/reprocess for Archipelago Digital Objects"),
+ *   label = @Translation("Trigger Strawberrry Runners process/reprocess for Archipelago Digital Objects"),
  *   category = @Translation("Strawberry Runners"),
  *   deriver = "Drupal\strawberry_runners\Plugin\Action\Derivative\EntitySbfActionDeriver",
  *   type = "node",
@@ -143,7 +144,7 @@ class StrawberryRunnersPostProcess extends StrawberryfieldJsonPatch implements V
     $active_plugins = $this->strawberryRunnerUtilityService->getActivePluginConfigs();
     $options = [];
     foreach ($active_plugins as $source => $processors) {
-      $options = array_combine(array_keys($processors), array_keys($processors));
+      $options = array_merge($options, array_combine(array_keys($processors), array_keys($processors)));
     }
     $options = array_unique($options);
     $form['plugins'] = [
