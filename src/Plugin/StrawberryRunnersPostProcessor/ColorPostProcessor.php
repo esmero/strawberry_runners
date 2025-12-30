@@ -354,7 +354,10 @@ else % CIE
 end
     */
     // $prm->F_L is a scalar but $RGBp is a matrix)
-    $tmp = (($prm->F_L * abs($RGBp))/100)**0.42;
+    $tmp = ($this->elementWiseMatrixOp($this->hadamardDivision($this->hadamardProduct($this->elementWiseMatrixOp($RGBp, 'abs'), $prm->F_L),100),'pow',0.42));
+    $signRGBp =  $this->elementWiseMatrixOp($RGBp, function($element) {return $element <=> 0;});
+    $RGBp_a_tmp = $this->hadamardProduct($this->hadamardProduct($signRGBp, 400), $tmp);
+    $RGBp_a = $this->hadamardDivision($RGBp_a_tmp, $this->componentSum($tmp, 27.13));
 
     /*
 %
@@ -364,7 +367,13 @@ a = RGBp_a*([11;-12;1]./11);
 b = RGBp_a*([1;1;-2]./9);
 h_rad = atan2(b,a);
 h = mod(180*h_rad/pi, 360);
-%
+    */
+    $a = $RGBp_a->multiply($this->hadamardDivision(new Matrix([[11],[-12],[1]]),11));
+    $b = $RGBp_a->multiply($this->hadamardDivision(new Matrix([[1],[1],[-1]]),9));
+    $h_rad = $this->elementWiseTwoMatrixOp($a, $b, FALSE, 'atan2');
+    $h = $this->elementWiseMatrixOp($h_rad->multiplyByScalar(180)->divideByScalar(M_PI), 'fmod', 360);
+
+/*%
 %%% Step 6: hue composition (using unique hue data) %%%
 %
 hp = h + 360*(h < prm.h_i(1));
@@ -664,7 +673,7 @@ tmp = ((prm.F_L .* prm.RGBp_w)/100).^0.42;
     return new Matrix($hadamard);
   }
 
-  public function elementWiseMatrixOp(Matrix $matrix, mixed $callable) {
+  public function elementWiseMatrixOp(Matrix $matrix, mixed $callable, mixed ...$arguments) {
     // @TODO. What if the callable needs extra arguments?
     // How do we define that the callable's argument needs to be
     // The matrix element?
@@ -677,11 +686,46 @@ tmp = ((prm.F_L .* prm.RGBp_w)/100).^0.42;
     }
       for ($i = 0; $i < $rows; $i++) {
         for ($j = 0; $j < $cols; $j++) {
-          $opresults[$i][$j] = call_user_func($callable, $matrix_data[$i][$j]);
+          $argument_local = $arguments;
+          $argument_local = is_array($argument_local) && !empty($argument_local) ? array_unshift($argument_local, $matrix_data[$i][$j]) : [$matrix_data[$i][$j]];
+          $opresults[$i][$j] = call_user_func($callable, $argument_local);
         }
       }
     return new Matrix($opresults);
     }
+
+  public function elementWiseTwoMatrixOp(Matrix $matrix, Matrix $othermatrixornumber, bool $invert, mixed $callable, mixed ...$arguments) {
+    // @TODO. What if the callable needs extra arguments?
+    // How do we define that the callable's argument needs to be
+    // The matrix element?
+    $matrix_data = $matrix->toArray();
+    $rows = $matrix->getRows();
+    $cols = $matrix->getColumns();
+    $opresults = [];
+    if (!is_callable($callable)) {
+      throw new \InvalidArgumentException("$callable is not a callable function");
+    }
+    if ($rows != $othermatrixornumber->getRows() || $cols != $othermatrixornumber->getColumns()) {
+      // TODO: They just need to have same colums per row ... but having different number of rows is OK
+      throw new \InvalidArgumentException("Both Input Matrices need to have the same dimensions");
+    }
+    $othermatrix_data = $othermatrixornumber->toArray();
+    for ($i = 0; $i < $rows; $i++) {
+      for ($j = 0; $j < $cols; $j++) {
+        $argument_local = $arguments;
+        if (!$invert) {
+          $argument_local = is_array($argument_local) && !empty($argument_local) ? array_unshift($argument_local, $othermatrix_data[$i][$j]) : [$othermatrix_data[$i][$j]];
+          $argument_local = array_unshift($argument_local, $matrix_data[$i][$j]);
+        }
+        else {
+          $argument_local = is_array($argument_local) && !empty($argument_local) ? array_unshift($argument_local, $matrix_data[$i][$j]) : [$matrix_data[$i][$j]];
+          $argument_local = array_unshift($argument_local, $othermatrix_data[$i][$j]);
+        }
+        $opresults[$i][$j] = call_user_func($callable, $arguments);
+      }
+    }
+    return new Matrix($opresults);
+  }
 
 
 
