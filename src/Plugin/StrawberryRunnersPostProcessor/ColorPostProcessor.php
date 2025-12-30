@@ -372,7 +372,7 @@ h = mod(180*h_rad/pi, 360);
     $b = $RGBp_a->multiply($this->hadamardDivision(new Matrix([[1],[1],[-1]]),9));
     $h_rad = $this->elementWiseTwoMatrixOp($a, $b, FALSE, 'atan2');
     $h = $this->elementWiseMatrixOp($h_rad->multiplyByScalar(180)->divideByScalar(M_PI), 'fmod', 360);
-
+    // renamed $pmr->h_i to $prm->h_ilower bc properties in PHP are case insensitive
 /*%
 %%% Step 6: hue composition (using unique hue data) %%%
 %
@@ -383,6 +383,60 @@ tmp = flipud(cumsum(flipud(tmp),1))==1;
 tmp = (hp - prm.h_i(idx)) ./ prm.e_i(idx);
 H = prm.H_i(idx) + (100*tmp) ./ (tmp + (prm.h_i(idx+1)-hp) ./ prm.e_i(idx+1));
 %
+*/
+    // Note
+    // prm.h_i(1) is equivalent to $prm->h_ilower->toArray()[0][0] .... IF $prm->h_ilower is a matrix
+    // $prm->h_ilower->toArray()[0] is a constant and it is 20.14
+
+
+
+
+    // Let's use that instead of the expensive op here.
+    // h < prm.h_i(1)
+    $temp_less_than = $this->elementWiseMatrixOp($h, function($element, $value) { return (int) $element < $value;},20.14)->multiplyByScalar(360);
+    // h + 360*(h < prm.h_i(1));
+    $hp = $h->add($temp_less_than);
+
+    $temp_less_than_or_equal = $this->elementWiseTwoMatrixOp($prm->h_ilower, $hp->transpose(), FALSE, function($element, $element2) { return (int) $element <= $element2;});
+    // flipup is in this case the same as array_reverse
+    // Cumsum is accumulative sum in a given dimension
+    /*
+     * A = [1 3 5; 2 4 6]
+     A = 2×3
+
+     1     3     5
+     2     4     6
+
+     Find the cumulative sum of the rows of A. The element B(3) is the sum of A(1) and A(3), while B(5) is the sum of A(1), A(3), and A(5).
+
+     B = cumsum(A,2)
+     B = 2×3
+
+     1     4     9
+     2     6    12
+
+     C = cumsum(A,1) --> our case here
+     1     3     5
+     3     7     11
+     */
+    $cumsum = array_reverse($temp_less_than_or_equal->toArray());
+    // @TODO refactor cumsum into a matrix method. Should get also which dimension.
+    $dim = 1; // if $dim == 2 will sum inside a row, if $dim == 1 per column.
+    foreach($cumsum as $rowkey => &$row) {
+      foreach($row as $colkey => $value) {
+        if ($colkey !==0 && $dim == 2) {
+          $row[$colkey] = $row[$colkey - 1] + $row[$colkey];
+        }
+        elseif ($dim == 1 && $rowkey!==0 ) {
+          $row[$colkey] = $row[$colkey] + $cumsum[$rowkey -1 ][$colkey];
+        }
+      }
+    }
+    $tmp = array_reverse($cumsum);
+    //tmp = flipud(cumsum(flipud(tmp),1))==1;
+    
+
+    /*
 %%% Step 7: achromatic response %%%
 %
 if prm.isns
@@ -474,7 +528,7 @@ prm.M_HPE = [...
       [-0.22981, 1.18340, 0.04641],
       [0, 0, 1],
     ]);
-    $prm->h_i = new Matrix([[20.14],[90.00],[164.25],[237.53],[380.14]]);
+    $prm->h_ilower = new Matrix([[20.14],[90.00],[164.25],[237.53],[380.14]]);
     $prm->e_i = new Matrix([[0.8],[0.7],[1.0],[1.2],[0.8]]);
     $prm->H_i = new Matrix([[0],[100],[200],[300],[400]]);
     /*
@@ -494,8 +548,8 @@ prm.M_HPE = [...
 prm.RGB_c = prm.D*prm.XYZ_w(2) ./ prm.RGB_w + 1 - prm.D;
 prm.RGBp_w = (prm.RGB_c .* prm.RGB_w) * (prm.M_HPE / prm.M_CAT02).';
     */
-
-    $prm->RGB_c = $this->hadamardDivision($this->componentSum($prm->RGB_w,  1 - $prm->D),$prm->D * $prm->XYZ_w->toArray()[1], TRUE);
+    // Note $prm->XYZ_w->toArray()[0][1] is equivalent to prm.XYZ_w(2) because toArray returns always an array(row) wrapped in an array
+    $prm->RGB_c = $this->hadamardDivision($this->componentSum($prm->RGB_w,  1 - $prm->D),$prm->D * $prm->XYZ_w->toArray()[0][1], TRUE);
     // Formal Division  of two matrices (not component/Hadamard) is the same as multiplying against the inverse of the divisor
     $prm->RBGp_w = $this->hadamardProduct($prm->RGB_w,  $prm->RGB_c)->multiply($prm->M_HPE->multiply($prm->M_CAT02->inverse())->traspose());
     /*
@@ -515,7 +569,7 @@ tmp = ((prm.F_L .* prm.RGBp_w)/100).^0.42;
 
     $prm->k = 1 / (5 * $L_A + 1);
     $prm->F_L = ($prm->k ** 4 * (5 * $L_A)) / 5 + ((1 - $prm->k ** 4 ) ** 2 * (5*$L_A) ** (1/3))/10;
-    $prm->n = $Y_b / $prm->XYZ_w->toArray()[1];
+    $prm->n = $Y_b / $prm->XYZ_w->toArray()[0][1];
     $prm->z = 1.48 + sqrt( $prm->n);
     $prm->N_bb = $prm->N_cb = 0.725  * $prm->n ** (-1/5);
     $tmp =  $this->hadamardPow($this->hadamardProduct($prm->RBGp_w, $prm->F_L), 0.42);
