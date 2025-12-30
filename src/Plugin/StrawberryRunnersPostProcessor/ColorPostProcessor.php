@@ -339,6 +339,9 @@ RGB_C = bsxfun(@times, prm.RGB_c, RGB);
 %
 RGBp = RGB_C * (prm.M_HPE / prm.M_CAT02).';
 %
+    */
+    $RGBp = $RGB_C->multiply($prm->M_HP->multiply($prm->M_CAT02->inverse())->traspose());
+    /*
 %%% Step 4: post-adaption cone response (nonlinear compression) %%%
 %
 if prm.isns
@@ -349,6 +352,11 @@ else % CIE
 	tmp = (prm.F_L .* bsxfun(@times,RGBp_signs,RGBp)/100).^0.42;
 	RGBp_a = 400 .* RGBp_signs .* tmp ./ (tmp+27.13) + 0.1;
 end
+    */
+    // $prm->F_L is a scalar but $RGBp is a matrix)
+    $tmp = (($prm->F_L * abs($RGBp))/100)**0.42;
+
+    /*
 %
 %%% Step 5: hue angle & opponent color dimensions a (red-green) & b (yellow-blue) %%%
 %
@@ -480,7 +488,7 @@ prm.RGBp_w = (prm.RGB_c .* prm.RGB_w) * (prm.M_HPE / prm.M_CAT02).';
 
     $prm->RGB_c = $this->hadamardDivision($this->componentSum($prm->RGB_w,  1 - $prm->D),$prm->D * $prm->XYZ_w->toArray()[1], TRUE);
     // Formal Division  of two matrices (not component/Hadamard) is the same as multiplying against the inverse of the divisor
-    $prm->RBGp_w = $this->hadamardProduct($prm->RGB_w,  $prm->RGB_c)->multiply($prm->M_HPE->multiply($prm->M_CAT02->inverse()));
+    $prm->RBGp_w = $this->hadamardProduct($prm->RGB_w,  $prm->RGB_c)->multiply($prm->M_HPE->multiply($prm->M_CAT02->inverse())->traspose());
     /*
 
 % Michaelis-Menten equation for the luminance level adaption factor:
@@ -655,6 +663,26 @@ tmp = ((prm.F_L .* prm.RGBp_w)/100).^0.42;
     }
     return new Matrix($hadamard);
   }
+
+  public function elementWiseMatrixOp(Matrix $matrix, mixed $callable) {
+    // @TODO. What if the callable needs extra arguments?
+    // How do we define that the callable's argument needs to be
+    // The matrix element?
+    $matrix_data = $matrix->toArray();
+    $rows = $matrix->getRows();
+    $cols = $matrix->getColumns();
+    $opresults = [];
+    if (!is_callable($callable)) {
+      throw new \InvalidArgumentException("$callable is not a callable function");
+    }
+      for ($i = 0; $i < $rows; $i++) {
+        for ($j = 0; $j < $cols; $j++) {
+          $opresults[$i][$j] = call_user_func($callable, $matrix_data[$i][$j]);
+        }
+      }
+    return new Matrix($opresults);
+    }
+
 
 
 
