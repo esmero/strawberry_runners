@@ -8,6 +8,7 @@
 
 namespace Drupal\strawberry_runners\Plugin;
 
+use Drupal\Component\Utility\Bytes;
 use Drupal\Core\Ajax\AjaxResponse;
 use Drupal\Core\Ajax\InvokeCommand;
 use Drupal\Core\Ajax\MessageCommand;
@@ -20,6 +21,7 @@ use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\Plugin\PluginBase;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
+use Drupal\strawberry_runners\strawberryRunnerUtilityService;
 use Drupal\strawberryfield\Event\StrawberryfieldFileEvent;
 use Drupal\strawberryfield\StrawberryfieldEventType;
 use GuzzleHttp\Client;
@@ -148,6 +150,9 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
       'timeout' => 10,
       // Order in which this processor is executed in the chain
       'weight' => 0,
+      // When evaluating File input, if files size will be taken in account.
+      'file_limit_type' => NULL,
+      'file_limit_value_bytes' => NULL,
       // The id of the config entity from where these values came from.
       'configEntity' => '',
       'uses_timeout_executable' => FALSE,
@@ -332,9 +337,18 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
     return $response;
   }
 
-  /* The proc_terminate() function doesn't end proccess properly on Windows */
+  /* The proc_terminate() function doesn't end process properly on Windows */
   protected function kill($pid) {
     return strstr(PHP_OS, 'WIN') ? exec("taskkill /F /T /PID $pid") : posix_kill($pid, 9);
+  }
+
+  public static function validateMaxFilesize($element, FormStateInterface $form_state) {
+    // Note Bytes::toNumber is buggy since PHP 8 and Drupal 8 9 and 10 and 11
+    // See https://www.drupal.org/project/drupal/issues/3352728
+    // We use the validate method instead.
+    if (!empty($element['#value']) && !Bytes::validate($element['#value'])) {
+      $form_state->setError($element, t('The "@name" option must contain a valid value. You may either leave the text field empty or enter a string like "512" (bytes), "80 KB" (kilobytes) or "50 MB" (megabytes).', ['@name' => $element['#title']]));
+    }
   }
 
   /**
