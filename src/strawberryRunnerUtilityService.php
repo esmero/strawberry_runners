@@ -3,6 +3,7 @@
 namespace Drupal\strawberry_runners;
 
 use Drupal\Component\Plugin\Exception\PluginException;
+use Drupal\Component\Utility\Bytes;
 use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Queue\QueueFactory;
 use Drupal\Core\Entity\ContentEntityInterface;
@@ -158,6 +159,8 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
          "as:application" => 0
       ]
        "mime_type" => "application/pdf"
+       "file_limit_type" => "<="
+       "file_limit_value_bytes" => 1048576000
        "path" => "/usr/bin/pdftotext"
        "arguments" => "%file"
        "output_type" => "json"
@@ -262,6 +265,36 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                               $asstructure["dr:mimetype"], $valid_mimes
                             )))
                       ) {
+                        // Now that mimetypes, if any, were evaluated,
+                        // We can check if File Size limit applies
+                        if ($config['file_limit_type'] && in_array($config['file_limit_type'], ['<=', '>='])) {
+                          if ($config['file_limit_value_bytes']) {
+                            $bytes = Bytes::validate($config['file_limit_value_bytes']) ? self::bytes_string_to_number($config['file_limit_value_bytes']) : NULL;
+                            if ($bytes) {
+                              $skip = TRUE;
+                              switch($config['file_limit_type']) {
+                                case '<=':
+                                  // Could be missing?
+                                  if (isset($asstructure['dr:filesize']) &&  (float) $asstructure['dr:filesize'] <= (float) $bytes) {
+                                    $skip = FALSE;
+                                  }
+                                  break;
+                                case '>=':
+                                  // Could be missing?
+                                  if (isset($asstructure['dr:filesize']) &&  (float) $asstructure['dr:filesize'] >= (float) $bytes) {
+                                    $skip = FALSE;
+                                  }
+                                  break;
+                                default:
+                                  break;
+                              }
+                            }
+                            if ($skip) {
+                              continue;
+                            }
+                          }
+                        }
+
                         $config['processor_queue_type'] = $config['processor_queue_type'] ?? 'realtime';
                         $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$config['processor_queue_type']] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
                         $data = new \stdClass();
@@ -274,7 +307,7 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         $data->field_delta = $delta;
                         // Used to pass to the processor children the fact
                         // That a cleanup queue item was already sent
-                        // Allows a leaf to cleanup even if there are
+                        // Allows a leaf to clean up even if there are
                         // no future enqueuing happening
                         // and avoids leafs to double enqueue for cleanup
                         // of locally generated files from $data->fid
@@ -318,7 +351,7 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         if ($global_config = $this->configFactory->get('strawberry_runners.general')) {
                           if ($global_config->get('force_processing')) {
                             $data->force = TRUE;
-                            $this->loggerFactory->get('strawberry_runner')->warning('Global Forced Processing is enabled.');
+                            $this->loggerFactory->get('strawberry_runner')->warning('Global Forced Strawberry Runners Processing is enabled.');
                           }
                         }
                         $data->plugin_config_entity_id = $activePluginId;
@@ -404,7 +437,7 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                   if ($global_config = $this->configFactory->get('strawberry_runners.general')) {
                     if ($global_config->get('force_processing')) {
                       $data->force = TRUE;
-                      $this->loggerFactory->get('strawberry_runner')->warning('Global Forced Processing is enabled.');
+                      $this->loggerFactory->get('strawberry_runner')->warning('Global Forced Strawberry Runners Processing is enabled.');
                     }
                   }
                   $data->plugin_config_entity_id = $activePluginId;
@@ -459,4 +492,36 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
     }
     return $active_plugins;
   }
+
+  /**
+   * Replaces buggy Drupal's bytes::toNumber();
+   * @see https://www.drupal.org/project/drupal/issues/3352728
+   * @TODO: remove once that is merged into Drupal 11
+   * @param $size
+   *
+   * @return float|int
+   */
+  public static function bytes_string_to_number($size): float|int {
+    if ($size === '') {
+      return 0;
+    }
+
+    // Remove the non-unit characters from the size.
+    $unit = preg_replace('/[^bkmgtpezy]/i', '', $size);
+    // Remove the non-numeric characters from the size.
+    $size = preg_replace('/[^0-9\.]/', '', $size);
+    if (!is_numeric($size)) {
+      return 0;
+    }
+    if ($unit) {
+      // Find the position of the unit in the ordered string which is the power
+      // of magnitude to multiply a kilobyte by.
+      return round($size * pow(Bytes::KILOBYTE, stripos('bkmgtpezy', $unit[0])));
+    }
+    else {
+      // Ensure size is a proper number type.
+      return round((float) $size);
+    }
+  }
+
 }
