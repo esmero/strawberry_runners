@@ -45,6 +45,12 @@ strawberryfield_runners.strawberry_runners_postprocessor.binary:
     mime_type:
       type: string
       label: 'Mimetypes(s) to limit this Processor to'
+    file_limit_type:
+      type: string
+      label: 'Type of File limit to impose for as:filetype driven input, <=. >= or NULL of disabled'
+    file_limit_value_bytes:
+      type: string
+      label: 'A valid, parseable as bytes, string to use against the file_limit type. Can be a number, or 50 KB, 100 MB, 1 GB, etc.'
     path:
       type: string
       label: 'The path for the binary to execute'
