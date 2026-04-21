@@ -111,8 +111,8 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
       '#title' => $this->t('File Size(s) comparision used to limit this Processor to.'),
       '#empty_option' => $this->t('- No Filesize Restriction -'),
       '#options' => [
-      '<=' => 'File Size larger than',
-      '>=' => 'File Size less than',
+      '>=' => 'File Size larger than',
+      '<=' => 'File Size less than',
     ],
       '#default_value' => $this->getConfiguration()['file_limit_type'],
       '#description' => $this->t('Select how the file size limit should be evaluated'),
@@ -328,6 +328,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
       }
       //Ok, let's try to get the an extension if there is one
       // will be 4 characters after
+      // What if its more? like tar.gz ?
       $extension = substr($arguments, (int) $pos + 8, 5);
       $extension = trim($extension ?? '');
       $extension = (strpos($extension, '.') === 0) && strlen($extension) >= 4 ? $extension : '';
@@ -342,10 +343,10 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
 
     if (\Drupal::service('strawberryfield.utility')
         ->verifyCommand($execpath) && (strpos($arguments, '%file') !== FALSE)) {
-
+      // Adds single quote around %s just in case the filenames contain (should not) a space
       $arguments = str_replace('%s', '', $arguments);
-      $arguments = $this->strReplaceFirst('%file', '%s', $arguments);
-      $arguments = $this->strReplaceFirst('%outfile', '%s', $arguments);
+      $arguments = $this->strReplaceFirst('%file', "'%s'", $arguments);
+      $arguments = $this->strReplaceFirst('%outfile', "'%s'", $arguments);
       if ($out_file_path) {
         // WE need the original one without extension here.
         $arguments = sprintf($arguments, $file_path, $out_file_path);
