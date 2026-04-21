@@ -665,23 +665,28 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    */
   private function ensureFileAvailability(FileInterface $file) {
     $uri = $file->getFileUri();
+    $basename = basename($uri);
+    // Remove any spaces since unix commands could have issues with that.
+    // This normally should not be an issue at all since The File Persister
+    // Should have done this... but a power user could override it via a hook
+    $basename = preg_replace('/\s+/', '', $basename);
     // Local stream.
     $cache_key = md5($uri);
     // @TODO can be sure its the same one? Ideas?
     if (is_readable(
       $this->fileSystem->realpath(
-        'temporary://sbr_' . $cache_key . '_' . basename($uri)
+        'temporary://sbr_' . $cache_key . '_' . $basename
       )
     )) {
       $templocation = $this->fileSystem->realpath(
-        'temporary://sbr_' . $cache_key . '_' . basename($uri)
+        'temporary://sbr_' . $cache_key . '_' . $basename
       );
     }
     else {
       try {
         $templocation = $this->fileSystem->copy(
           $uri,
-          'temporary://sbr_' . $cache_key . '_' . basename($uri),
+          'temporary://sbr_' . $cache_key . '_' . $basename,
           FileSystemInterface::EXISTS_REPLACE
         );
         $templocation = $this->fileSystem->realpath(
