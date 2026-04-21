@@ -270,8 +270,8 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         if ($config['file_limit_type'] && in_array($config['file_limit_type'], ['<=', '>='])) {
                           if ($config['file_limit_value_bytes']) {
                             $bytes = Bytes::validate($config['file_limit_value_bytes']) ? self::bytes_string_to_number($config['file_limit_value_bytes']) : NULL;
+                            $skip = TRUE;
                             if ($bytes) {
-                              $skip = TRUE;
                               switch($config['file_limit_type']) {
                                 case '<=':
                                   // Could be missing?
