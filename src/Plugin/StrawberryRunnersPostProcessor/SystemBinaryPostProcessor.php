@@ -256,7 +256,6 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
     $output_type = $config['output_type'];
     $output_destination = $config['output_destination'];
     $timeout = $config['timeout']; // in seconds
-    // TODO how do we map $input_argument to the callable executable binary?
     if (isset($io->input->{$input_property})) {
       setlocale(LC_CTYPE, 'en_US.UTF-8');
       $execstring = $this->buildExecutableCommand($io);
