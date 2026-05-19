@@ -7,5 +7,7 @@ php: 8
 dependencies:
   - 'drupal:views'
   - 'strawberryfield'
+  - 'format_strawberryfield_views'
+  - 'format_strawberryfield'
   - 'search_api_solr'
   - 'views_bulk_operations'
