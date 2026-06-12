@@ -339,6 +339,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
       setlocale(LC_CTYPE, 'en_US.UTF-8');
       $execstring_pdfalto = $this->buildExecutableCommand_pdfalto($io);
+
       if ($execstring_pdfalto) {
         $backup_locale = setlocale(LC_CTYPE, '0');
         setlocale(LC_CTYPE, $backup_locale);
@@ -781,7 +782,9 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       $command_pdfalto = escapeshellcmd($execpath_pdfalto . ' ' . $arguments_pdfalto);
       $command = $command_pdfalto;
     }
-    return NULL;
+    else {
+      return NULL;
+    }
     // Only return $command if it contains the original filepath somewhere
     if (strpos($command, $file_path) !== FALSE) {
       return $command;
