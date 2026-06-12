@@ -774,12 +774,13 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       // Make sure we leave for PDFALTO always at the end or it will fail.
       $arguments_pdfalto = str_replace('%file','', $arguments_pdfalto);
       $arguments_pdfalto = $arguments_pdfalto. ' %file';
-      $arguments_pdfalto = "-noLineNumbers -noImage -noImageInline -readingOrder -f {$sequence_number} -l {$sequence_number} " . $arguments_pdfalto . " 2>/dev/null - ";
+      $arguments_pdfalto = "-noLineNumbers -noImage -noImageInline -readingOrder -f {$sequence_number} -l {$sequence_number} " . $arguments_pdfalto;
       $arguments_pdfalto = str_replace('%s', '', $arguments_pdfalto);
       $arguments_pdfalto = $this->strReplaceFirst('%file', '%s', $arguments_pdfalto);
       $arguments_pdfalto = sprintf($arguments_pdfalto, $file_path);
       $command_pdfalto = escapeshellcmd($execpath_pdfalto . ' ' . $arguments_pdfalto);
-      $command = $command_pdfalto;
+      //escapeshellcmd breaks 2>/dev/null
+      $command = $command_pdfalto. " 2>/dev/null - ";
     }
     return NULL;
     // Only return $command if it contains the original filepath somewhere
