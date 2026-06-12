@@ -174,7 +174,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#type' => 'textfield',
       '#title' => $this->t('The system path to the pdfalto binary that will be executed by this processor.'),
       '#default_value' => $this->getConfiguration()['path_pdfalto'],
-      '#description' => t('A full system path to the pdfalto binary present in the same environment your PHP runs, e.g  <em>/usr/local/bin/pdfalto</em>'),
+      '#description' => t('A full system path to the pdfalto binary present in the same environment your PHP runs, e.g  <em>/usr/bin/pdfalto</em>'),
       '#required' => FALSE,
     ];
 
@@ -774,7 +774,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       // Make sure we leave for PDFALTO always at the end or it will fail.
       $arguments_pdfalto = str_replace('%file','', $arguments_pdfalto);
       $arguments_pdfalto = $arguments_pdfalto. ' %file';
-      $arguments_pdfalto = "-noLineNumbers -noImage -noImageInline -readingOrder -f {$sequence_number} -l {$sequence_number} " . $arguments_pdfalto . " - ";
+      $arguments_pdfalto = "-noLineNumbers -noImage -noImageInline -readingOrder -f {$sequence_number} -l {$sequence_number} " . $arguments_pdfalto . " 2>/dev/null - ";
       $arguments_pdfalto = str_replace('%s', '', $arguments_pdfalto);
       $arguments_pdfalto = $this->strReplaceFirst('%file', '%s', $arguments_pdfalto);
       $arguments_pdfalto = sprintf($arguments_pdfalto, $file_path);
