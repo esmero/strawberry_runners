@@ -8,8 +8,10 @@
 
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
+use Drupal\Component\Utility\Environment;
 use Drupal\Core\File\Exception\FileNotExistsException;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\StringTranslation\ByteSizeMarkup;
 use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
@@ -67,7 +69,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
         'filepath' => 'Full file paths passed by another processor',
       ],
       '#default_value' => $this->getConfiguration()['source_type'],
-      '#description' => $this->t('Select from where the source file  this processor needs is fetched'),
+      '#description' => $this->t('Select from where the source file this processor needs is fetched'),
       '#required' => TRUE,
     ];
 
@@ -104,6 +106,36 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
       '#default_value' => $this->getConfiguration()['mime_type'],
       '#description' => $this->t('A single Mimetype type or a coma separed list of mimetypes that qualify to be Processed. Leave empty to apply any file'),
     ];
+    $element['file_limit_type'] = [
+    '#type' => 'select',
+      '#title' => $this->t('File Size(s) comparision used to limit this Processor to.'),
+      '#empty_option' => $this->t('- No Filesize Restriction -'),
+      '#options' => [
+      '>=' => 'File Size larger than',
+      '<=' => 'File Size less than',
+    ],
+      '#default_value' => $this->getConfiguration()['file_limit_type'],
+      '#description' => $this->t('Select how the file size limit should be evaluated'),
+    ];
+
+    $element['file_limit_value_bytes'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('File Size(s) to limit this Processor to.'),
+      '#description' => $this->t('Enter a value like "512" (bytes), "80 KB" (kilobytes) or "50 MB" (megabytes) in order to restrict processing to the previous condition.'),
+      '#element_validate' => [[get_class($this), 'validateMaxFilesize']],
+      '#size' => 100,
+      '#default_value' => $this->getConfiguration()['file_limit_value_bytes'],
+      '#states' => [
+        'visible' => [
+          ':input[name="pluginconfig[file_limit_type]"]' => ['empty' => FALSE],
+        ],
+        'required' => [
+          ':input[name="pluginconfig[file_limit_type]"]' => ['empty' => FALSE],
+        ],
+      ],
+    ];
+
+
     $element['path'] = [
       '#type' => 'textfield',
       '#title' => $this->t('The system path to the binary that will be executed by this processor.'),
@@ -224,7 +256,6 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
     $output_type = $config['output_type'];
     $output_destination = $config['output_destination'];
     $timeout = $config['timeout']; // in seconds
-    // TODO how do we map $input_argument to the callable executable binary?
     if (isset($io->input->{$input_property})) {
       setlocale(LC_CTYPE, 'en_US.UTF-8');
       $execstring = $this->buildExecutableCommand($io);
@@ -296,6 +327,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
       }
       //Ok, let's try to get the an extension if there is one
       // will be 4 characters after
+      // What if its more? like tar.gz ?
       $extension = substr($arguments, (int) $pos + 8, 5);
       $extension = trim($extension ?? '');
       $extension = (strpos($extension, '.') === 0) && strlen($extension) >= 4 ? $extension : '';
@@ -310,10 +342,10 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
 
     if (\Drupal::service('strawberryfield.utility')
         ->verifyCommand($execpath) && (strpos($arguments, '%file') !== FALSE)) {
-
+      // Adds single quote around %s just in case the filenames contain (should not) a space
       $arguments = str_replace('%s', '', $arguments);
-      $arguments = $this->strReplaceFirst('%file', '%s', $arguments);
-      $arguments = $this->strReplaceFirst('%outfile', '%s', $arguments);
+      $arguments = $this->strReplaceFirst('%file', "'%s'", $arguments);
+      $arguments = $this->strReplaceFirst('%outfile', "'%s'", $arguments);
       if ($out_file_path) {
         // WE need the original one without extension here.
         $arguments = sprintf($arguments, $file_path, $out_file_path);
