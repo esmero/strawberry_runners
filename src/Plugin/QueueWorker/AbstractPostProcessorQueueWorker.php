@@ -13,21 +13,23 @@ use Drupal\Core\Datetime\DrupalDateTime;
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\TranslatableInterface;
+use Drupal\Core\File\FileExists;
 use Drupal\Core\File\FileSystemInterface;
 use Drupal\Core\KeyValueStore\KeyValueFactoryInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
 use Drupal\Core\Queue\QueueWorkerBase;
 use Drupal\Core\StreamWrapper\StreamWrapperInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\file\FileInterface;
 use Drupal\search_api\Query\QueryInterface;
+use Drupal\strawberry_runners\Plugin\Exception\FailedRunnerException;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberryfield\Event\StrawberryfieldFileEvent;
 use Drupal\strawberryfield\Semantic\ActivityStream;
 use Drupal\Core\File\Exception\FileException;
 use Drupal\strawberryfield\StrawberryfieldEventType;
 use Exception;
-use Drupal\Core\Queue\RequeueException;
 use Psr\Log\LoggerInterface;
 use Psr\Log\LogLevel;
 use stdClass;
@@ -43,6 +45,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     'background' => 'strawberryrunners_process_background',
     'realtime' => 'strawberryrunners_process_index'
   ];
+
+  use StringTranslationTrait;
   /**
    * Drupal\Core\Entity\EntityTypeManager definition.
    *
@@ -161,13 +165,12 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
     // If $data->filepath_to_clean is present and is an array (can be a single entry) and
     // $data->sbr_cleanup == TRUE
-    // Then this is will not do its processor invoking, this is a cleanup local files
-    // We send the composter even invocation and return;
+    // Then this will not do its processor invoking, this is a cleanup local files
+    // We send the composter invocation and return;
     if (is_array($data->filepath_to_clean ?? NULL) && ($data->sbr_cleanup ?? FALSE)) {
       $this->dispatchComposter($data);
       return;
     }
-
 
     $processor_instance = $this->getProcessorPlugin($data->plugin_config_entity_id);
 
@@ -205,6 +208,16 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ]);
       return;
     }
+    // Return sooner if there is no destination
+    if (!isset($processor_config['output_destination']) || !is_array($processor_config['output_destination'])) {
+      $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted for ADO Node ID @nodeid because there is no output destination setup for @processor',
+        [
+          '@processor' => $processor_instance->label(),
+          '@nodeid' => $data->nid,
+        ]
+      );
+      return;
+    }
 
     // We only need to ensure $file if we are going to use the actual file for processing.
     if ($processor_instance->getPluginDefinition()['input_property'] == 'filepath') {
@@ -229,16 +242,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     }
     else {
       $data->filepath = NULL;
-    }
-
-    if (!isset($processor_config['output_destination']) || !is_array($processor_config['output_destination'])) {
-      $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing aborted for ADO Node ID @nodeid because there is no output destination setup for @processor',
-        [
-          '@processor' => $processor_instance->label(),
-          '@nodeid' => $data->nid,
-        ]
-      );
-      return;
     }
 
     // Get the whole processing chain
@@ -268,9 +271,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     // AND won't chain in the future
 
     $needs_localfile_cleanup = !$will_chain_future && !$data->sbr_cleanedup_before && $processor_instance->getPluginDefinition()['input_property'] == 'filepath';
+    $needs_immediate_localfile_cleanup = $needs_localfile_cleanup && $this->isProcessorRoot($data->plugin_config_entity_id);
     // We set this before triggering cleanup, means future thinking
     // bc we need to make sure IF there is a next processor it will get
-    // The info that during this queuworker processing cleanup at the end
+    // The info that during this queue worker processing cleanup at the end
     // Will happen at the end.
     $data->sbr_cleanedup_before = $data->sbr_cleanedup_before == TRUE ? $data->sbr_cleanedup_before : $needs_localfile_cleanup;
 
@@ -290,334 +294,352 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     if (array_key_exists('plugin', $enabled_processor_output_types) && $enabled_processor_output_types['plugin'] === 'plugin') {
       $tobechained = TRUE;
     }
-
-    // Only applies to those that will be indexed
-    if ($tobeindexed) {
-      try {
-        // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
-        $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
-        $keyvalue_collection = StrawberryfieldFlavorDatasource::SBFL_KEY_COLLECTION;
-        $item_ids = [];
-        $inindex = 1;
-        $input_property = $processor_instance->getPluginDefinition()['input_property'];
-        $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
-        $sequence_key = 1;
-
-        // If argument is not there we will assume there is a mistake and that it is
-        // a single one.
-        // New ot 0.9.0. Since ML chained might have as input argument 'annotation'
-        // But still need a sequence_number, we will check if data contains either one
-        // or a FIXED ->sequence_number
-        if ($input_argument && $input_argument == "sequence_number") {
-          $data->{$input_argument} = $data->{$input_argument} ?? 1;
-          // In case $data->{$input_argument} is an array/data we will use the key as "sequence"
-          // Each processor needs to be sure it passes a single item and with a unique key
-          if (is_array($data->{$input_argument})) {
-            $sequence_key = array_key_first($data->{$input_argument});
-          }
-          else {
-            $sequence_key = (int) $data->{$input_argument} ?? 1;
-          }
-        }
-        else {
-          // See fixed. ML processors will always set this in their output.
-          $sequence_key = $data->sequence_number ?? 1;
-        }
-        // Here goes the main trick for making sure out $sequence_key in the Solr ID
-        // Is the right now (relative to its own, 1 if single file, or an increasing number if a pdf
-        // We check if the current item has siblings!
-        if (!isset($data->siblings) || isset($data->siblings) && $data->siblings == 1) {
+    try {
+      // Only applies to those that will be indexed
+      if ($tobeindexed) {
+        try {
+          // Get which indexes have our StrawberryfieldFlavorDatasource enabled!
+          $indexes = StrawberryfieldFlavorDatasource::getValidIndexes();
+          $keyvalue_collection = StrawberryfieldFlavorDatasource::SBFL_KEY_COLLECTION;
+          $item_ids = [];
+          $inindex = 1;
+          $input_property = $processor_instance->getPluginDefinition()['input_property'];
+          $input_argument = $processor_instance->getPluginDefinition()['input_argument'];
           $sequence_key = 1;
-        }
-        // Now the strange case of a PDF, page 2, with annotations.
-        if (isset($data->internal_sequence_id) && is_numeric($data->internal_sequence_id) && $data->internal_sequence_id !=1 ) {
-          $sequence_key = $sequence_key . '-' . $data->internal_sequence_id;
-          // So Second Page of a PDF, first ML annotation will be 2-1
-        }
 
-        if (is_a($entity, TranslatableInterface::class)) {
-          $translations = $entity->getTranslationLanguages();
-          foreach ($translations as $translation_id => $translation) {
-            // checksum and file->uuid apply even if the source is not a local-ized/ensure local file.
-            // But we might want to review this if we plan on indexing JSON RAW/metadata directly as an vector embedding.
-            $item_id = $entity->id() . ':' . $sequence_key . ':' . $translation_id . ':' . $file->uuid() . ':' . $data->plugin_config_entity_id;
-            // a single 0 as return will force us to reindex.
-            $inindex = $inindex * $this->flavorInSolrIndex($item_id, $data->metadata['checksum'], $indexes);
-            $item_ids[] = $item_id;
-          }
-        }
-
-        // Check if we already have this entry in Solr
-        if ($inindex !== 0 && !$data->force) {
-          $this->logger->log(LogLevel::INFO, 'Flavor already in index for @plugin on ADO Node ID @nodeid, not forced, so skipping or chaining.',
-            [
-              '@plugin' => $processor_instance->getPluginId(),
-              '@nodeid' => $data->nid,
-            ]
-          );
-        }
-        $inkeystore = TRUE;
-
-        // For now keeping a single language. Processor might not be aware of other languages for chaining indexed?
-        // Reason is even if we iterate over each language, $toindex == 1. Always the same.
-        // @TODO May 2024. Re-Review this in Flavor Data Source provider. We could save ourself a lot of KeyStore element.s
-        $processed_data_for_chaining = NULL;
-
-        // Skip file if element for every language is found in key_value collection.
-        foreach ($item_ids as $item_id) {
-          $processed_data = $this->keyValue->get($keyvalue_collection)
-            ->get($item_id);
-          if (empty($processed_data) || !isset($processed_data->checksum) ||
-            empty($processed_data->checksum) ||
-            $processed_data->checksum != $data->metadata['checksum']) {
-            $inkeystore = $inkeystore && FALSE;
+          // If argument is not there we will assume there is a mistake and that it is
+          // a single one.
+          // New ot 0.9.0. Since ML chained might have as input argument 'annotation'
+          // But still need a sequence_number, we will check if data contains either one
+          // or a FIXED ->sequence_number
+          if ($input_argument && $input_argument == "sequence_number") {
+            $data->{$input_argument} = $data->{$input_argument} ?? 1;
+            // In case $data->{$input_argument} is an array/data we will use the key as "sequence"
+            // Each processor needs to be sure it passes a single item and with a unique key
+            if (is_array($data->{$input_argument})) {
+              $sequence_key = array_key_first($data->{$input_argument});
+            }
+            else {
+              $sequence_key = (int) $data->{$input_argument} ?? 1;
+            }
           }
           else {
-            // I am keeping a single one here. Should we discern by language for chaining?
-            // @TODO analize what it means for us.
-            $processed_data_for_chaining = $processed_data;
+            // See fixed. ML processors will always set this in their output.
+            $sequence_key = $data->sequence_number ?? 1;
           }
-        }
-        // May 2024. Allow a Processor that is to be indexed, already was processed and has data in the key store
-        // To use that data as input for a child one, if chained too. But only if nothing has set $io->output->plugin before
-        // This is needed for Processors (e.g OCR) that have already processed everything and then get a new chained
-        // Child that was never processed before. Would be terrible to have to re-process OCR completely just to get
-        // A Child to trigger. We will only provide $io->input->plugin['searchapi'] bc that is what we know
-        // Any other type of child won't be able to feed from pre-existing.
-        if ($inkeystore && $tobechained && !$data->force && $processed_data_for_chaining!=NULL && (!isset($io->output->plugin) || !empty($io->output->plugin))) {
-          // Since we don't know at all what $io->output->plugin should contain
-          // We will pass the keystore value into $io->output->plugin and let the Processor itself (needs to have that logic)
-          // Deal with this use case.
-          $this->logger->log(LogLevel::INFO, 'Chaining @plugin on ADO Node ID @nodeid with preexisting data to the next one.',
-            [
-              '@plugin' => $processor_instance->getPluginId(),
-              '@nodeid' => $data->nid,
-            ]
-          );
-          if (!isset($io)) {
-            $io=  new \stdClass();
-            $io->output = new \stdClass();
-            $io->output->plugin = [];
+          // Here goes the main trick for making sure out $sequence_key in the Solr ID
+          // Is the right now relative to its own, 1 if single file, or an increasing number if a pdf
+          // We check if the current item has siblings!
+          if (!isset($data->siblings) || isset($data->siblings) && $data->siblings == 1) {
+            $sequence_key = 1;
           }
-          $io->output->plugin['searchapi'] = $processed_data_for_chaining;
-        }
+          // Now the strange case of a PDF, page 2, with annotations.
+          if (isset($data->internal_sequence_id) && is_numeric($data->internal_sequence_id) && $data->internal_sequence_id != 1) {
+            $sequence_key = $sequence_key . '-' . $data->internal_sequence_id;
+            // So Second Page of a PDF, first ML annotation will be 2-1
+          }
 
-        // Allows a force in case of corrupted key value? Partial output
-        // External/weird data?
-
-        if (($inindex === 0 || $inkeystore === FALSE) ||
-          $data->force == TRUE) {
-          // Extract file and save it in key_value collection.
-          $this->logger->log(LogLevel::INFO, 'Invoking @plugin on ADO Node ID @nodeid.',
-            [
-              '@plugin' => $processor_instance->getPluginId(),
-              '@nodeid' => $data->nid,
-            ]
-          );
-          $io = $this->invokeProcessor($processor_instance, $data);
-
-          // Check if $io->output exists?
-          $toindex = new stdClass();
-          $toindex->fulltext = $io->output->searchapi['fulltext'] ?? '';
-          $toindex->config_processor_id = $data->plugin_config_entity_id ?? '';
-          $toindex->plaintext = $io->output->searchapi['plaintext'] ?? '';
-          $toindex->metadata = $io->output->searchapi['metadata'] ?? [];
-          $toindex->who = $io->output->searchapi['who'] ?? [];
-          $toindex->where = $io->output->searchapi['where'] ?? [];
-          $toindex->when = $io->output->searchapi['when'] ?? [];
-          $toindex->ts = $io->output->searchapi['ts'] ?? NULL;
-          // Comes from WACZ Text one
-          $toindex->uri = $io->output->searchapi['uri'] ?? NULL;
-          $toindex->label = $io->output->searchapi['label'] ?? NULL;
-          $toindex->sentiment = $io->output->searchapi['sentiment'] ?? 0;
-          $toindex->nlplang = $io->output->searchapi['nlplang'] ?? [];
-          $toindex->processlang = $io->output->searchapi['processlang'] ?? [];
-          // ML ones.
-          $toindex->vector_384 = $io->output->searchapi['vector_384'] ?? NULL;
-          $toindex->vector_512 = $io->output->searchapi['vector_512'] ?? NULL;
-          $toindex->vector_576 = $io->output->searchapi['vector_576'] ?? NULL;
-          $toindex->vector_1024 = $io->output->searchapi['vector_1024'] ?? NULL;
-          $toindex->vector_768 = $io->output->searchapi['vector_768'] ?? NULL;
-          $toindex->service_md5 = $io->output->searchapi['service_md5'] ?? '';
-
-          // $siblings will be the amount of total children processors that were
-          // enqueued for a single Processor chain.
-          $toindex->sequence_total = !empty($data->siblings) ? $data->siblings : 1;
-          // Be implicit about this one. No longer depend on the Solr DOC ID splitting.
-
-          $toindex->sequence_id = $data->sequence_number ?? 1;
-          $toindex->internal_sequence_id = $data->internal_sequence_id ?? $toindex->sequence_id ;
-          $toindex->checksum = $data->metadata['checksum'];
-
-          $datasource_id = 'strawberryfield_flavor_datasource';
-          foreach ($indexes as $index) {
-            // For each language we do this
-            // Eventually we will want to have different outputs per language?
-            // But maybe not for HOCR. since the doc will be the same.
-            foreach ($item_ids as $item_id) {
-              $this->keyValue->get($keyvalue_collection)
-                ->set($item_id, $toindex);
+          if (is_a($entity, TranslatableInterface::class)) {
+            $translations = $entity->getTranslationLanguages();
+            foreach ($translations as $translation_id => $translation) {
+              // checksum and file->uuid apply even if the source is not a local-ized/ensure local file.
+              // But we might want to review this if we plan on indexing JSON RAW/metadata directly as an vector embedding.
+              $item_id = $entity->id() . ':' . $sequence_key . ':' . $translation_id . ':' . $file->uuid() . ':' . $data->plugin_config_entity_id;
+              // a single 0 as return will force us to reindex.
+              $inindex = $inindex * $this->flavorInSolrIndex($item_id, $data->metadata['checksum'], $indexes);
+              $item_ids[] = $item_id;
             }
-            $index->trackItemsInserted($datasource_id, $item_ids);
+          }
+
+          // Check if we already have this entry in Solr
+          if ($inindex !== 0 && !$data->force) {
+            $this->logger->log(LogLevel::INFO, 'Flavor already in index for @plugin on ADO Node ID @nodeid, not forced, so skipping or chaining.',
+              [
+                '@plugin' => $processor_instance->getPluginId(),
+                '@nodeid' => $data->nid,
+              ]
+            );
+          }
+          $inkeystore = TRUE;
+
+          // For now keeping a single language. Processor might not be aware of other languages for chaining indexed?
+          // Reason is even if we iterate over each language, $toindex == 1. Always the same.
+          // @TODO May 2024. Re-Review this in Flavor Data Source provider. We could save ourself a lot of KeyStore element.s
+          $processed_data_for_chaining = NULL;
+
+          // Skip file if element for every language is found in key_value collection.
+          foreach ($item_ids as $item_id) {
+            $processed_data = $this->keyValue->get($keyvalue_collection)
+              ->get($item_id);
+            if (empty($processed_data) || !isset($processed_data->checksum) ||
+              empty($processed_data->checksum) ||
+              $processed_data->checksum != $data->metadata['checksum']) {
+              $inkeystore = $inkeystore && FALSE;
+            }
+            else {
+              // I am keeping a single one here. Should we discern by language for chaining?
+              // @TODO analize what it means for us.
+              $processed_data_for_chaining = $processed_data;
+            }
+          }
+          // May 2024. Allow a Processor that is to be indexed, already was processed and has data in the key store
+          // To use that data as input for a child one, if chained too. But only if nothing has set $io->output->plugin before
+          // This is needed for Processors (e.g OCR) that have already processed everything and then get a new chained
+          // Child that was never processed before. Would be terrible to have to re-process OCR completely just to get
+          // A Child to trigger. We will only provide $io->input->plugin['searchapi'] bc that is what we know
+          // Any other type of child won't be able to feed from pre-existing.
+          if ($inkeystore && $tobechained && !$data->force && $processed_data_for_chaining != NULL && (!isset($io->output->plugin) || !empty($io->output->plugin))) {
+            // Since we don't know at all what $io->output->plugin should contain
+            // We will pass the keystore value into $io->output->plugin and let the Processor itself (needs to have that logic)
+            // Deal with this use case.
+            $this->logger->log(LogLevel::INFO, 'Chaining @plugin on ADO Node ID @nodeid with preexisting data to the next one.',
+              [
+                '@plugin' => $processor_instance->getPluginId(),
+                '@nodeid' => $data->nid,
+              ]
+            );
+            if (!isset($io)) {
+              $io = new \stdClass();
+              $io->output = new \stdClass();
+              $io->output->plugin = [];
+            }
+            $io->output->plugin['searchapi'] = $processed_data_for_chaining;
+          }
+
+          // Allows a force in case of corrupted key value? Partial output
+          // External/weird data?
+
+          if (($inindex === 0 || $inkeystore === FALSE) ||
+            $data->force == TRUE) {
+            // Extract file and save it in key_value collection.
+            $this->logger->log(LogLevel::INFO, 'Invoking @plugin on ADO Node ID @nodeid.',
+              [
+                '@plugin' => $processor_instance->getPluginId(),
+                '@nodeid' => $data->nid,
+              ]
+            );
+
+            $io = $this->invokeProcessor($processor_instance, $data);
+            // Check if $io->output exists?
+            $toindex = new stdClass();
+            $toindex->fulltext = $io->output->searchapi['fulltext'] ?? '';
+            $toindex->config_processor_id = $data->plugin_config_entity_id ?? '';
+            $toindex->plaintext = $io->output->searchapi['plaintext'] ?? '';
+            $toindex->metadata = $io->output->searchapi['metadata'] ?? [];
+            $toindex->who = $io->output->searchapi['who'] ?? [];
+            $toindex->where = $io->output->searchapi['where'] ?? [];
+            $toindex->when = $io->output->searchapi['when'] ?? [];
+            $toindex->ts = $io->output->searchapi['ts'] ?? NULL;
+            // Comes from WACZ Text one
+            $toindex->uri = $io->output->searchapi['uri'] ?? NULL;
+            $toindex->label = $io->output->searchapi['label'] ?? NULL;
+            $toindex->sentiment = $io->output->searchapi['sentiment'] ?? 0;
+            $toindex->nlplang = $io->output->searchapi['nlplang'] ?? [];
+            $toindex->processlang = $io->output->searchapi['processlang'] ?? [];
+            // ML ones.
+            $toindex->vector_384 = $io->output->searchapi['vector_384'] ?? NULL;
+            $toindex->vector_512 = $io->output->searchapi['vector_512'] ?? NULL;
+            $toindex->vector_576 = $io->output->searchapi['vector_576'] ?? NULL;
+            $toindex->vector_1024 = $io->output->searchapi['vector_1024'] ?? NULL;
+            $toindex->vector_768 = $io->output->searchapi['vector_768'] ?? NULL;
+            $toindex->service_md5 = $io->output->searchapi['service_md5'] ?? '';
+
+            // $siblings will be the amount of total children processors that were
+            // enqueued for a single Processor chain.
+            $toindex->sequence_total = !empty($data->siblings) ? $data->siblings : 1;
+            // Be implicit about this one. No longer depend on the Solr DOC ID splitting.
+
+            $toindex->sequence_id = $data->sequence_number ?? 1;
+            $toindex->internal_sequence_id = $data->internal_sequence_id ?? $toindex->sequence_id;
+            $toindex->checksum = $data->metadata['checksum'];
+
+            $datasource_id = 'strawberryfield_flavor_datasource';
+            foreach ($indexes as $index) {
+              // For each language we do this
+              // Eventually we will want to have different outputs per language?
+              // But maybe not for HOCR. since the doc will be the same.
+              foreach ($item_ids as $item_id) {
+                $this->keyValue->get($keyvalue_collection)
+                  ->set($item_id, $toindex);
+              }
+              $index->trackItemsInserted($datasource_id, $item_ids);
+            }
+          }
+        }
+        catch (Exception $exception) {
+          throw new FailedRunnerException($exception->getMessage());
+        }
+      }
+      else {
+          $io = $this->invokeProcessor($processor_instance, $data);
+      }
+      // Means we got a file back from the processor
+      if ($tobeupdated && isset($io->output->file) && !empty($io->output->file)) {
+        $this->updateNodeWithFile($entity, $data, $io);
+      }
+      // Chains a new Processor into the QUEUE, if there are any children
+      if ($tobechained && isset($io->output->plugin) && !empty($io->output->plugin)) {
+        foreach ($childprocessorschain as $plugin_info) {
+          if ($plugin_info['parent_plugin_id'] !== $data->plugin_config_entity_id) {
+            // Means it is another processor up the tree
+            continue;
+          }
+          $childdata = clone $data; // So we do not touch original data
+          //@TODO. What if we want to force a child object only?
+          // We could IF the Child Object depends only on searchapi.
+          // Requires a Change in our SBR Trigger VBO plugin
+          // @TODO ask Allison. We might need a VBO processor to delete, selectively Flavors from Key/Solr too.
+          // Only way of A) removing Bias/bad vectors/Even bad OCR> And the processor should be also be able to mark
+          // ap:task no ML etc
+          /* if ($plugin_info['plugin_definition']['id'] ?? NULL == 'ml_sentence_transformer') {
+            $childdata->force = TRUE;
+          }*/
+          /* @var  $strawberry_runners_postprocessor_config \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity */
+          $postprocessor_config_entity = $plugin_info['config_entity'];
+          $queue_name = $postprocessor_config_entity->getPluginconfig()['processor_queue_type'] ?? 'realtime';
+          $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$queue_name] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
+          $input_property = $plugin_info['plugin_definition']['input_property'] ?? NULL;
+          $input_argument = $plugin_info['plugin_definition']['input_argument'] ?? NULL;
+          //@TODO check if this are here and not null!
+          // $io->output will contain whatever the output is
+          // We will check if the child processor
+          // contains a property contained in $output
+          // If so we check if there is a single value or multiple ones
+          // For each we enqueue a child using that property in its data
+          // Possible input properties:
+          // - Can come from the original Data (most likely)
+          // - May be overridden by the $io->output, e.g when a processor generates a file that is not part of any node
+          $input_property_value_from_plugin = TRUE;
+          $input_property_value = $input_property && isset($io->output->plugin) && isset($io->output->plugin[$input_property]) ? $io->output->plugin[$input_property] : NULL;
+          // If was not defined by the previous processor try from the main data.
+          if ($input_property_value == NULL) {
+            $input_property_value_from_plugin = FALSE;
+            $input_property_value = isset($data->{$input_property}) ? $data->{$input_property} : NULL;
+          }
+
+          // If still null means the child is incompatible with the parent. We abort.
+          if ($input_property_value == NULL) {
+            $this->logger->log(LogLevel::WARNING,
+              'Sorry @childplugin is incompatible with @parentplugin or its output or the later is empty, skipping.',
+              [
+                '@parentplugin' => $data->plugin_config_entity_id,
+                '@childplugin' => $postprocessor_config_entity->id(),
+              ]);
+            continue;
+          }
+          // Warning Diego. This could lead to a null?
+          $childdata->{$input_property} = $input_property_value;
+          $childdata->plugin_config_entity_id = $postprocessor_config_entity->id();
+          $input_argument_value = $input_argument && isset($io->output->plugin) && isset($io->output->plugin[$input_argument]) ?
+            $io->output->plugin[$input_argument] : ($input_argument && isset($data->{$input_argument}) ? $data->{$input_argument} : NULL);
+
+          // May 2024, Most cases, like Pagers (PDF page extractors) $input_argument_value will be an array, a sequence
+          // Leading to many children.
+          // But for chained processors like ML ones, e.g each OCR will generate exactly ONE ML
+          // using the same input property of OCR.
+          // So we can no longer assume/not depend on $input_argument_value as we did until 0.7.0
+
+          if ($input_argument_value) {
+            if (is_array($input_argument_value)) {
+              foreach ($input_argument_value as $input_argument_index => $value) {
+                // Here is the catch.
+                // Output properties may be many
+                // Input Properties matching always need to be one
+                if (!is_array($value)) {
+                  $childdata->{$input_argument} = $value;
+                  // The count will always be relative to this call
+                  // Means count of how many children are being called.
+                  $childdata->siblings = count($input_argument_value);
+                  // In case the $input_property_value is an array coming from a plugin we may want to know if it has the same amount of values of $input_argument_value
+                  // If so, it is many to one, and we only need the corresponding entry to this sequence
+                  if ($input_property_value_from_plugin &&
+                    is_array($input_property_value) &&
+                    count($input_property_value) == $childdata->siblings &&
+                    isset($input_property_value[$value])) {
+                    $childdata->{$input_property} = $input_property_value[$value];
+                  }
+
+                  $childdata->sequence_id = $childdata->sequence_id ?? 1;
+                  // I know sequence_number and sequence_id are the same. But we have been using this silly mapping
+                  // for years.
+                  $childdata->sequence_number = $childdata->sequence_number ?? $childdata->sequence_id;
+
+                  $childdata->internal_sequence_id = $input_argument_index + 1;
+                  Drupal::queue($queue_name, TRUE)
+                    ->createItem($childdata);
+                }
+              }
+            }
+            elseif (!empty($input_argument_value) && $input_property_value) {
+              // WE Have a single one. e.g. Generated by a Double chaining. For 0.8.0 we will accept this option
+              $childdata->{$input_argument} = $input_argument_value;
+              $childdata->{$input_property} = $input_property_value;
+              $childdata->siblings = $childdata->siblings ?? 1;
+
+              $childdata->sequence_id = $childdata->sequence_id ?? 1;
+              $childdata->sequence_number = $childdata->sequence_number ?? $childdata->sequence_id;
+              $childdata->internal_sequence_id = $childdata->internal_sequence_id ?? 1;
+
+              Drupal::queue($queue_name, TRUE)
+                ->createItem($childdata);
+            }
           }
         }
       }
-      catch (Exception $exception) {
+      // If we enqueued means we can not compost the original file.
+      // Safest route to get rid of the ensured local file
+      // Is to enqueue it on the same `strawberryrunners_process_background` queue
+      // Sadly not on a processor that is a leaf but on the one that creates leaves! (enques)
+      // or it will never enqueue at all. (yes, some just process).
+      // Why? because for one that creates there might be hundreds of leaves and we don't want
+      // to enqueue for cleanup hundred of times. Right?
+      // There is a bit of statistics (when) here but that said
+      // Since the file is re-checked of existence everytime a queue worker jumps
+      // in, if lost, we will simply regenerate it.
+      // Note for 1.1.0 and 2.1.0
+      // There is a problem with this approach.
+      // Imagine a Processor that has is root and leaf at the same time
+      // We have 1000 Enqueued (e.g system binary)
+      // Each one for a different ADO.
+      // BY enqueuing at the end, first clean up will happen at 1001
+      // By then we will be out of space.
+    }
+    catch (FailedRunnerException $exception) {
+      $message_params = [
+        '@file_id' => $data->fid,
+        '@entity_id' => $data->nid,
+        '@message' => $exception->getMessage(),
+      ];
+      if (!isset($data->extract_attempts)) {
+        $data->extract_attempts = 0;
+        $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed with message: @message File id @file_id at ADO Node ID @entity_id.', $message_params);
+      }
+      if ($data->extract_attempts < 3) {
+        $data->extract_attempts++;
+        // Re-enqueue in the same Queue it came from. Not so great to have round robin
+        Drupal::queue($queue_name, TRUE)
+          ->createItem($data);
+      }
+      else {
         $message_params = [
           '@file_id' => $data->fid,
           '@entity_id' => $data->nid,
-          '@message' => $exception->getMessage(),
         ];
-        if (!isset($data->extract_attempts)) {
-          $data->extract_attempts = 0;
-          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed with message: @message File id @file_id at ADO Node ID @entity_id.', $message_params);
-        }
-        if ($data->extract_attempts < 3) {
-          $data->extract_attempts++;
-          // Re-enqueue in the same Queue it came from. Not so great to have round robin
-          Drupal::queue($queue_name, TRUE)
-            ->createItem($data);
-        }
-        else {
-          $message_params = [
-            '@file_id' => $data->fid,
-            '@entity_id' => $data->nid,
-          ];
-          $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts File Id @file_id at ADO Node ID @entity_id.', $message_params);
-        }
+        $this->logger->log(LogLevel::ERROR, 'Strawberry Runners Processing failed after 3 attempts File Id @file_id at ADO Node ID @entity_id.', $message_params);
       }
     }
-    else {
-      $io = $this->invokeProcessor($processor_instance, $data);
-    }
-    // Means we got a file back from the processor
-    if ($tobeupdated && isset($io->output->file) && !empty($io->output->file)) {
-      $this->updateNodeWithFile($entity, $data, $io);
-    }
-    // Chains a new Processor into the QUEUE, if there are any children
-    if ($tobechained && isset($io->output->plugin) && !empty($io->output->plugin)) {
-      foreach ($childprocessorschain as $plugin_info) {
-        if ($plugin_info['parent_plugin_id'] !== $data->plugin_config_entity_id) {
-          // Means its another processor up the tree
-          continue ;
-        }
-        $childdata = clone $data; // So we do not touch original data
-        //@TODO. What if we want to force a child object only?
-        // We could IF the Child Object depends only on searchapi.
-        // Requires a Change in our SBR Trigger VBO plugin
-        // @TODO ask Allison. We might need a VBO processor to delete, selectively Flavors from Key/Solr too.
-        // Only way of A) removing Bias/bad vectors/Even bad OCR> And the processor should be also be able to mark
-        // ap:task no ML etc
-        /* if ($plugin_info['plugin_definition']['id'] ?? NULL == 'ml_sentence_transformer') {
-          $childdata->force = TRUE;
-        }*/
-        /* @var  $strawberry_runners_postprocessor_config \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity */
-        $postprocessor_config_entity = $plugin_info['config_entity'];
-        $queue_name = $postprocessor_config_entity->getPluginconfig()['processor_queue_type'] ?? 'realtime';
-        $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$queue_name] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
-        $input_property = $plugin_info['plugin_definition']['input_property'] ?? NULL;
-        $input_argument = $plugin_info['plugin_definition']['input_argument'] ?? NULL;
-        //@TODO check if this are here and not null!
-        // $io->output will contain whatever the output is
-        // We will check if the child processor
-        // contains a property contained in $output
-        // If so we check if there is a single value or multiple ones
-        // For each we enqueue a child using that property in its data
-        // Possible input properties:
-        // - Can come from the original Data (most likely)
-        // - May be overridden by the $io->output, e.g when a processor generates a file that is not part of any node
-        $input_property_value_from_plugin = TRUE;
-        $input_property_value = $input_property && isset($io->output->plugin) && isset($io->output->plugin[$input_property]) ? $io->output->plugin[$input_property] : NULL;
-        // If was not defined by the previous processor try from the main data.
-        if ($input_property_value == NULL) {
-          $input_property_value_from_plugin = FALSE;
-          $input_property_value = isset($data->{$input_property}) ? $data->{$input_property} : NULL;
-        }
 
-        // If still null means the child is incompatible with the parent. We abort.
-        if ($input_property_value == NULL) {
-          $this->logger->log(LogLevel::WARNING,
-            'Sorry @childplugin is incompatible with @parentplugin or its output or the later is empty, skipping.',
-            [
-              '@parentplugin' => $data->plugin_config_entity_id,
-              '@childplugin' => $postprocessor_config_entity->id(),
-            ]);
-          continue;
-        }
-        // Warning Diego. This may lead to a null?
-        $childdata->{$input_property} = $input_property_value;
-        $childdata->plugin_config_entity_id = $postprocessor_config_entity->id();
-        $input_argument_value = $input_argument && isset($io->output->plugin) && isset($io->output->plugin[$input_argument]) ?
-          $io->output->plugin[$input_argument] : ($input_argument && isset($data->{$input_argument}) ? $data->{$input_argument} : NULL);
-
-        // May 2024, Most cases, like Pagers (PDF page extractors) $input_argument_value will be an array, a sequence
-        // Leading to many children.
-        // But for chained processors like ML ones, e.g each OCR will generate exactly ONE ML
-        // using the same input property of OCR.
-        // So we can no longer assume/not depend on $input_argument_value as we did until 0.7.0
-
-        if ($input_argument_value) {
-          if (is_array($input_argument_value)) {
-            foreach ($input_argument_value as $input_argument_index => $value) {
-              // Here is the catch.
-              // Output properties may be many
-              // Input Properties matching always need to be one
-              if (!is_array($value)) {
-                $childdata->{$input_argument} = $value;
-                // The count will always be relative to this call
-                // Means count of how many children are being called.
-                $childdata->siblings = count($input_argument_value);
-                // In case the $input_property_value is an array coming from a plugin we may want to know if it has the same amount of values of $input_argument_value
-                // If so, it is many to one, and we only need the corresponding entry to this sequence
-                if ($input_property_value_from_plugin &&
-                  is_array($input_property_value) &&
-                  count($input_property_value) == $childdata->siblings &&
-                  isset($input_property_value[$value])) {
-                  $childdata->{$input_property} = $input_property_value[$value];
-                }
-
-                $childdata->sequence_id =  $childdata->sequence_id ?? 1;
-                // I know sequence_number and sequence_id are the same. But we have been using this silly mapping
-                // for years.
-                $childdata->sequence_number = $childdata->sequence_number ?? $childdata->sequence_id;
-
-                $childdata->internal_sequence_id = $input_argument_index + 1;
-                Drupal::queue($queue_name, TRUE)
-                  ->createItem($childdata);
-              }
-            }
-          } elseif (!empty($input_argument_value) && $input_property_value) {
-            // WE Have a single one. E.g Generated by a Double chaining. For 0.8.0 we will accept this option
-            $childdata->{$input_argument} = $input_argument_value;
-            $childdata->{$input_property} = $input_property_value;
-            $childdata->siblings = $childdata->siblings ?? 1;
-
-            $childdata->sequence_id = $childdata->sequence_id ?? 1;
-            $childdata->sequence_number = $childdata->sequence_number ?? $childdata->sequence_id;
-            $childdata->internal_sequence_id = $childdata->internal_sequence_id ?? 1;
-
-            Drupal::queue($queue_name, TRUE)
-              ->createItem($childdata);
-          }
-        }
-      }
-    }
-    // If we enqueued means we can not compost the original file.
-    // Safest route to get rid of the ensured local file
-    // Is to enqueue it on the same `strawberryrunners_process_background` queue
-    // Sadly not on a processor that is a leaf but on the one that creates leaves! (enques)
-    // or had will never enqueue at all. (yes, some just process).
-    // Why? because for one that creates there might be hundreds of leaves and we don't want
-    // to enqueue for cleanup hundred of times. Right?
-    // There is a bit of statistics (when) here but that said
-    // Since the file is re-checked of existence everytime a queue worker jumps
-    // in, if lost, we will simply regenerate it.
-    if ($needs_localfile_cleanup && $filelocation) {
+    if ($needs_localfile_cleanup && !empty($filelocation)) {
       $data_cleanup = new \stdClass();
       $data_cleanup->filepath_to_clean = [$filelocation];
       $data_cleanup->sbr_cleanup = TRUE;
-      Drupal::queue($queue_name, TRUE)
-       ->createItem($data_cleanup);
+      if (!$needs_immediate_localfile_cleanup) {
+        Drupal::queue($queue_name, TRUE)
+          ->createItem($data_cleanup);
+      }
+      else {
+        $this->dispatchComposter($data_cleanup);
+      }
     }
   }
 
@@ -655,41 +677,71 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   }
 
   /**
+   * Get the extractor plugin.
+   *
+   * @param $plugin_config_entity_id
+   *
+   * @return bool
+   *
+   * @throws \Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException
+   * @throws \Drupal\Component\Plugin\Exception\PluginException
+   * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
+   */
+  protected function isProcessorRoot($plugin_config_entity_id):bool {
+    /* @var $plugin_config_entity \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntityInterface */
+    $plugin_config_entity = $this->entityTypeManager
+      ->getStorage('strawberry_runners_postprocessor')
+      ->load($plugin_config_entity_id);
+
+    if ($plugin_config_entity->getParent() == '') {
+       return TRUE;
+    }
+    return FALSE;
+  }
+
+  /**
    * Move file to local to if needed process.
    *
    * @param \Drupal\file\FileInterface $file
    *   The File URI to look at.
    *
    * @return string|FALSE
-   *   Output of processing chain for a particular file.
+   *   Input (real path) of processing chain for a particular file.
+   *   or FALSE if it could not be acquired.
    */
   private function ensureFileAvailability(FileInterface $file) {
     $uri = $file->getFileUri();
+    $basename = basename($uri);
+    // Remove any spaces since unix commands could have issues with that.
+    // This normally should not be an issue at all since The File Persister
+    // Should have done this... but a power user could override it via a hook
+    $basename = preg_replace('/\s+/', '', $basename);
     // Local stream.
     $cache_key = md5($uri);
-    // @TODO can be sure its the same one? Ideas?
     if (is_readable(
       $this->fileSystem->realpath(
-        'temporary://sbr_' . $cache_key . '_' . basename($uri)
+        'temporary://sbr_' . $cache_key . '_' . $basename
       )
     )) {
       $templocation = $this->fileSystem->realpath(
-        'temporary://sbr_' . $cache_key . '_' . basename($uri)
+        'temporary://sbr_' . $cache_key . '_' . $basename
       );
+      // By touching an existing file we can extend its time before composting.
+      touch($templocation);
     }
     else {
       try {
         $templocation = $this->fileSystem->copy(
           $uri,
-          'temporary://sbr_' . $cache_key . '_' . basename($uri),
-          FileSystemInterface::EXISTS_REPLACE
+          'temporary://sbr_' . $cache_key . '_' . $basename,
+          FileExists::Replace
         );
         $templocation = $this->fileSystem->realpath(
           $templocation
         );
       } catch (FileException $exception) {
-        // Means the file is not longer there
-        // This happens if a file was added and shortly after that removed and replace
+        // Means the original file is not longer there
+        // This could happen if a file was added and shortly after that removed and replaced
         // by a new one.
         $templocation = FALSE;
       }
@@ -697,7 +749,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
     if (!$templocation) {
       $this->logger->warning(
-        'Could not adquire a local accessible location for text extraction for file with URL @fileurl. File may no longer exist.',
+        'Could not acquire a local accessible location for text extraction for file with URL @fileurl. File may no longer exist.',
         [
           '@fileurl' => $file->getFileUri(),
         ]
@@ -710,7 +762,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   }
 
   /**
-   * Checks Search API indexes for an Document ID and Checksum Match
+   * Checks Search API indexes for a Document ID and Checksum Match
    *
    * @param string $key
    * @param string $checksum
@@ -734,14 +786,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         'offset' => 0,
       ]);
 
-      /*$query->setFulltextFields([
-        'title',
-        'body',
-        'filename',
-        'saa_field_file_document',
-        'saa_field_file_news',
-        'saa_field_file_page'
-      ]);*/
       $parse_mode = $this->parseModeManager->createInstance('terms');
       $query->setParseMode($parse_mode);
       $query->sort('search_api_relevance', 'DESC');
@@ -795,6 +839,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    * @param \stdClass $data
    *
    * @return \stdClass
+   *
+   * @throws \Drupal\strawberry_runners\Plugin\Exception\FailedRunnerException
    */
   private function invokeProcessor(StrawberryRunnersPostProcessorPluginInterface $processor_instance, stdClass $data): stdClass {
 
@@ -802,8 +848,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $input_argument = $processor_instance->getPluginDefinition()['input_argument'] ?? NULL;
 
     // CHECK IF $input_argument even exists!
-
-
     $io = new stdClass();
     $input = new stdClass();
     if (isset($input_property)) {
@@ -823,20 +867,23 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $input->lang = $data->lang ?? NULL;
     $io->input = $input;
     $io->output = NULL;
-    //@TODO implement the TEST and BENCHMARK logic here
+    // @TODO implement the TEST and BENCHMARK logic here
     // RUN should return exit codes so we can know if something failed
-    // And totally discard indexing.
+    // And totally discard further processing.
+    // Or different THROWS depending on the actual failure.
+    // @TODO. Modify the System binary one to differentiate between
+    // Timeout && failed process. @see \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase::proc_execute
     try {
       $extracted_data = $processor_instance->run($io, StrawberryRunnersPostProcessorPluginInterface::PROCESS);
     }
     catch (\Exception $exception) {
-      $this->logger->error('@plugin threw an exception while trying to call ::run for Node UUID @nodeuuid with message: @msg', [
-          '@msg' => $exception->getMessage(),
-          '@plugin' => $processor_instance->getPluginId(),
-          '@nodeuuid' => $input->nuuid,
-        ]
-      );
-      throw new RequeueException('I am not done yet. Will re-enqueue myself');
+      $message = $this->t('@plugin threw an exception while trying to call ::run for Node UUID @nodeuuid with message: @msg. We will try to re-enqueue up to 2 times', [
+        '@msg' => $exception->getMessage(),
+        '@plugin' => $processor_instance->getPluginId(),
+        '@nodeuuid' => $input->nuuid,
+      ]);
+      $this->logger->error($message);
+      throw new FailedRunnerException($message);
     }
     return $io;
   }
@@ -863,7 +910,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ];
       $this->logger->log(
         LogLevel::ERROR,
-        'Strawberry Runners Processing failed to update Node because expected @newfile_path was not found! message: @message File id @file_id at Node @entity_id.',
+        'Strawberry Runners Processing failed to update Node because expected @newfile_path was not found! message: @message File id @file_id for Node ID @entity_id.',
         $message_params
       );
       return;
@@ -904,9 +951,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         );
         $field_content[$jsonkey][$uniqueid]['flv:' . $data->plugin_config_entity_id] = $this->addActivityStream($data->plugin_config_entity_id);
         $itemfield->setMainValueFromArray($field_content);
-        // Should we check decide on this? Safer is a new revision, but also an overhead
-        // $entity->setNewRevision(FALSE);
         $entity->save();
+        return;
       }
       catch (Exception $exception) {
         $message_params = [
@@ -917,7 +963,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         ];
         $this->logger->log(
           LogLevel::ERROR,
-          'Strawberry Runners Processing failed to update Node and add @newfile_path, message: @message for File ID @file_id at Node ID @entity_id.',
+          'Strawberry Runners Processing failed to update Node and add @newfile_path, message: @message for File ID @file_id at Node ID @entity_id. We will not try again.',
           $message_params
         );
       }
@@ -930,11 +976,13 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ];
       $this->logger->log(
         LogLevel::INFO,
-        'Strawberry Runners Processing decided to not update Node and add @newfile_path because the source was marked already as processed. message: for File ID @file_id at Node  ID@entity_id. No action is required',
+        'Strawberry Runners Processing decided to not update Node and add @newfile_path because the source was marked already as processed. message: for File ID @file_id at Node ID @entity_id. No action is required.',
         $message_params
       );
-      unlink($io->output->file);
     }
+    // This will delete if it was there and we did not update OR if it failed to update.
+    // But on proper update we return sooner.
+    unlink($io->output->file);
   }
 
   protected function addActivityStream($name = NULL) {
@@ -1051,7 +1099,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   }
 
   private function dispatchComposter(\StdClass $data):void {
-    // Just in case bc the destructor will be invoked
     $this->instanceFiles = [];
     foreach($data->filepath_to_clean ?? [] as $instanceFile) {
       $event_type = StrawberryfieldEventType::TEMP_FILE_CREATION;
@@ -1062,16 +1109,4 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       $this->eventDispatcher->dispatch($event, $event_type);
     }
   }
-
-  public function __destruct() {
-    /* foreach($this->instanceFiles as $instanceFile) {
-      $event_type = StrawberryfieldEventType::TEMP_FILE_CREATION;
-      $current_timestamp = (new DrupalDateTime())->getTimestamp();
-      $event = new StrawberryfieldFileEvent($event_type, 'strawberry_runners', $instanceFile, $current_timestamp);
-      // This will allow any temp file on ADO save to be managed
-      // IN a queue by \Drupal\strawberryfield\EventSubscriber\StrawberryfieldEventCompostBinSubscriber
-      $this->eventDispatcher->dispatch($event, $event_type);
-    }*/
-  }
-
 }
