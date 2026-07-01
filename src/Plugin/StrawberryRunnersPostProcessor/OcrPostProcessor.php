@@ -381,8 +381,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       $height = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['height'] ?? NULL;
       // In case identify failed, we can try with flv:exif (e.g JP2s might not pass the identify test)
       if (!($width && $height)) {
-         $width = $io->input->metadata['flv:exif']['ImageWidth'] ?? NULL;
-         $height = $io->input->metadata['flv:exif']['ImageHeight'] ?? NULL;
+        $width = $io->input->metadata['flv:exif']['ImageWidth'] ?? NULL;
+        $height = $io->input->metadata['flv:exif']['ImageHeight'] ?? NULL;
       }
 
       if ($width && $height) {
@@ -435,14 +435,15 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
                       $page_coords = explode(' ', $pagetitle);
                       $width_hocr = $page_coords[2] ?? $width_hocr;
                       $height_hocr = $page_coords[3] ?? $height_hocr;
-                       // Cast them to INT to make sure we are matching exactly
+                      // Cast them to INT to make sure we are matching exactly
                       $width_hocr = $width_hocr ? (int)$width_hocr : $width_hocr;
                       $height_hocr = $height_hocr ? (int)$height_hocr : $height_hocr;
                       // NOTE: we can not match offset OCRs. either full page or not
+                      $wh_from_xml = [];
                       if (($width_hocr == $width) && ($height_hocr == $height)) {
                         $ocr_html = file_get_contents($text_astructure['url']);
                         if ($ocr_html !== FALSE) {
-                          $miniocr = $this->hOCRtoMiniOCR($ocr_html, $sequence_number);
+                          $miniocr = $this->hOCRtoMiniOCR($ocr_html, $sequence_number, $wh_from_xml);
                           if ($miniocr == NULL) {
                             $this->logger->warning("@sbr_processor: HOCR to miniOCR processing from attached text file with UUID @source_hocr_uuid failed for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
                               [
@@ -455,7 +456,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
                           }
                           else {
                             $this->logger->info("@sbr_processor: HOCR to miniOCR processing from attached text file with UUID @source_hocr_uuid successfull for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
-                             [
+                              [
                                 '@sbr_processor' => $this->getPluginId(),
                                 '@node_uuid' => $node_uuid ?? 'ABSENT',
                                 '@file_uuid' => $file_uuid ?? 'ABSENT',
@@ -473,6 +474,37 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
                       // the other parts.
                       break;
                     }
+                  }
+                }
+                else {
+                  // No HTML tags in the Exif (on latest exiftool 13.55)
+                  $ocr_html = file_get_contents($text_astructure['url']);
+                  $wh_from_xml = [];
+                  if ($ocr_html !== FALSE) {
+                    $miniocr = $this->hOCRtoMiniOCR($ocr_html, $sequence_number, $wh_from_xml);
+                    if ((int)$width !== (int) ($wh_from_xml[0] ?? 1) || (int)$height !== (int) ($wh_from_xml[1] ?? 1))  {
+                      $this->logger->info("@sbr_processor: an HOCR to miniOCR processing from attached text file with UUID @source_hocr_uuid was not used bc the coordinates inside the hOCR do not match the attached Image, for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
+                        [
+                          '@sbr_processor' => $this->getPluginId(),
+                          '@node_uuid' => $node_uuid ?? 'ABSENT',
+                          '@file_uuid' => $file_uuid ?? 'ABSENT',
+                          '@source_hocr_uuid' => $text_astructure["dr:uuid"] ?? 'ABSENT',
+                          '@sequence_id' => $sequence_number,
+                        ]);
+                    }
+                    else {
+                      $this->logger->info("@sbr_processor: HOCR to miniOCR processing from attached text file with UUID @source_hocr_uuid successfull for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
+                        [
+                          '@sbr_processor' => $this->getPluginId(),
+                          '@node_uuid' => $node_uuid ?? 'ABSENT',
+                          '@file_uuid' => $file_uuid ?? 'ABSENT',
+                          '@source_hocr_uuid' => $text_astructure["dr:uuid"] ?? 'ABSENT',
+                          '@sequence_id' => $sequence_number,
+                        ]);
+                    }
+                    $output->searchapi['fulltext'] = $miniocr;
+                    $io->output = $output;
+                    $external_found = TRUE;
                   }
                 }
               }
@@ -502,8 +534,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
               ]);
             throw new \Exception("Could not execute {$execstring} or timed out");
           }
-
-          $miniocr = $this->hOCRtoMiniOCR($proc_output, $sequence_number);
+          $wh_from_xml = [];
+          $miniocr = $this->hOCRtoMiniOCR($proc_output, $sequence_number, $wh_from_xml);
           if ($miniocr == NULL) {
             $this->logger->warning("@sbr_processor: HOCR to miniOCR processing from Tesseract failed for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
               [
@@ -792,7 +824,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     return NULL;
   }
 
-  protected function hOCRtoMiniOCR($output, $pageid) {
+  protected function hOCRtoMiniOCR($output, $pageid, array &$wh_from_xml) {
+    // $wh_from_xml is an array by refernce that will hold INT values for w,h
     $hocr = simplexml_load_string($output);
     $internalErrors = libxml_use_internal_errors(TRUE);
     libxml_clear_errors();
@@ -825,6 +858,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       // To avoid divisions by 0
       $pwidth = (float) $coos[2] ? (float) $coos[2] : 1;
       $pheight = (float) $coos[3] ? (float) $coos[3] : 1;
+      $wh_from_xml = [(int) $pwidth, (int) $pheight];
       // NOTE: floats are in the form of .1 so we need to remove the first 0.
       if (count($coos)) {
         $miniocr->startElement("p");
