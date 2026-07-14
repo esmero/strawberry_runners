@@ -1077,8 +1077,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       $miniocr->startElement("p");
       $miniocr->writeAttribute("xml:id", 'sequence_' . $pageid);
       $miniocr->writeAttribute("wh", $pageWidthPx . " " . $pageHeightPx);
-      $miniocr->startElement("p");
-      $miniocr->writeAttribute("xml:id", 'sequence_' . $pageid);
       $page->registerXPathNamespace('ns',
         'http://www.loc.gov/standards/alto/ns-v3#');
       $l = ltrim(sprintf('%.3f', 0) ?? '', 0);
