@@ -35,7 +35,9 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
   public function defaultConfiguration() {
     return [
         'source_type' => 'asstructure',
-        'mime_type' => ['application/pdf'],
+        'mime_type' => 'application/pdf',
+        'dr_for' => '',
+        'dr_for_negate' => FALSE,
         'output_type' => 'json',
         'language_key' => 'language_iso639_3',
         'language_default' => 'eng',
@@ -92,6 +94,21 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
       '#title' => $this->t('Mimetypes(s) to limit this Processor to.'),
       '#default_value' => $this->getConfiguration()['mime_type'],
       '#description' => $this->t('A single Mimetype type or a coma separed list of mimetypes that qualify to be Processed. Leave empty to apply any file'),
+    ];
+
+    $element['dr_for'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('File Upload JSON Key name(s) to limit this Processor to.'),
+      '#default_value' => $this->getConfiguration()['dr_for'],
+      '#description' => $this->t('A single JSON key name or a comma separated list of JSON key names where the files that should qualify were uploaded to (dr:for in an as:filetype structure). Leave empty to apply any file upload key'),
+    ];
+
+    $element['dr_for_negate'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Skip post processing to the above configured "File Upload JSON Key name(s)"'),
+      '#default_value' => (bool) $this->getConfiguration()['dr_for_negate'] ?? FALSE,
+      '#description' => $this->t('If the previous File Upload JSON key name(s) should be skipped instead. Means, files uploaded to any JSON Key name(s) will be processed, except the ones present in above configured "File Upload JSON Key name(s)".'),
+      '#required' => FALSE,
     ];
 
     $element['language_key'] = [
@@ -180,7 +197,7 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
         // If not assign the internal file sequence relative to its type (e.g as:image)
         // Final Sequence number is always relative to itself given that on Solr
         // We use the actual file UUID to as part of the ID
-        // e.g default_solr_index-strawberryfield_flavor_datasource/5801:1:en:1e9f687c-e29e-4c23-91ba-655d9c5cdfe6:ocr
+        // e.g. default_solr_index-strawberryfield_flavor_datasource/5801:1:en:1e9f687c-e29e-4c23-91ba-655d9c5cdfe6:ocr
         // For the general ID we will use this number when there are multiple siblings
         // or 1 if the File is a single output
         $sequence_number[] = $io->input->metadata['sequence'];

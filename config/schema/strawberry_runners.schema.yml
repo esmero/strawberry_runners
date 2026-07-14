@@ -45,6 +45,12 @@ strawberryfield_runners.strawberry_runners_postprocessor.binary:
     mime_type:
       type: string
       label: 'Mimetypes(s) to limit this Processor to'
+    dr_for:
+      type: string
+      label: 'Limit this Processor to files uploaded to certain JSON Key(s)'
+    dr_for_negate:
+      type: string
+      label: 'Reverse the "files uploaded to certain JSON Key(s) limit" by allowing any except those'
     file_limit_type:
       type: string
       label: 'Type of File limit to impose for as:filetype driven input, <=. >= or NULL of disabled'
@@ -98,6 +104,12 @@ strawberryfield_runners.strawberry_runners_postprocessor.ocr:
     mime_type:
       type: string
       label: 'Mimetypes(s) to limit this Processor to'
+    dr_for:
+      type: string
+      label: 'Limit this Processor to files uploaded to certain JSON Key(s)'
+    dr_for_negate:
+      type: string
+      label: 'Reverse the "files uploaded to certain JSON Key(s) limit" by allowing any except those'
     language_default:
       type: string
       label: 'The default language'
@@ -105,6 +117,9 @@ strawberryfield_runners.strawberry_runners_postprocessor.ocr:
     language_key:
       type: bool
       label: 'The JSON key(s) containing the language code in ISO639-3'
+    single_bounding_box_pdfalto:
+      type: bool
+      label: 'If PDFAlto succeeds, remove bounding boxes and generate a full page single "word" miniOCR'
     arguments:
       type: string
       label: 'Any additional argument your executable binary requires'
@@ -191,6 +206,12 @@ strawberryfield_runners.strawberry_runners_postprocessor.filesequence:
     mime_type:
       type: string
       label: 'Mimetypes(s) to limit this Processor to'
+    dr_for:
+      type: string
+      label: 'Limit this Processor to files uploaded to certain JSON Key(s)'
+    dr_for_negate:
+      type: string
+      label: 'Reverse the "files uploaded to certain JSON Key(s) limit" by allowing any except those'
     output_type:
       type: string
       label: 'The expected and desired output of this processor'
@@ -229,6 +250,12 @@ strawberryfield_runners.strawberry_runners_postprocessor.waczpages:
     mime_type:
       type: string
       label: 'Mimetypes(s) to limit this Processor to'
+    dr_for:
+      type: string
+      label: 'Limit this Processor to files uploaded to certain JSON Key(s)'
+    dr_for_negate:
+      type: string
+      label: 'Reverse the "files uploaded to certain JSON Key(s) limit" by allowing any except those'
     output_type:
       type: string
       label: 'The expected and desired output of this processor'
@@ -267,6 +294,124 @@ strawberryfield_runners.strawberry_runners_postprocessor.webpage:
     mime_type:
       type: string
       label: 'Mimetypes(s) to limit this Processor to'
+    dr_for:
+      type: string
+      label: 'Limit this Processor to files uploaded to certain JSON Key(s)'
+    dr_for_negate:
+      type: string
+      label: 'Reverse the "files uploaded to certain JSON Key(s) limit" by allowing any except those'
+    output_type:
+      type: string
+      label: 'The expected and desired output of this processor'
+    output_destination:
+      type: sequence
+      label: 'Where and how the output will be used'
+      sequence:
+        - type: string
+    uses_timeout_executable:
+      type: boolean
+      label: 'if timeout host binary is to be used to control executable binary timeouts'
+    timeout_path:
+      type: string
+      label: 'The path for the timeout binary to execute'
+    timeout:
+      type: integer
+      label: 'Timeout in seconds for this process'
+    weight:
+      type: integer
+      label: 'Order or execution in the global chain'
+    processor_queue_type:
+      type: string
+      label: 'The queue to use for this processor'
+    nlp:
+      type: boolean
+      label: 'If NLP should be triggered for the extracted Text'
+    nlp_url:
+      type: string
+      label: 'The URL of the NLP64 server'
+    nlp_method:
+      type: string
+      label: 'The NLP method, spaCy or Polyglot'
+strawberryfield_runners.strawberry_runners_postprocessor.text:
+  type: config_object
+  label: 'Strawberry Runners Post Processor Config Entity Pure Text specific config'
+  mapping:
+    source_type:
+      type: string
+      label: 'The type of Source Data this Processor works on'
+    ado_type:
+      type: string
+      label: 'DO type(s) to limit this Processor to'
+    jsonkey:
+      type: sequence
+      label: 'The JSON key(s) containing the desired Source File(s)'
+      sequence:
+        - type: string
+    mime_type:
+      type: string
+      label: 'Mimetypes(s) to limit this Processor to'
+    dr_for:
+      type: string
+      label: 'Limit this Processor to files uploaded to certain JSON Key(s)'
+    dr_for_negate:
+      type: string
+      label: 'Reverse the "files uploaded to certain JSON Key(s) limit" by allowing any except those'
+    output_type:
+      type: string
+      label: 'The expected and desired output of this processor'
+    output_destination:
+      type: sequence
+      label: 'Where and how the output will be used'
+      sequence:
+        - type: string
+    uses_timeout_executable:
+      type: boolean
+      label: 'if timeout host binary is to be used to control executable binary timeouts'
+    timeout_path:
+      type: string
+      label: 'The path for the timeout binary to execute'
+    timeout:
+      type: integer
+      label: 'Timeout in seconds for this process'
+    weight:
+      type: integer
+      label: 'Order or execution in the global chain'
+    processor_queue_type:
+      type: string
+      label: 'The queue to use for this processor'
+    nlp:
+      type: boolean
+      label: 'If NLP should be triggered for the extracted Text'
+    nlp_url:
+      type: string
+      label: 'The URL of the NLP64 server'
+    nlp_method:
+      type: string
+      label: 'The NLP method, spaCy or Polyglot'
+strawberryfield_runners.strawberry_runners_postprocessor.subtitle:
+  type: config_object
+  label: 'Strawberry Runners Post Processor Config Entity Subtitles(VTT) specific config'
+  mapping:
+    source_type:
+      type: string
+      label: 'The type of Source Data this Processor works on'
+    ado_type:
+      type: string
+      label: 'DO type(s) to limit this Processor to'
+    jsonkey:
+      type: sequence
+      label: 'The JSON key(s) containing the desired Source File(s)'
+      sequence:
+        - type: string
+    mime_type:
+      type: string
+      label: 'Mimetypes(s) to limit this Processor to'
+    dr_for:
+      type: string
+      label: 'Limit this Processor to files uploaded to certain JSON Key(s)'
+    dr_for_negate:
+      type: string
+      label: 'Reverse the "files uploaded to certain JSON Key(s) limit" by allowing any except those'
     output_type:
       type: string
       label: 'The expected and desired output of this processor'
