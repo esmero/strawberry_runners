@@ -32,6 +32,8 @@
         "react/stream": "^1.1",
         "web64/php-nlp-client" : ">=0.4",
         "mixnode/mixnode-warcreader-php":">=0.0",
+        "league/color-extractor": ">=0.4",
+        "php-ai/php-ml": ">=0.1",
         "ext-simplexml": "*",
         "ext-libxml": "*",
         "ext-xmlwriter": "*"
