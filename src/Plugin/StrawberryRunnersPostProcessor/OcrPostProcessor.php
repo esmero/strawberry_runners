@@ -37,13 +37,16 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
   public function defaultConfiguration() {
     return [
         'source_type' => 'asstructure',
-        'mime_type' => ['application/pdf'],
+        'mime_type' => 'application/pdf',
+        'dr_for' => '',
+        'dr_for_negate' => FALSE,
         'path' => '',
         'path_tesseract' => '',
         'path_pdfalto' => '',
         'arguments' => '',
         'arguments_tesseract' => '',
         'arguments_pdfalto' => '',
+        'single_bounding_box_pdfalto' => FALSE,
         'output_type' => 'json',
         'output_destination' => 'searchapi',
         'processor_queue_type' => 'background',
@@ -110,6 +113,22 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#default_value' => $this->getConfiguration()['mime_type'],
       '#description' => $this->t('A single Mimetype type or a comma separated list of mimetypes that qualify to be Processed. Leave empty to apply any file'),
     ];
+
+    $element['dr_for'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('File Upload JSON Key name(s) to limit this Processor to.'),
+      '#default_value' => $this->getConfiguration()['dr_for'],
+      '#description' => $this->t('A single JSON key name or a comma separated list of JSON key names where the files that should qualify were uploaded to (dr:for in an as:filetype structure). Leave empty to apply any file upload key'),
+    ];
+
+    $element['dr_for_negate'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Skip post processing to the above configured "File Upload JSON Key name(s)"'),
+      '#default_value' => (bool) $this->getConfiguration()['dr_for_negate'] ?? FALSE,
+      '#description' => $this->t('If the previous File Upload JSON key name(s) should be skipped instead. Means, files uploaded to any JSON Key name(s) will be processed, except the ones present in above configured "File Upload JSON Key name(s)".'),
+      '#required' => FALSE,
+    ];
+
     $element['path'] = [
       '#type' => 'textfield',
       '#title' => $this->t('The system path to the ghostscript (gs) binary that will be executed by this processor.'),
@@ -185,6 +204,14 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       '#description' => t('Any arguments your binary requires to run. Use %file as replacement for the file that is output by the pdfalto binary.'),
       '#required' => FALSE,
     ];
+
+    $element['single_bounding_box_pdfalto'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t("If pdfalto successfully extracts HOCR, ignore the coordinates and generate a single, full page paragraph using the Source Image Coordinates as Bounding box"),
+      '#default_value' => $this->getConfiguration()['single_bounding_box_pdfalto'] ?? FALSE,
+      '#description' => t('This is an advanced option and normally not recommended. Only use if you manually copied a PDF Text layer from a different layout/PDF into the PDF to be processed, and the OCR highlights do not match at all over the images. The new OCR will have a single Bounding box.'),
+    ];
+
 
     $element['output_type'] = [
       '#type' => 'select',
@@ -339,7 +366,15 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
       setlocale(LC_CTYPE, 'en_US.UTF-8');
       $execstring_pdfalto = $this->buildExecutableCommand_pdfalto($io);
-
+      // PDFs might not have INFO here at all.
+      // BUT flv:pdfinfo will have for the sequence itself
+      $width = $io->input->metadata['flv:identify'][$sequence_number]['width'] ?? NULL;
+      $height = $io->input->metadata['flv:identify'][$sequence_number]['height'] ?? NULL;
+      // In case identify failed, we can try with flv:exif (e.g JP2s might not pass the identify test)
+      if (!($width && $height)) {
+        $width = $io->input->metadata['flv:exif']['ImageWidth'] ?? NULL;
+        $height = $io->input->metadata['flv:exif']['ImageHeight'] ?? NULL;
+      }
       if ($execstring_pdfalto) {
         $backup_locale = setlocale(LC_CTYPE, '0');
         setlocale(LC_CTYPE, $backup_locale);
@@ -357,8 +392,36 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
             ]);
           throw new \Exception("Could not execute {$execstring_pdfalto} or timed out");
         }
-        if (strpos($proc_output,"TextBlock")!== FALSE) {
-          $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
+        $miniocr = NULL;
+        if (strpos($proc_output,"TextBlock") !== FALSE) {
+          if (($config['single_bounding_box_pdfalto'] ?? FALSE) ) {
+            // Super annoying. the $width/height situation on PDFs is a hit an miss.
+            // But also we need one matching the extracted Images
+            // As if this was tesseraact.
+            // We could just run tesseract but use this
+            // but that would be too expensive
+            // So we borrow -r150 or -r300 (defaulting to ghostscripts) internal
+            // And then we use the flv:pdfinfo for this page data. If any
+            // If we can't get a grasp of a width/height then IIIF Content Search API response will fail.
+            if (!$height || !$width) {
+              $ghostscript_resolution = 72;
+              $regex = "/\-r([0-9]+)/";
+              if (preg_match($regex, $config['arguments'], $matches)) {
+                $ghostscript_resolution = $matches[1];
+              }
+              $width = $io->input->metadata['flv:pdfinfo'][$sequence_number]["width"] ?? NULL;
+              $height = $io->input->metadata['flv:pdfinfo'][$sequence_number]["height"] ?? NULL;
+            }
+            if ($width && $height) {
+              $width = ($width * $ghostscript_resolution / 72);
+              $height = ($height * $ghostscript_resolution / 72);
+              $miniocr = $this->ALTOtoMiniOCRSingleWord($proc_output, $width, $height, $sequence_number);
+            }
+          }
+          else {
+            $miniocr = $this->ALTOtoMiniOCR($proc_output, $sequence_number);
+          }
+
           if ($miniocr == NULL) {
             $this->logger->warning("@sbr_processor: ALTO extracted from PDF to miniOCR processing failed for ADO with UUID @node_uuid and File with UUID @file_uuid with sequence number @sequence_id",
               [
@@ -377,14 +440,6 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       //as the current Image and try to process, if not, run, tesseract
       // @TODO. Ask Allison. If PDFAlto worked out, do we still need to check if there is an attached HOCR?
       // Or does an attached HOCR always wins over PDFtoAlto?
-      $width = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['width'] ?? NULL;
-      $height = $io->input->metadata['flv:identify'][$io->input->{$input_argument}]['height'] ?? NULL;
-      // In case identify failed, we can try with flv:exif (e.g JP2s might not pass the identify test)
-      if (!($width && $height)) {
-        $width = $io->input->metadata['flv:exif']['ImageWidth'] ?? NULL;
-        $height = $io->input->metadata['flv:exif']['ImageHeight'] ?? NULL;
-      }
-
       if ($width && $height) {
         // Cast them to INT to make sure we are matching exactly
         $width = (int)$width;
@@ -984,6 +1039,85 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         $miniocr->endElement();
       }
       $miniocr->endElement();
+    }
+    $miniocr->endElement();
+    $miniocr->endDocument();
+    unset($alto);
+    if ($atleastone_word) {
+      return $miniocr->outputMemory(TRUE);
+    }
+    else {
+      return StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
+    }
+  }
+
+
+  protected function ALTOtoMiniOCRSingleWord($output, $width, $height, $pageid) {
+    $alto = simplexml_load_string($output);
+    $internalErrors = libxml_use_internal_errors(TRUE);
+    libxml_clear_errors();
+    libxml_use_internal_errors($internalErrors);
+
+    $miniocr = new \XMLWriter();
+    $miniocr->openMemory();
+    $miniocr->startDocument('1.0', 'UTF-8');
+    $miniocr->startElement("ocr");
+    $atleastone_word = FALSE;
+
+    if (!$alto) {
+      return NULL;
+    }
+    foreach ($alto->Layout->children() as $page) {
+      $pageWidthPts = (float) $width;
+      $pageHeightPts = (float) $height;
+      // To check if conversion is ok px = pts / 72 * 300 (dpi)
+      //It seems that pdfalto output is in points while tesseract alto is in pixel
+      $pageWidthPx = sprintf('%.0f', $pageWidthPts);
+      $pageHeightPx = sprintf('%.0f', $pageHeightPts);
+      $miniocr->startElement("p");
+      $miniocr->writeAttribute("xml:id", 'sequence_' . $pageid);
+      $miniocr->writeAttribute("wh", $pageWidthPx . " " . $pageHeightPx);
+      $page->registerXPathNamespace('ns',
+        'http://www.loc.gov/standards/alto/ns-v3#');
+      $l = ltrim(sprintf('%.3f', 0) ?? '', 0);
+      $t = ltrim(sprintf('%.3f', 0) ?? '', 0);
+      $w = ltrim(sprintf('%.3f', 1) ?? '', 0);
+      $h = ltrim(sprintf('%.3f', 1) ?? '', 0);
+      $miniocr->startElement("b");
+      $miniocr->startElement("l");
+      $miniocr->startElement("w");
+      $miniocr->writeAttribute("x",
+        $l . ' ' . $t . ' ' . $w . ' ' . $h);
+      $concat_text = '';
+      foreach ($page->xpath('.//ns:TextBlock') as $block) {
+
+        foreach ($block->children() as $line) {
+
+          foreach ($line->children() as $child_name => $child_node) {
+            if ($child_name == 'SP') {
+              $concat_text = $concat_text. ' ';
+            }
+            elseif ($child_name == 'String') {
+              // New OCR Highlight > 0.71 does not like empty <w> tags at all
+              if (strlen(trim($child_node['CONTENT'] ?? "")) > 0) {
+                $concat_text = $concat_text.trim($child_node['CONTENT']). " ";
+
+                // Only assume we have at least one word for <w> tags
+                // Since lines? could end empty?
+                $atleastone_word = TRUE;
+              }
+            }
+          }
+          $concat_text = $concat_text . "&#xD;&#xA;";
+        }
+      }
+      if ($atleastone_word) {
+        $miniocr->text(trim($concat_text, " \t\n\r\0\x0B"));
+      }
+      $miniocr->endElement(); // Ends the single W
+      $miniocr->endElement(); // Ends the single l
+      $miniocr->endElement();// Ends the single b
+      $miniocr->endElement(); // Ends the single p
     }
     $miniocr->endElement();
     $miniocr->endDocument();

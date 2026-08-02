@@ -28,7 +28,9 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
   public function defaultConfiguration() {
     return [
         'source_type' => 'asstructure',
-        'mime_type' => ['application/vnd.datapackage+zip'],
+        'mime_type' => 'application/vnd.datapackage+zip',
+        'dr_for' => '',
+        'dr_for_negate' => FALSE,
         'output_type' => 'json',
         'output_destination' => ['plugin' => 'plugin'],
         'processor_queue_type' => ['realtime' => 'realtime'],
