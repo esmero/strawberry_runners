@@ -6,9 +6,8 @@ class VTTLine
 {
   protected $starttime = NULL;
   protected $endstime = NULL;
-  protected string $body;
 
-  public function __construct(string $timesstart, string $timeend, string $body = '')
+  public function __construct(string $timesstart, string $timeend, protected string $body = '')
   {
     $start_time = explode('.',$timesstart);
     $end_time = explode('.',$timeend);
@@ -17,7 +16,6 @@ class VTTLine
 
     $this->starttime = (strtotime($start_time[0], 0) - $base) +  floatval('.'.$start_time[1]);
     $this->endstime = (strtotime($end_time[0], 0)  - $base) + floatval('.'.$end_time[1]);
-    $this->body = $body;
   }
 
   public function toHtml(): string
