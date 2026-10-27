@@ -16,6 +16,7 @@ use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
 use Drupal\Core\StringTranslation\TranslationInterface;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager;
 use Drupal\strawberry_runners\Plugin\QueueWorker\AbstractPostProcessorQueueWorker;
+use stdClass;
 
 class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceInterface {
 
@@ -230,15 +231,17 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                 ) {
                   foreach ($activePlugins as $activePluginId => $config) {
                     // Checks if the flag is set and is an array.
-                    $nopost = (isset($flatvalues["ap:tasks"]["ap:nopost"]) &&
+                    $nopost = [];
+                    $nopost_present = (isset($flatvalues["ap:tasks"]["ap:nopost"]) &&
                       is_array($flatvalues["ap:tasks"]["ap:nopost"]));
 
-                    if ($nopost) {
+                    if ($nopost_present) {
                       if (in_array($activePluginId, $flatvalues["ap:tasks"]["ap:nopost"])) {
                         // if we have an entry like ["ap:tasks"]["ap:nopost"][0] == "pager" we don't run pager
                         // for this ADO. We won't delete existing ones. Just never process.
                         continue;
                       }
+                      $nopost = $flatvalues["ap:tasks"]["ap:nopost"];
                     }
 
                     // Never ever run a processor over its own creation
@@ -246,7 +249,24 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                       continue;
                     }
 
-                    //@TODO also split $config['ado_type'] so we can check
+                    $valid_file_sources =  explode(',', ($config['dr_for'] ?? ''));
+                    $negate_file_sources =  (bool) ($config['dr_for_negate'] ?? FALSE);
+                    $valid_file_sources = array_map('trim', $valid_file_sources);
+                    $valid_file_sources = array_filter($valid_file_sources);
+                    $skip_bc_file_sources = FALSE;
+                    foreach ($valid_file_sources as $dr_for) {
+                      if (!empty($dr_for) ) {
+                        $skip_bc_file_sources = match($negate_file_sources) {
+                          true  => $asstructure["dr:for"] == $dr_for,
+                          false => $asstructure["dr:for"] != $dr_for,
+                        };
+                      }
+                    }
+
+                    if ($skip_bc_file_sources) {
+                      continue;
+                    }
+
                     $valid_ado_type = explode(',', $config['ado_type']);
                     $valid_ado_type = array_map('trim', $valid_ado_type);
                     if (empty($config['ado_type'])
@@ -267,8 +287,8 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                       ) {
                         // Now that mimetypes, if any, were evaluated,
                         // We can check if File Size limit applies
-                        if ($config['file_limit_type'] && in_array($config['file_limit_type'], ['<=', '>='])) {
-                          if ($config['file_limit_value_bytes']) {
+                        if (isset($config['file_limit_type']) && in_array($config['file_limit_type'], ['<=', '>='])) {
+                          if (isset($config['file_limit_value_bytes'])) {
                             $bytes = Bytes::validate($config['file_limit_value_bytes']) ? self::bytes_string_to_number($config['file_limit_value_bytes']) : NULL;
                             $skip = TRUE;
                             if ($bytes) {
@@ -297,7 +317,9 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
 
                         $config['processor_queue_type'] = $config['processor_queue_type'] ?? 'realtime';
                         $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$config['processor_queue_type']] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
-                        $data = new \stdClass();
+                        $data = new stdClass();
+                        $data->sbf_type = $sbf_type;
+                        $data->nopost = $nopost;
                         $data->fid = $asstructure['dr:fid'];
                         $data->nid = $entity->id();
                         $data->asstructure_uniqueid = $uniqueid;
@@ -313,8 +335,7 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         // of locally generated files from $data->fid
                         $data->sbr_cleanedup_before = FALSE;
                         // Get the configured Language from descriptive metadata
-                        if (isset($config['language_key'])
-                          && !empty($config['language_key'])
+                        if (!empty($config['language_key'])
                           && isset($flatvalues[$config['language_key']])
                         ) {
                           $data->lang = is_array(
@@ -359,7 +380,7 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                         // Since the destination Queue can be a modal thing
                         // And really what defines is the type of worker we want
                         // But all at the end will eventually feed the ::run() method
-                        // We want to make this a full blown service.
+                        // We want to make this a full-blown service.
                         $success = $this->queueFactory->get(
                           $queue_name, TRUE
                         )->createItem($data);
@@ -380,15 +401,17 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
             if (!empty($metadata_from_json)) {
               foreach ($activePlugins as $activePluginId => $config) {
                 // Checks if the flag is set and is an array.
-                $nopost = (isset($flatvalues["ap:tasks"]["ap:nopost"]) &&
+                $nopost = [];
+                $nopost_present = (isset($flatvalues["ap:tasks"]["ap:nopost"]) &&
                   is_array($flatvalues["ap:tasks"]["ap:nopost"]));
 
-                if ($nopost) {
+                if ($nopost_present) {
                   if (in_array($activePluginId, $flatvalues["ap:tasks"]["ap:nopost"])) {
                     // if we have an entry like ["ap:tasks"]["ap:nopost"][0] == "pager" we don't run pager
-                    // for this ADO. We won't delete existing ones. Just never process.
+                    // for this ADO. We won't delete existing ones. Just never process.=
                     continue;
                   }
+                  $nopost = $flatvalues["ap:tasks"]["ap:nopost"];
                 }
                 // @TODO how to avoid running on metadata generated by a processor?
                 // We should limit where that metadata goes. Should never be the same ADO?
@@ -401,7 +424,9 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                 ) {
                   $config['processor_queue_type'] = $config['processor_queue_type'] ?? 'realtime';
                   $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$config['processor_queue_type']] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
-                  $data = new \stdClass();
+                  $data = new stdClass();
+                  $data->sbf_type = $sbf_type;
+                  $data->nopost = $nopost;
                   $data->fid = NULL;
                   $data->nid = $entity->id();
                   $data->nuuid = $entity->uuid();
@@ -411,8 +436,7 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
                   // by saying. This was cleaned up before.
                   $data->sbr_cleanedup_before = TRUE;
                   // Get the configured Language from descriptive metadata
-                  if (isset($config['language_key'])
-                    && !empty($config['language_key'])
+                  if (!empty($config['language_key'])
                     && isset($flatvalues[$config['language_key']])
                   ) {
                     $data->lang = is_array(
@@ -524,4 +548,92 @@ class strawberryRunnerUtilityService implements strawberryRunnerUtilityServiceIn
     }
   }
 
+
+  public function canInvokeSingleProcessor($activePluginId, array $config, stdClass $data):bool {
+    $nopost_present = is_array($data->nopost) && !empty($nopost);
+    if ($nopost_present) {
+      if (in_array($activePluginId, $data->nopost)) {
+        // if we have an entry like ["ap:tasks"]["ap:nopost"][0] == "ocr" we don't run pager
+        // for this ADO. We won't delete existing ones. Just never process.
+        return FALSE;
+      }
+    }
+
+    // Never ever run a processor over its own creation
+    // @TODO: We could re-think this and allow it to run of $data->force == true?
+    if (isset($data->metadata) && ($data->metadata["dr:for"] ?? '') == 'flv:' . $activePluginId) {
+      return FALSE;
+    }
+    $valid_file_sources = explode(',', ($config['dr_for'] ?? ''));
+    $negate_file_sources = (bool) ($config['dr_for_negate'] ?? FALSE);
+    $valid_file_sources = array_map('trim', $valid_file_sources);
+    $valid_file_sources = array_filter($valid_file_sources);
+    $skip_bc_file_sources = FALSE;
+    foreach ($valid_file_sources as $dr_for) {
+      if (isset($data->metadata["dr:for"]) && !empty($dr_for)) {
+        $skip_bc_file_sources = match ($negate_file_sources) {
+          TRUE => $data->metadata["dr:for"] == $dr_for,
+          FALSE => $data->metadata["dr:for"] != $dr_for,
+        };
+      }
+    }
+
+    if ($skip_bc_file_sources) {
+      return FALSE;
+    }
+
+    $valid_ado_type = explode(',', $config['ado_type']);
+    $valid_ado_type = array_map('trim', $valid_ado_type);
+    if (empty($config['ado_type'])
+      || count(
+        array_intersect($valid_ado_type, $data->sbf_type ?? [])
+      ) > 0
+    ) {
+      $valid_mimes = explode(',', $config['mime_type']);
+      $valid_mimes = array_filter(
+        array_map('trim', $valid_mimes)
+      );
+      if ($config['source_type'] == 'json' || isset($data->metadata["dr:mimetype"]) && empty($data->metadata['flv:' . $activePluginId]) || ($data->force ?? FALSE) && empty($valid_mimes)
+        || (isset($data->metadata["dr:mimetype"])
+          && in_array(
+            $data->metadata["dr:mimetype"], $valid_mimes
+          ))
+      ) {
+        if (is_array($data->metadata ?? FALSE) && isset($config['file_limit_type']) && in_array($config['file_limit_type'], ['<=', '>='])) {
+          if (!empty($config['file_limit_value_bytes'])) {
+            $bytes = Bytes::validate($config['file_limit_value_bytes']) ? self::bytes_string_to_number($config['file_limit_value_bytes']) : NULL;
+            $skip = TRUE;
+            if ($bytes) {
+              switch($config['file_limit_type']) {
+                case '<=':
+                  // Could be missing?
+                  if (isset($data->metadata['dr:filesize']) &&  (float) $data->metadata['dr:filesize'] <= (float) $bytes) {
+                    $skip = FALSE;
+                  }
+                  break;
+                case '>=':
+                  // Could be missing?
+                  if (isset($data->metadata['dr:filesize']) &&  (float) $data->metadata['dr:filesize'] >= (float) $bytes) {
+                    $skip = FALSE;
+                  }
+                  break;
+                default:
+                  break;
+              }
+            }
+            if ($skip) {
+              return FALSE;
+            }
+          }
+        }
+        return TRUE;
+      }
+      else {
+        return FALSE;
+      }
+    }
+    else {
+      return FALSE;
+    }
+  }
 }

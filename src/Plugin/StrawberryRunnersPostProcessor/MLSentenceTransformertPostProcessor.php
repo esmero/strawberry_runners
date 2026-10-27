@@ -41,8 +41,8 @@ class MLSentenceTransformertPostProcessor extends abstractMLPostProcessor {
    */
   public function defaultConfiguration() {
     return [
-        'source_type' => 'asstructure',
-        'mime_type' => ['image/jpeg'],
+        'source_type' => 'json',
+        'mime_type' => '',
         'output_type' => 'json',
         'output_destination' => 'searchapi',
         'processor_queue_type' => 'background',

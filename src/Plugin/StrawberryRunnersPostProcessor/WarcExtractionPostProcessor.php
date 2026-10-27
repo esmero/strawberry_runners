@@ -34,7 +34,9 @@ class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBa
   public function defaultConfiguration() {
     return [
         'source_type' => 'asstructure',
-        'mime_type' => ['application/pdf'],
+        'mime_type' => '',
+        'dr_for' => '',
+        'dr_for_negate' => FALSE,
         'path' => '',
         'arguments' => '',
         'output_type' => 'json',
@@ -91,6 +93,21 @@ class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBa
       '#title' => $this->t('Mimetypes(s) to limit this Processor to.'),
       '#default_value' => $this->getConfiguration()['mime_type'],
       '#description' => $this->t('A single Mimetype type or a coma separed list of mimetypes that qualify to be Processed. Leave empty to apply any file'),
+    ];
+
+    $element['dr_for'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('File Upload JSON Key name(s) to limit this Processor to.'),
+      '#default_value' => $this->getConfiguration()['dr_for'],
+      '#description' => $this->t('A single JSON key name or a coma separed list of JSON key names where the files that should qualify were uploaded to (dr:for in an as:filetype structure). Leave empty to apply any file upload key'),
+    ];
+
+    $element['dr_for_negate'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Negate Upload JSON Key name(s).'),
+      '#default_value' => (bool) $this->getConfiguration()['dr_for_negate'] ?? FALSE,
+      '#description' => $this->t('If the previous File Upload JSON key name(s) should be negated instead. Means, any upload JSON Key name except the listed ones.'),
+      '#required' => FALSE,
     ];
 
     $element['output_type'] = [

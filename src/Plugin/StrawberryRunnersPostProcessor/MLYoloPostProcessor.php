@@ -35,7 +35,7 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
   public function defaultConfiguration() {
     return [
         'source_type' => 'asstructure',
-        'mime_type' => ['image/jpeg'],
+        'mime_type' => 'image/jpeg',
         'output_type' => 'json',
         'output_destination' => 'searchapi',
         'processor_queue_type' => 'background',

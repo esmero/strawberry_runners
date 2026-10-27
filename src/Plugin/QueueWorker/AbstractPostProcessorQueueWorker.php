@@ -38,6 +38,7 @@ use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\search_api\ParseMode\ParseModePluginManager;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Drupal\strawberry_runners\strawberryRunnerUtilityServiceInterface;
 
 abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implements ContainerFactoryPluginInterface {
 
@@ -107,6 +108,13 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   protected $eventDispatcher;
 
   /**
+   * The Strawberry Runners Utility Service.
+   *
+   * @var \Drupal\strawberry_runners\strawberryRunnerUtilityServiceInterface
+   */
+  protected $strawberryRunnerUtilityService;
+
+  /**
    * Constructor.
    *
    * @param array $configuration
@@ -119,8 +127,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    * @param \Drupal\Core\KeyValueStore\KeyValueFactoryInterface $key_value
    * @param \Psr\Log\LoggerInterface $logger
    * @param \Drupal\search_api\ParseMode\ParseModePluginManager $parse_mode_manager
+   * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $event_dispatcher
+   * @param \Drupal\strawberry_runners\strawberryRunnerUtilityServiceInterface $utilityService
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, StrawberryRunnersPostProcessorPluginManager $strawberry_runner_processor_plugin_manager, FileSystemInterface $file_system, StreamWrapperManagerInterface $stream_wrapper_manager, KeyValueFactoryInterface $key_value, LoggerInterface $logger, ParseModePluginManager $parse_mode_manager, EventDispatcherInterface $event_dispatcher) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, StrawberryRunnersPostProcessorPluginManager $strawberry_runner_processor_plugin_manager, FileSystemInterface $file_system, StreamWrapperManagerInterface $stream_wrapper_manager, KeyValueFactoryInterface $key_value, LoggerInterface $logger, ParseModePluginManager $parse_mode_manager, EventDispatcherInterface $event_dispatcher, strawberryRunnerUtilityServiceInterface $utilityService) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->entityTypeManager = $entity_type_manager;
     $this->strawberryRunnerProcessorPluginManager = $strawberry_runner_processor_plugin_manager;
@@ -130,6 +140,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $this->logger = $logger;
     $this->parseModeManager = $parse_mode_manager;
     $this->eventDispatcher = $event_dispatcher;
+    $this->strawberryRunnerUtilityService = $utilityService;
   }
 
   /**
@@ -154,7 +165,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       $container->get('keyvalue'),
       $container->get('logger.channel.strawberry_runners'),
       $container->get('plugin.manager.search_api.parse_mode'),
-      $container->get('event_dispatcher')
+      $container->get('event_dispatcher'),
+      $container->get('strawberry_runner.utility')
     );
   }
 
@@ -180,10 +192,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     }
     $processor_config = $processor_instance->getConfiguration();
 
-    // @TODO check on this Diego. This is a bit misleading since it assumes
-    // every processor will work only on Files.
-    // True for now, but eventually we want processors that do only
-    // metadata to metadata.
 
     if (!isset($data->fid) || $data->fid == NULL || !isset($data->nid) || $data->nid == NULL || !is_array($data->metadata)) {
       return;
@@ -257,7 +265,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         /* @var  $postprocessor_config_entity_chain \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity */
         $postprocessor_config_entity_chain = $plugin_info['config_entity'];
         $chains = $postprocessor_config_entity_chain->getPluginconfig(
-          )['output_destination']['plugin'] ?? FALSE;
+        )['output_destination']['plugin'] ?? FALSE;
         $chains = $chains === 'plugin' ? TRUE : FALSE;
         $will_chain_future = $will_chain_future || $chains;
       }
@@ -343,7 +351,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
             $translations = $entity->getTranslationLanguages();
             foreach ($translations as $translation_id => $translation) {
               // checksum and file->uuid apply even if the source is not a local-ized/ensure local file.
-              // But we might want to review this if we plan on indexing JSON RAW/metadata directly as an vector embedding.
+              // But we might want to review this if we plan on indexing JSON RAW/metadata directly as a vector embedding.
               $item_id = $entity->id() . ':' . $sequence_key . ':' . $translation_id . ':' . $file->uuid() . ':' . $data->plugin_config_entity_id;
               // a single 0 as return will force us to reindex.
               $inindex = $inindex * $this->flavorInSolrIndex($item_id, $data->metadata['checksum'], $indexes);
@@ -399,8 +407,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
               ]
             );
             if (!isset($io)) {
-              $io = new \stdClass();
-              $io->output = new \stdClass();
+              $io = new stdClass();
+              $io->output = new stdClass();
               $io->output->plugin = [];
             }
             $io->output->plugin['searchapi'] = $processed_data_for_chaining;
@@ -418,7 +426,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
                 '@nodeid' => $data->nid,
               ]
             );
-
             $io = $this->invokeProcessor($processor_instance, $data);
             // Check if $io->output exists?
             $toindex = new stdClass();
@@ -464,6 +471,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
               }
               $index->trackItemsInserted($datasource_id, $item_ids);
             }
+
           }
         }
         catch (Exception $exception) {
@@ -471,7 +479,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         }
       }
       else {
-          $io = $this->invokeProcessor($processor_instance, $data);
+        $io = $this->invokeProcessor($processor_instance, $data);
       }
       // Means we got a file back from the processor
       if ($tobeupdated && isset($io->output->file) && !empty($io->output->file)) {
@@ -496,6 +504,15 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           }*/
           /* @var  $strawberry_runners_postprocessor_config \Drupal\strawberry_runners\Entity\strawberryRunnerPostprocessorEntity */
           $postprocessor_config_entity = $plugin_info['config_entity'];
+          if (!$this->strawberryRunnerUtilityService->canInvokeSingleProcessor($postprocessor_config_entity->id(), $postprocessor_config_entity->getPluginconfig(), $childdata)) {
+            $this->logger->log(LogLevel::INFO,
+              'Skipping Chained @childplugin BC it does not pass conditions.You can ignore this message',
+              [
+
+                '@childplugin' => $postprocessor_config_entity->id(),
+              ]);
+            continue;
+          }
           $queue_name = $postprocessor_config_entity->getPluginconfig()['processor_queue_type'] ?? 'realtime';
           $queue_name = AbstractPostProcessorQueueWorker::QUEUES[$queue_name] ?? AbstractPostProcessorQueueWorker::QUEUES['realtime'];
           $input_property = $plugin_info['plugin_definition']['input_property'] ?? NULL;
@@ -514,7 +531,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           // If was not defined by the previous processor try from the main data.
           if ($input_property_value == NULL) {
             $input_property_value_from_plugin = FALSE;
-            $input_property_value = isset($data->{$input_property}) ? $data->{$input_property} : NULL;
+            $input_property_value = $data->{$input_property} ?? NULL;
           }
 
           // If still null means the child is incompatible with the parent. We abort.
@@ -630,7 +647,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     }
 
     if ($needs_localfile_cleanup && !empty($filelocation)) {
-      $data_cleanup = new \stdClass();
+      $data_cleanup = new stdClass();
       $data_cleanup->filepath_to_clean = [$filelocation];
       $data_cleanup->sbr_cleanup = TRUE;
       if (!$needs_immediate_localfile_cleanup) {
@@ -694,7 +711,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       ->load($plugin_config_entity_id);
 
     if ($plugin_config_entity->getParent() == '') {
-       return TRUE;
+      return TRUE;
     }
     return FALSE;
   }
@@ -1046,10 +1063,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    * @param string $uri
    *   The URI of the file, e.g. public://directory/file.jpg.
    *
-   * @return mixed
+   * @return string
    *   The real path to the file if it is a local file. A URL otherwise.
    */
-  public function getRealpath(string $uri) {
+  public function getRealpath(string $uri): string {
     $wrapper = $this->streamWrapperManager->getViaUri($uri);
     $scheme = $this->streamWrapperManager->getScheme($uri);
     $local_wrappers = $this->streamWrapperManager->getWrappers(StreamWrapperInterface::LOCAL);
@@ -1098,7 +1115,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     return $pluginid . '_from_' . $uuid . '.' . $destination_extension;
   }
 
-  private function dispatchComposter(\StdClass $data):void {
+  private function dispatchComposter(stdClass $data):void {
     $this->instanceFiles = [];
     foreach($data->filepath_to_clean ?? [] as $instanceFile) {
       $event_type = StrawberryfieldEventType::TEMP_FILE_CREATION;

@@ -41,7 +41,9 @@ class SubtitlePostProcessor extends TextPostProcessor {
   public function defaultConfiguration() {
     return [
         'source_type' => 'asstructure',
-        'mime_type' => ['text/vtt'],
+        'mime_type' => 'text/vtt',
+        'dr_for' => '',
+        'dr_for_negate' => FALSE,
         'output_type' => 'json',
         'output_destination' => 'searchapi',
         'processor_queue_type' => 'background',
@@ -103,6 +105,22 @@ class SubtitlePostProcessor extends TextPostProcessor {
       '#default_value' => $this->getConfiguration()['mime_type'],
       '#description' => $this->t('A single Mimetype type or a comma separated list of mimetypes that qualify to be Processed. Leave empty to apply any file'),
     ];
+
+    $element['dr_for'] = [
+      '#type' => 'textfield',
+      '#title' => $this->t('File Upload JSON Key name(s) to limit this Processor to.'),
+      '#default_value' => $this->getConfiguration()['dr_for'],
+      '#description' => $this->t('A single JSON key name or a comma separated list of JSON key names where the files that should qualify were uploaded to (dr:for in an as:filetype structure). Leave empty to apply any file upload key'),
+    ];
+
+    $element['dr_for_negate'] = [
+      '#type' => 'checkbox',
+      '#title' => $this->t('Skip post processing to the above configured "File Upload JSON Key name(s)"'),
+      '#default_value' => (bool) $this->getConfiguration()['dr_for_negate'] ?? FALSE,
+      '#description' => $this->t('If the previous File Upload JSON key name(s) should be skipped instead. Means, files uploaded to any JSON Key name(s) will be processed, except the ones present in above configured "File Upload JSON Key name(s)".'),
+      '#required' => FALSE,
+    ];
+
 
     $element['language_key'] = [
       '#type' => 'textfield',

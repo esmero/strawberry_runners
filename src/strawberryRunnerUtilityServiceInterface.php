@@ -35,4 +35,15 @@ interface strawberryRunnerUtilityServiceInterface {
    */
   public function getActivePluginConfigs($onlyRoot = TRUE):array;
 
+  /**
+   * Checks if a particular Processor, given a Child Data structure should run
+   *
+   * @param $activePluginId
+   * @param $data
+   * @param $config
+   *
+   * @return bool
+   */
+  public function canInvokeSingleProcessor($activePluginId, array $config, \stdClass $data):bool;
+
 }
