@@ -44,59 +44,59 @@ use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\abstractMLPo
 class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBase */
 {
 
-  const IMAGEML_INPUT_SCHEMA = <<<'JSON'
-{
-    "title": "Image ML filter Input structure",
-    "description": "A JSON Schema describing what this filter accepts.",
-    "type": "object",
-    "properties": {
-      "iiif_image_id": {
-        "type": "string"
-      },
-      "image_uuid": {
-        "type": "string"
-      },
-      "bbox": {
-        "type": "object",
-        "properties": {
-          "x": {
-            "type": "number"
-          },
-          "y": {
-            "type": "number"
-          },
-          "w": {
-            "type": "number"
-          },
-          "h": {
-            "type": "number"
-          }
+  const IMAGEML_INPUT_SCHEMA = <<<'JSON_WRAP'
+  {
+      "title": "Image ML filter Input structure",
+      "description": "A JSON Schema describing what this filter accepts.",
+      "type": "object",
+      "properties": {
+        "iiif_image_id": {
+          "type": "string"
         },
-        "required": [
-          "x",
-          "y",
-          "w",
-          "h"
-        ]
-      }
-    },
-    "oneOf": [
-      {
-        "required": [
-          "iiif_image_id"
-        ]
+        "image_uuid": {
+          "type": "string"
+        },
+        "bbox": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "w": {
+              "type": "number"
+            },
+            "h": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "w",
+            "h"
+          ]
+        }
       },
-      {
-        "required": [
-          "image_uuid"
-        ]
-      }
-    ],
-    "required": [
-      "bbox"
-    ]
-}
-JSON;
+      "oneOf": [
+        {
+          "required": [
+            "iiif_image_id"
+          ]
+        },
+        {
+          "required": [
+            "image_uuid"
+          ]
+        }
+      ],
+      "required": [
+        "bbox"
+      ]
+  }
+  JSON_WRAP;
 
 
   use SearchApiFilterTrait;
@@ -494,7 +494,7 @@ JSON;
         try {
           $response = $plugin_instance->callImageML($iiif_image_url, []);
         }
-        catch (\Exception $exception) {
+        catch (\Exception) {
           // Give user feedback
           return;
         }
