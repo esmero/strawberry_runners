@@ -182,14 +182,14 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
 
     $input_property = $this->pluginDefinition['input_property'];
     $input_argument = $this->pluginDefinition['input_argument'];
-    $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
+    $file_uuid = $io->input->metadata['dr:uuid'] ?? NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
     $config = $this->getConfiguration();
     $output = new \stdClass();
     $io->output = $io->input;
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
-      $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+      $file_path = $io->input->{$input_property} ?? NULL;
       // File path may not be .zip?
       // We may want to check
       $info = pathinfo($file_path);
