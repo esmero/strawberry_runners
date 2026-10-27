@@ -28,7 +28,7 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
   /**
    * Is argument validated.
    */
-  public ?bool $argument_validated;
+  public ?bool $argument_validated = null;
   /**
    * Stores the exposed input for this filter.
    *
@@ -395,7 +395,7 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
                     ->getRequestTime() + 7200), $tags);
               }
             }
-            catch (\Exception $exception) {
+            catch (\Exception) {
               // Give user feedback
               return;
             }
@@ -445,7 +445,7 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
         try {
           $decoded = gzdecode(pack("c*",...$unpacked_deflated));
         }
-        catch (\Exception $e) {
+        catch (\Exception) {
           // Ok was not that so we try another method
         }
       }
@@ -592,9 +592,7 @@ class StrawberryRunnersMLImageArgument extends SearchApiStandard {
     $this->argument_validated = NULL;
     $session = $this->view->getRequest()->getSession();
     $views_session = $session->get('views', []);
-    if (!isset($views_session[$this->view->storage->id()][$display_id])) {
-      $views_session[$this->view->storage->id()][$display_id] = [];
-    }
+    $views_session[$this->view->storage->id()][$display_id] ??= [];
     $session_ref = &$views_session[$this->view->storage->id()][$display_id];
     // Deals with no argument at all (e.g 'all');
     if (($this->options['exception']['value'] ?? NULL) == $arg) {
