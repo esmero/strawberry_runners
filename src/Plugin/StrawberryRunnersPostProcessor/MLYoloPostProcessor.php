@@ -118,7 +118,7 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
       $height = $io->input->metadata['flv:exif']['ImageHeight'] ?? NULL;
     }
     $iiifidentifier = urlencode(
-      StreamWrapperManager::getTarget( isset($io->input->metadata['url']) ? $io->input->metadata['url'] : NULL)
+      StreamWrapperManager::getTarget( $io->input->metadata['url'] ?? NULL)
     );
 
     if ($iiifidentifier == NULL || empty($iiifidentifier) || empty($width) || empty($height)) {

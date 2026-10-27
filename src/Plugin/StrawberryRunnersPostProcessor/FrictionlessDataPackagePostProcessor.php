@@ -227,15 +227,15 @@ class FrictionlessDataPackagePostProcessor extends StrawberryRunnersPostProcesso
 
     $input_property = $this->pluginDefinition['input_property'];
     $input_argument = $this->pluginDefinition['input_argument'];
-    $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
+    $file_uuid = $io->input->metadata['dr:uuid'] ?? NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
     $config = $this->getConfiguration();
     $timeout = $config['timeout']; // in seconds
 
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
       // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
       $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
-      $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+      $file_path = $io->input->{$input_property} ?? NULL;
       $package = Package::load($file_path);
       foreach ($package as $resource) {
         echo $resource->name();
