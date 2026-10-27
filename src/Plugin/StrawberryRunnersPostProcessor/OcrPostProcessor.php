@@ -354,8 +354,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
 
     $input_property = $this->pluginDefinition['input_property'];
     $input_argument = $this->pluginDefinition['input_argument'];
-    $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
+    $file_uuid = $io->input->metadata['dr:uuid'] ?? NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
     $config = $this->getConfiguration();
     $timeout = $config['timeout']; // in seconds
     $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default'] ?? '') : 'eng'];
@@ -393,7 +393,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
           throw new \Exception("Could not execute {$execstring_pdfalto} or timed out");
         }
         $miniocr = NULL;
-        if (strpos($proc_output,"TextBlock") !== FALSE) {
+        if (str_contains($proc_output,"TextBlock")) {
           if (($config['single_bounding_box_pdfalto'] ?? FALSE) ) {
             // Super annoying. the $width/height situation on PDFs is a hit an miss.
             // But also we need one matching the extracted Images
@@ -755,7 +755,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $input_property = $this->pluginDefinition['input_property'];
     $input_argument = $this->pluginDefinition['input_argument'];
     // Sets the default page to 1 if not passed.
-    $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+    $file_path = $io->input->{$input_property} ?? NULL;
     $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
     $config = $this->getConfiguration();
     $execpath_gs = $config['path'];
@@ -783,8 +783,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       // Check if this is a pdf. If so, attempt to convert to a png using ghostscript.
       //-- with r300 == 300dpi, should be configurable, etc. All should be configurable
       // E.g. gs -dBATCH -dNOPAUSE -sDEVICE=pnggray -r300 -dUseCropBox -sOutputFile=somepage_pagenumber.png %file
-      if ($can_run_gs && $this->isGsMimeType($file_mime) && (strpos($arguments_gs,
-            '%file') !== FALSE)) {
+      if ($can_run_gs && $this->isGsMimeType($file_mime) && (str_contains($arguments_gs,
+            '%file'))) {
         $tesseract_input_filename = "{$sourcefolder}{$filename}_{$sequence_number}.png";
         // Removed here -r300. This will now pass as a setting.
         $arguments_gs = "-dBATCH -dNOPAUSE -dUseCropBox -dQUIET -sDEVICE=pnggray -dFirstPage={$sequence_number} -dLastPage={$sequence_number} -sOutputFile=$tesseract_input_filename " . $arguments_gs;
@@ -794,8 +794,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
         $commands[] = escapeshellcmd($execpath_gs . ' ' . $arguments_gs);
       }
 
-      elseif ($this->isTesseractMimeType($file_mime) && $can_run_tesseract && (strpos($arguments_tesseract,
-            '%file') !== FALSE)) {
+      elseif ($this->isTesseractMimeType($file_mime) && $can_run_tesseract && (str_contains($arguments_tesseract,
+            '%file'))) {
         // Run tesseract directly on the file.
         $tesseract_input_filename = $file_path;
       }
@@ -822,7 +822,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       }
     }
     // Only return $command if it contains the original filepath somewhere
-    if (strpos($command, $file_path) !== FALSE) {
+    if (str_contains($command, $file_path)) {
       return $command;
     }
     return NULL;
@@ -843,7 +843,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $input_property = $this->pluginDefinition['input_property'];
     $input_argument = $this->pluginDefinition['input_argument'];
     // Sets the default page to 1 if not passed.
-    $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+    $file_path = $io->input->{$input_property} ?? NULL;
     $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
     $config = $this->getConfiguration();
     $execpath_pdfalto = $config['path_pdfalto'];
@@ -857,8 +857,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
     $can_run_pdfalto = \Drupal::service('strawberryfield.utility')
       ->verifyCommand($execpath_pdfalto);
     if ($can_run_pdfalto &&
-      (strpos($arguments_pdfalto,
-          '%file') !== FALSE) && $this->isGsMimeType($file_mime)) {
+      (str_contains($arguments_pdfalto,
+          '%file')) && $this->isGsMimeType($file_mime)) {
       // Make sure we leave for PDFALTO always at the end or it will fail.
       $arguments_pdfalto = str_replace('%file','', $arguments_pdfalto);
       $arguments_pdfalto = $arguments_pdfalto. ' %file';
@@ -874,7 +874,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       return NULL;
     }
     // Only return $command if it contains the original filepath somewhere
-    if (strpos($command, $file_path) !== FALSE) {
+    if (str_contains($command, $file_path)) {
       return $command;
     }
     return NULL;
@@ -912,8 +912,8 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       }
       $coos = explode(" ", $pagetitle);
       // To avoid divisions by 0
-      $pwidth = (float) $coos[2] ? (float) $coos[2] : 1;
-      $pheight = (float) $coos[3] ? (float) $coos[3] : 1;
+      $pwidth = (float) $coos[2] ?: 1;
+      $pheight = (float) $coos[3] ?: 1;
       $wh_from_xml = [(int) $pwidth, (int) $pheight];
       // NOTE: floats are in the form of .1 so we need to remove the first 0.
       if (count($coos)) {
