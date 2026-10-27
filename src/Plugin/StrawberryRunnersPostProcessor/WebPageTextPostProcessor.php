@@ -203,7 +203,7 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
    */
   public function run(\stdClass $io, $context = StrawberryRunnersPostProcessorPluginInterface::PROCESS) {
     $input_property = $this->pluginDefinition['input_property'];
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
     $output = new \stdClass();
     $output->searchapi['fulltext'] = StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
     $output->searchapi['metadata'] = [];
@@ -213,7 +213,7 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
       if (json_last_error() == JSON_ERROR_NONE) {
         $page_title = $page_info['title'] ?? NULL;
         $page_url = $page_info['url'] ?? '';
-        $page_title = $page_title ?? $page_url;
+        $page_title ??= $page_url;
         $page_text = $page_info['text'] ?? '';
         $page_text = preg_replace('/[\x0D]/', '', $page_text);
         $page_ts = $page_info['ts'] ?? date("c");
