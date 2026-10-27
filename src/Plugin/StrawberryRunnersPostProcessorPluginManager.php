@@ -31,8 +31,8 @@ class StrawberryRunnersPostProcessorPluginManager extends DefaultPluginManager{
       'Plugin/StrawberryRunnersPostProcessor',
       $namespaces,
       $module_handler,
-      'Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface',
-      'Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor'
+      \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface::class,
+      \Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor::class
     );
 
     $this->alterInfo('strawberry_runners_strawberryrunnerspostprocessor_info');
