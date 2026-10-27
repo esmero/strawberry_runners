@@ -202,11 +202,11 @@ class strawberryRunnerPostprocessorEntity extends ConfigEntityBase implements st
    * Helper callback for uasort() to sort configuration entities by weight, parent and label.
    */
   public static function hierarchicalSort(ConfigEntityInterface $a, ConfigEntityInterface $b) {
-    $a_parent = isset($a->parent) ? $a->parent : '';
-    $b_parent = isset($b->parent) ? $b->parent : '';
+    $a_parent = $a->parent ?? '';
+    $b_parent = $b->parent ?? '';
 
-    $a_weight = isset($a->weight) ? $a->weight : 0;
-    $b_weight = isset($b->weight) ? $b->weight : 0;
+    $a_weight = $a->weight ?? 0;
+    $b_weight = $b->weight ?? 0;
     if ($a_parent == $b->id()) {
       return -1;
     }

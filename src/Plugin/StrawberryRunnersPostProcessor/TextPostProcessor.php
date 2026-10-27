@@ -252,15 +252,15 @@ class TextPostProcessor extends OcrPostProcessor {
 
     $input_property = $this->pluginDefinition['input_property'];
 
-    $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
-    $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+    $file_uuid = $io->input->metadata['dr:uuid'] ?? NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
+    $file_path = $io->input->{$input_property} ?? NULL;
     $config = $this->getConfiguration();
     $file_languages = isset($io->input->lang) ? (array) $io->input->lang : [$config['language_default'] ? trim($config['language_default'] ?? '') : 'eng'];
     if ($file_path && $file_uuid && $node_uuid) {
       $output = new \stdClass();
       // Let's see if we need an output path or not
-      $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+      $file_path = $io->input->{$input_property} ?? NULL;
       $out_file_path = NULL;
       $sequence_number = isset($io->input->metadata['sequence']) ? (int) $io->input->metadata['sequence'] : 1;
       $file_mime = $io->input->metadata["dr:mimetype"] ?? NULL;

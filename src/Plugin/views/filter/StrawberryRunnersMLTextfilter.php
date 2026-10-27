@@ -403,7 +403,7 @@ class StrawberryRunnersMLTextfilter extends FilterPluginBase /* FilterPluginBase
         try {
           $response = $plugin_instance->callTextML($this->value, TRUE);
         }
-        catch (\Exception $exception) {
+        catch (\Exception) {
           // Give user feedback
           return;
         }

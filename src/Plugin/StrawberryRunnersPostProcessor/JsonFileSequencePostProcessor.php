@@ -175,8 +175,8 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
     // Needed since this executes locally on the server via SHELL.
 
     $input_property = $this->pluginDefinition['input_property'];
-    $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
+    $file_uuid = $io->input->metadata['dr:uuid'] ?? NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
     $config = $this->getConfiguration();
     $sequence_number = [];
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {

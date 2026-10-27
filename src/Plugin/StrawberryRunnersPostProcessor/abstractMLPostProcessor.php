@@ -285,8 +285,8 @@ abstract class abstractMLPostProcessor extends StrawberryRunnersPostProcessorPlu
    */
   public function run(\stdClass $io, $context = StrawberryRunnersPostProcessorPluginInterface::PROCESS) {
     $input_property = $this->pluginDefinition['input_property'];
-    $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
+    $file_uuid = $io->input->metadata['dr:uuid'] ?? NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
 
     $config = $this->getConfiguration();
     $timeout = $config['timeout']; // in seconds
