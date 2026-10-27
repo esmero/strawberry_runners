@@ -253,9 +253,9 @@ class SubtitlePostProcessor extends TextPostProcessor {
 
     $input_property = $this->pluginDefinition['input_property'];
 
-    $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
-    $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+    $file_uuid = $io->input->metadata['dr:uuid'] ?? NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
+    $file_path = $io->input->{$input_property} ?? NULL;
     $config = $this->getConfiguration();
     // For subtitles we might have to use NLP in the actual Solr DOC for the language. The ADO might not be enough,
     // But still OK  to have as a fallback.
@@ -264,7 +264,7 @@ class SubtitlePostProcessor extends TextPostProcessor {
       $output = new \stdClass();
       $output->plugin = NULL;
       // Let's see if we need an output path or not
-      $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+      $file_path = $io->input->{$input_property} ?? NULL;
       $out_file_path = NULL;
       $sequence_number = isset($io->input->metadata['sequence']) ? (int) $io->input->metadata['sequence'] : 1;
       $file_mime = $io->input->metadata["dr:mimetype"] ?? NULL;
