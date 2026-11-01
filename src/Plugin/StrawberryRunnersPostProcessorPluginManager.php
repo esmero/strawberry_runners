@@ -11,6 +11,7 @@ namespace Drupal\strawberry_runners\Plugin;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Plugin\DefaultPluginManager;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor as StrawberryRunnersPostProcessorAttribute;
 
 
 /**
@@ -32,6 +33,7 @@ class StrawberryRunnersPostProcessorPluginManager extends DefaultPluginManager{
       $namespaces,
       $module_handler,
       \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface::class,
+      StrawberryRunnersPostProcessorAttribute::class,
       \Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor::class
     );
 
