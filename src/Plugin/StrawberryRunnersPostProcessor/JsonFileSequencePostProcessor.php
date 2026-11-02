@@ -9,24 +9,22 @@
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\SystemBinaryPostProcessor;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
-
 
 /**
  *
  * File sequence Post processor Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "filesequence",
- *    label = @Translation("Post processor that extracts/generates Ordered Sequences of files/pages/children using Files present in an ADO"),
- *    input_type = "entity:file",
- *    input_property = "filepath",
- *    input_argument = NULL
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'filesequence',
+  label: new TranslatableMarkup('Post processor that extracts/generates Ordered Sequences of files/pages/children using Files present in an ADO'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: null
+)]
 class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPluginBase {
 
   /**
