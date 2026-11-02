@@ -10,7 +10,8 @@ namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
@@ -19,15 +20,14 @@ use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
 /**
  *
  * System Binary Post processor Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "text",
- *    label = @Translation("Post processor that extracts text from Files"),
- *    input_type = "entity:file",
- *    input_property = "filepath",
- *    input_argument = NULL
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'text',
+  label: new TranslatableMarkup('Post processor that extracts text from Files'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: null
+)]
 class TextPostProcessor extends OcrPostProcessor {
 
   public $pluginDefinition;
@@ -261,7 +261,6 @@ class TextPostProcessor extends OcrPostProcessor {
       $output = new \stdClass();
       // Let's see if we need an output path or not
       $file_path = $io->input->{$input_property} ?? NULL;
-      $out_file_path = NULL;
       $sequence_number = isset($io->input->metadata['sequence']) ? (int) $io->input->metadata['sequence'] : 1;
       $file_mime = $io->input->metadata["dr:mimetype"] ?? NULL;
       $page_text = '';
@@ -274,7 +273,8 @@ class TextPostProcessor extends OcrPostProcessor {
           elseif ($this->isXmlMime($file_mime)) {
             // Lastly plain text version of the XML
             // Try first with HOCR
-            $page_text = $this->hOCRtoMiniOCR($text_content, $sequence_number);
+            $wh_from_xml = [];
+            $page_text = $this->hOCRtoMiniOCR($text_content, $sequence_number, $wh_from_xml);
             if ($page_text) {
               $page_text = strip_tags(str_replace("<l>",
                 PHP_EOL . "<l> ", $page_text)) ;
