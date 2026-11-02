@@ -10,23 +10,23 @@ namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
 
-
 /**
  *
  * OCR processor Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "ocr",
- *    label = @Translation("Post processor that Runs OCR/HORC against files"),
- *    input_type = "entity:file",
- *    input_property = "filepath",
- *    input_argument = "sequence_number"
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'ocr',
+  label: new TranslatableMarkup('Post processor that Runs OCR/HORC against files'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: 'sequence_number'
+)]
 class OcrPostProcessor extends SystemBinaryPostProcessor {
 
   public $pluginDefinition;
@@ -881,7 +881,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
   }
 
   protected function hOCRtoMiniOCR($output, $pageid, array &$wh_from_xml) {
-    // $wh_from_xml is an array by refernce that will hold INT values for w,h
+    // $wh_from_xml is an array by reference that will hold INT values for w,h
     $hocr = simplexml_load_string($output);
     $internalErrors = libxml_use_internal_errors(TRUE);
     libxml_clear_errors();
@@ -1162,7 +1162,7 @@ class OcrPostProcessor extends SystemBinaryPostProcessor {
       ->verifyCommand($execpath_tesseract)) {
       // --tessdata-dir /usr/share/tessdata
 
-      if ($datafolder_tesseract && strlen(trim($datafolder_tesseract ?? '') >0 )) {
+      if ($datafolder_tesseract && strlen(trim($datafolder_tesseract ?? '')) > 0 ) {
         $execpath_tesseract = $execpath_tesseract . ' --tessdata-dir '. escapeshellarg( $datafolder_tesseract);
       }
       $execpath_tesseract = $execpath_tesseract .' --list-langs';

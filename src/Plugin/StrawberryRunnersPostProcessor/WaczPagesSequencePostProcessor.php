@@ -2,24 +2,24 @@
 
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
-use Drupal\Core\File\FileSystemInterface;
+use Drupal\Core\File\FileExists;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 
 /**
  *
  * File sequence Post processor Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "waczpages",
- *    label = @Translation("Post processor that extracts/generates Indexed Page Content from WACZ files in an ADO"),
- *    input_type = "entity:file",
- *    input_property = "filepath",
- *    input_argument = NULL
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'waczpages',
+  label: new TranslatableMarkup('Post processor that extracts/generates Indexed Page Content from WACZ files in an ADO'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: null
+)]
 class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPluginBase {
 
   /**
@@ -196,16 +196,15 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
       $newname = $info['dirname'].'/'.$info['filename'] . '.' . 'zip';
       $sequence_data = [];
       $sequence_number = [];
-      $newname = $this->fileSystem->move($file_path, $newname, FileSystemInterface::EXISTS_REPLACE);
+      $newname = $this->fileSystem->move($file_path, $newname, FileExists::Replace);
       $z = new \ZipArchive();
-      $contents = NULL;
       if ($z->open($newname)) {
         $i = 0;
         $j = 0;
         $fp = $z->getStream('pages/pages.jsonl');
         if ($fp) {
           while (($buffer = fgets($fp)) !== FALSE) {
-            // First row in a jsonl will be the headers, we do not need this one.
+            // First row in a JSONL will be the headers, we do not need this one.
             if ($i == 0) {
               $i++;
               continue;
@@ -226,7 +225,7 @@ class WaczPagesSequencePostProcessor extends StrawberryRunnersPostProcessorPlugi
         $fp_extra = $z->getStream('pages/extraPages.jsonl');
         if ($fp_extra) {
           while (($buffer = fgets($fp_extra)) !== FALSE) {
-            // First row in a jsonl will be the headers, we do not need this one.
+            // First row in a JSONL will be the headers, we do not need this one.
             if ($j == 0) {
               $j++;
               continue;

@@ -10,27 +10,26 @@ namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberry_runners\VTTLine;
 use Drupal\strawberry_runners\VTTProcessor;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
-use Laracasts\Transcriptions\Transcription;
 
 
 /**
  *
  * Sub title (VTT) Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "subtitle",
- *    label = @Translation("Post processor that extracts subtitles and generates time/space transmutated OCR"),
- *    input_type = "entity:file",
- *    input_property = "filepath",
- *    input_argument = NULL
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'subtitle',
+  label: new TranslatableMarkup('Post processor that extracts subtitles and generates time/space transmutated OCR'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: null
+)]
 class SubtitlePostProcessor extends TextPostProcessor {
 
   public $pluginDefinition;

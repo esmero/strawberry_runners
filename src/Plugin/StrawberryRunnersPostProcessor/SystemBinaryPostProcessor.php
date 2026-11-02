@@ -8,11 +8,10 @@
 
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
-use Drupal\Component\Utility\Environment;
 use Drupal\Core\File\Exception\FileNotExistsException;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\StringTranslation\ByteSizeMarkup;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 
@@ -20,18 +19,19 @@ use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterfa
 /**
  *
  * System Binary Post processor Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "binary",
- *    label = @Translation("Post processor that uses a System Binary to process
- *   files"), input_type = "entity:file", input_property = "filepath",
- *   input_argument = NULL
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'binary',
+  label: new TranslatableMarkup('Post processor that uses a System Binary to process
+   files'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: null
+)]
 class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase {
 
   /**
-   * Keeps track of a the expected output file in case there is any of course.
+   * Keeps track of the expected output file in case there is any of course.
    *
    * @var string|null
    */
@@ -359,9 +359,9 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
         // No input, returning
         return NULL;
       }
-      //Ok, let's try to get the an extension if there is one
+      //Ok, let's try to get an extension if there is one
       // will be 4 characters after
-      // What if its more? like tar.gz ?
+      // What if it is more? like tar.gz ?
       $extension = substr($arguments, (int) $pos + 8, 5);
       $extension = trim($extension ?? '');
       $extension = (str_starts_with($extension, '.')) && strlen($extension) >= 4 ? $extension : '';

@@ -8,29 +8,24 @@
 
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
-use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManager;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
-use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
-use Drupal\strawberry_runners\VTTLine;
-use Drupal\strawberry_runners\VTTProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
-use Laracasts\Transcriptions\Transcription;
 
 /**
  *
  * ML ViT
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "ml_vit",
- *    label = @Translation("Post processor that generates Object detection and Vector Embeddings using ViT"),
- *    input_type = "entity:file",
- *    input_property = "filepath",
- *    input_argument = "annotation"
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'ml_vit',
+  label: new TranslatableMarkup('Post processor that generates Object detection and Vector Embeddings using ViT'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: 'annotation'
+)]
 class MLViTPostProcessor extends abstractMLPostProcessor {
 
   public $pluginDefinition;
