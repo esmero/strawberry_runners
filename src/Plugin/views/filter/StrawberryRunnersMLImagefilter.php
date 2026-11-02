@@ -2,45 +2,26 @@
 
 namespace Drupal\strawberry_runners\Plugin\views\filter;
 
-use Drupal\Core\Cache\CacheableMetadata;
-use Drupal\Core\Cache\RefinableCacheableDependencyInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\TypedData\EntityDataDefinitionInterface;
-use Drupal\Core\Field\TypedData\FieldItemDataDefinitionInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Form\OptGroup;
-use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManager;
-use Drupal\Core\TypedData\ComplexDataDefinitionInterface;
-use Drupal\Core\TypedData\DataDefinitionInterface;
-use Drupal\node\NodeStorageInterface;
 use Drupal\search_api\Entity\Index;
-use Drupal\search_api\IndexInterface;
-use Drupal\search_api\ParseMode\ParseModePluginManager;
-use Drupal\search_api\Plugin\views\filter\SearchApiFulltext;
 use Drupal\search_api\Plugin\views\query\SearchApiQuery;
-use Drupal\search_api\SearchApiException;
-use Drupal\search_api_solr\Utility\Utility;
 use Drupal\strawberryfield\Tools\StrawberryfieldJsonHelper;
+use Drupal\views\Attribute\ViewsFilter;
 use Drupal\views\Plugin\views\filter\FilterPluginBase;
 use Drupal\search_api\Plugin\views\filter\SearchApiFilterTrait;
-use Drupal\views\Plugin\views\filter\InOperator;
-use Drupal\views\Views;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\search_api\Utility\FieldsHelperInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\Core\Entity\Element\EntityAutocomplete;
 use Drupal\Core\Cache\CacheBackendInterface;
-use Drupal\Core\Render\RenderContext;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\abstractMLPostProcessor;
 
 /**
  * Defines a filter that handles Image Similarity.
  *
  * @ingroup views_filter_handlers
- *
- * @ViewsFilter("sbr_imageml_filter")
  */
+#[ViewsFilter('sbr_imageml_filter')]
 class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBase */
 {
 
@@ -608,7 +589,7 @@ class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBas
       }
     }
     else {
-      // Do for non exposed. Should be directly a JSON?
+      // @TODO for non exposed. Should be directly a JSON?
     }
   }
 
