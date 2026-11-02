@@ -14,15 +14,15 @@ use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\search_api\Utility\FieldsHelperInterface;
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\abstractMLPostProcessor;
+use Drupal\views\Attribute\ViewsArgument;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Defines a filter that handles Image Similarity.
  *
  * @ingroup views_argument_handlers
- *
- * @ViewsArgument("sbr_imageml_filter")
  */
+#[ViewsArgument('sbr_imageml_filter')]
 class StrawberryRunnersMLImageArgument extends SearchApiStandard {
 
   /**
