@@ -59,7 +59,8 @@ function strawberry_runners_views_data_alter(array &$data) {
       $args = [
         '%index' => $index->label(),
       ];
-      ErrorAlias::logException('strawberry_runners', $e, '%type while computing Views data for index %index: @message in %function (line %line of %file).', $args);
+      $logger = \Drupal::logger('strawberry_runners');
+      ErrorAlias::logException($logger, $e, '%type while computing Views data for index %index: @message in %function (line %line of %file).', $args);
     }
   }
   return $data;
