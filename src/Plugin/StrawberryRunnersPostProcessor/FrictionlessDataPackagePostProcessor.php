@@ -7,24 +7,24 @@
  */
 
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\Core\Form\FormStateInterface;
 use frictionlessdata\datapackage\Package;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 
 /**
  *
  * System Binary Post processor Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "datapackage",
- *    label = @Translation("Post processor that writes/reads Frictionless Data Packages"),
- *    input_type = "entity:file",
- *    input_property = "filepath",
- *    input_argument = "sequence_number"
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'datapackage',
+  label: new TranslatableMarkup('Post processor that writes/reads Frictionless Data Packages'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: 'sequence_number'
+)]
 class FrictionlessDataPackagePostProcessor extends StrawberryRunnersPostProcessorPluginBase {
 
   /**
