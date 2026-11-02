@@ -30,8 +30,9 @@ class StrawberryRunnersPostProcessor extends Plugin {
   public function __construct(
     public readonly string $id,
     public readonly ?TranslatableMarkup $label = NULL,
-    public readonly string $input_type,
-    public readonly string $input_property,
+    public readonly string $input_type = '',
+    public readonly string $output_type = '',
+    public readonly string $input_property = '',
     public readonly ?string $input_argument = NULL,
     public readonly string $when = StrawberryRunnersPostProcessor::POSTSAVE,
     public readonly ?TranslatableMarkup $description = NULL,
