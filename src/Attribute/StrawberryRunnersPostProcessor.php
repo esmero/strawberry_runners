@@ -1,7 +1,7 @@
 <?php
 
 namespace Drupal\strawberry_runners\Attribute;
-use Drupal\Component\Attribute\Plugin;
+use Drupal\Component\Plugin\Attribute\Plugin;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
 
 /**
