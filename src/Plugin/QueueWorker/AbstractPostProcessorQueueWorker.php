@@ -386,7 +386,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           }
           // May 2024. Allow a Processor that is to be indexed, already was processed and has data in the key store
           // To use that data as input for a child one, if chained too. But only if nothing has set $io->output->plugin before
-          // This is needed for Processors (e.g OCR) that have already processed everything and then get a new chained
+          // This is needed for Processors (e.g. OCR) that have already processed everything and then get a new chained
           // Child that was never processed before. Would be terrible to have to re-process OCR completely just to get
           // A Child to trigger. We will only provide $io->input->plugin['searchapi'] bc that is what we know
           // Any other type of child won't be able to feed from pre-existing.
@@ -546,7 +546,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
           // May 2024, Most cases, like Pagers (PDF page extractors) $input_argument_value will be an array, a sequence
           // Leading to many children.
-          // But for chained processors like ML ones, e.g each OCR will generate exactly ONE ML
+          // But for chained processors like ML ones, e.g. each OCR will generate exactly ONE ML
           // using the same input property of OCR.
           // So we can no longer assume/not depend on $input_argument_value as we did until 0.7.0
 
@@ -610,7 +610,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       // Note for 1.1.0 and 2.1.0
       // There is a problem with this approach.
       // Imagine a Processor that has is root and leaf at the same time
-      // We have 1000 Enqueued (e.g system binary)
+      // We have 1000 Enqueued (e.g. system binary)
       // Each one for a different ADO.
       // BY enqueuing at the end, first clean up will happen at 1001
       // By then we will be out of space.
@@ -830,8 +830,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       $count = $count + (int) $results->getResultCount();
 
     }
-    // This is a good one. If I have multiple indexes, but one is missing the I assume
-    // reprocessing is needed
+    // This is a good one. If I have multiple indexes, but one is missing, then
+    // I assume reprocessing is needed
     // But if not, then I return 1, which means we have them all
     // FUTURE thinking is the best.
     return ($count == count($indexes)) ? 1 : 0;
@@ -991,7 +991,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $message_params
       );
     }
-    // This will delete if it was there and we did not update OR if it failed to update.
+    // This will delete, if it was there, and we did not update OR if it failed to update.
     // But on proper update we return sooner.
     unlink($io->output->file);
   }
@@ -1052,7 +1052,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   }
 
   /**
-   * Helper method to get the real path from an uri.
+   * Helper method to get the real path from a uri.
    *
    * @param string $uri
    *   The URI of the file, e.g. public://directory/file.jpg.
