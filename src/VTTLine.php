@@ -1,7 +1,7 @@
 <?php
 
 namespace Drupal\strawberry_runners;
-use JsonSerializable;
+
 class VTTLine
 {
   protected $starttime = NULL;
