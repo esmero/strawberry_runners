@@ -81,7 +81,7 @@ class Redirect extends ControllerBase {
     if ($PID) {
       $parts = explode(':', $PID);
     }
-    $response = new RedirectResponse('/do/'.$parts[1], 302);
+    $response = new RedirectResponse('/do/'.$parts[1], \Symfony\Component\HttpFoundation\Response::HTTP_FOUND);
     return $response;
   }
 

@@ -1,30 +1,31 @@
 <?php
 
 namespace Drupal\strawberry_runners\Plugin\Action;
+use Drupal\Core\Action\Attribute\Action;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Plugin\Action\Derivative\EntitySbfActionDeriver;
 use Drupal\views\ViewExecutable;
 use Drupal\views_bulk_operations\Traits\ViewsBulkOperationsActionCompletedTrait;
 use Drupal\views_bulk_operations\Action\ViewsBulkOperationsActionInterface;
 use Drupal\Core\Plugin\PluginFormInterface;
 use Drupal\strawberryfield\Plugin\Action\StrawberryfieldJsonPatch;
 use Drupal\views_bulk_operations\Action\ViewsBulkOperationsPreconfigurationInterface;
-
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Provides an action that can Modify Entity attached SBFs via JSON Patch.
- *
- * @Action(
- *   id = "entity:sbr_posstprocess_action",
- *   action_label = @Translation("Trigger Strawberrry Runners process/reprocess for Archipelago Digital Objects"),
- *   label = @Translation("Trigger Strawberrry Runners process/reprocess for Archipelago Digital Objects"),
- *   category = @Translation("Strawberry Runners"),
- *   deriver = "Drupal\strawberry_runners\Plugin\Action\Derivative\EntitySbfActionDeriver",
- *   type = "node",
- *   confirm = "true"
- * )
  */
+#[Action(
+  id: 'entity:sbr_posstprocess_action',
+  label: new TranslatableMarkup('Trigger Strawberrry Runners process/reprocess for Archipelago Digital Objects'),
+  action_label: new TranslatableMarkup('Trigger Strawberrry Runners process/reprocess for Archipelago Digital Objects'),
+  category: new TranslatableMarkup('Strawberry Runners'),
+  deriver: EntitySbfActionDeriver::class,
+  confirm_form_route_name: 'views_bulk_operations.confirm',
+  type: 'node',
+)]
 class StrawberryRunnersPostProcess extends StrawberryfieldJsonPatch implements ViewsBulkOperationsActionInterface, ViewsBulkOperationsPreconfigurationInterface, PluginFormInterface {
 
   use ViewsBulkOperationsActionCompletedTrait;

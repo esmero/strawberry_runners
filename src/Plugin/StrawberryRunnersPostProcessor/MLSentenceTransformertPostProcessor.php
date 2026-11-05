@@ -8,30 +8,23 @@
 
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
-use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\StreamWrapper\StreamWrapperManager;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
-use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
-use Drupal\strawberry_runners\VTTLine;
-use Drupal\strawberry_runners\VTTProcessor;
-use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
-use Laracasts\Transcriptions\Transcription;
 
 /**
  *
  * ML Sentence Transformer
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "ml_sentence_transformer",
- *    label = @Translation("Post processor that generates Vector Embeddings using Sentence Transformers"),
- *    input_property = "searchapi",
- *    input_type = "json",
- *    output_type = "json",
- *    input_argument = "sequence_number"
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'ml_sentence_transformer',
+  label: new TranslatableMarkup('Post processor that generates Vector Embeddings using Sentence Transformers'),
+  input_property: 'searchapi',
+  input_type: 'json',
+  output_type: 'json',
+  input_argument: 'sequence_number'
+)]
 class MLSentenceTransformertPostProcessor extends abstractMLPostProcessor {
 
   public $pluginDefinition;

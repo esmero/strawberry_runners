@@ -1,13 +1,16 @@
 <?php
 
 namespace Drupal\strawberry_runners\Plugin\Action;
+use Drupal\Core\Action\Attribute\Action;
 use Drupal\Core\Entity\EntityInterface;
 use Drupal\Core\Field\EntityReferenceFieldItemListInterface;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\Session\AccountInterface;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\search_api\Query\QueryInterface;
 use Drupal\search_api\SearchApiException;
 use Drupal\search_api\Utility\Utility;
+use Drupal\strawberry_runners\Plugin\Action\Derivative\EntitySbfActionDeriver;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\views\ViewExecutable;
 use Drupal\views_bulk_operations\Traits\ViewsBulkOperationsActionCompletedTrait;
@@ -15,22 +18,21 @@ use Drupal\views_bulk_operations\Action\ViewsBulkOperationsActionInterface;
 use Drupal\Core\Plugin\PluginFormInterface;
 use Drupal\strawberryfield\Plugin\Action\StrawberryfieldJsonPatch;
 use Drupal\views_bulk_operations\Action\ViewsBulkOperationsPreconfigurationInterface;
-
 use Symfony\Component\DependencyInjection\ContainerInterface;
+use Drupal\Core\Utility\Error as ErrorAlias;
 
 /**
  * Provides an action that can Modify Entity attached SBFs via JSON Patch.
- *
- * @Action(
- *   id = "entity:sbr_flavordelete_action",
- *   action_label = @Translation("Delete and untrack Search API indexed Strawberry Flavors (e.g OCR) for Archipelago Digital Objects"),
- *   label = @Translation("Delete and untrack Search API indexed Strawberry Flavors (e.g OCR) for Archipelago Digital Objects"),
- *   category = @Translation("Strawberry Runners"),
- *   deriver = "Drupal\strawberry_runners\Plugin\Action\Derivative\EntitySbfActionDeriver",
- *   type = "node",
- *   confirm = "true"
- * )
  */
+#[Action(
+  id: 'entity:sbr_flavordelete_action',
+  label: new TranslatableMarkup('Delete and untrack Search API indexed Strawberry Flavors (e.g OCR) for Archipelago Digital Objects'),
+  action_label: new TranslatableMarkup('Delete and untrack Search API indexed Strawberry Flavors (e.g OCR) for Archipelago Digital Objects'),
+  category: new TranslatableMarkup('Strawberry Runners'),
+  deriver: EntitySbfActionDeriver::class,
+  confirm_form_route_name: 'views_bulk_operations.confirm',
+  type: 'node',
+)]
 class StrawberryRunnersDeleteFlavors extends StrawberryfieldJsonPatch implements ViewsBulkOperationsActionInterface, ViewsBulkOperationsPreconfigurationInterface, PluginFormInterface {
 
   use ViewsBulkOperationsActionCompletedTrait;
@@ -294,7 +296,8 @@ class StrawberryRunnersDeleteFlavors extends StrawberryfieldJsonPatch implements
         }
       }
       catch (SearchApiException $searchApiException) {
-        watchdog_exception('strawberryfield', $searchApiException, 'We could not delete and untrack Strawberry Flavor Documents from Index because the Solr Query returned an exception at server level.');
+        $logger = \Drupal::logger('strawberry_runners');
+        ErrorAlias::logException($logger, $searchApiException,  'We could not delete and untrack Strawberry Flavor Documents from Index because the Solr Query returned an exception at server level.');
       }
     }
 
@@ -304,15 +307,10 @@ class StrawberryRunnersDeleteFlavors extends StrawberryfieldJsonPatch implements
       $tracking_manager = \Drupal::getContainer()
         ->get('search_api.entity_datasource.tracking_manager');
       foreach ($entity->field_sbf_nodetonode->referencedEntities() as $key => $referencedEntity) {
-        if (!isset($indexes[$referencedEntity->getType()])) {
-          $indexes[$referencedEntity->getType()]
-            = $tracking_manager->getIndexesForEntity($referencedEntity);
-        }
+        $indexes[$referencedEntity->getType()] ??= $tracking_manager->getIndexesForEntity($referencedEntity);
         $entity_id = $referencedEntity->id();
         $languages = $referencedEntity->getTranslationLanguages();
-        $combine_id = function ($langcode) use ($entity_id) {
-          return $entity_id . ':' . $langcode;
-        };
+        $combine_id = (fn($langcode) => $entity_id . ':' . $langcode);
         $updated_item_ids = array_map($combine_id, array_keys($languages));
         if (isset($indexes[$referencedEntity->getType()])) {
           foreach ($indexes[$referencedEntity->getType()] as $index) {

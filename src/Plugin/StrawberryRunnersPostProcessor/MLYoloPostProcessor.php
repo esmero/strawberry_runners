@@ -10,21 +10,23 @@ namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManager;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
 
 /**
  *
  * ML YOLO
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "ml_yolo",
- *    label = @Translation("Post processor that generates Object detection and Vector Embeddings using YOLO"),
- *    input_type = "entity:file",
- *    input_property = "filepath",
- *    input_argument = "annotation"
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'ml_yolo',
+  label: new TranslatableMarkup('Post processor that generates Object detection and Vector Embeddings using YOLO'),
+  input_type:
+  'entity:file',
+  input_property: 'filepath',
+  input_argument: 'annotation'
+)]
 class MLYoloPostProcessor extends abstractMLPostProcessor {
 
   public $pluginDefinition;
@@ -118,7 +120,7 @@ class MLYoloPostProcessor extends abstractMLPostProcessor {
       $height = $io->input->metadata['flv:exif']['ImageHeight'] ?? NULL;
     }
     $iiifidentifier = urlencode(
-      StreamWrapperManager::getTarget( isset($io->input->metadata['url']) ? $io->input->metadata['url'] : NULL)
+      StreamWrapperManager::getTarget( $io->input->metadata['url'] ?? NULL)
     );
 
     if ($iiifidentifier == NULL || empty($iiifidentifier) || empty($width) || empty($height)) {

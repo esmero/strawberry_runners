@@ -229,13 +229,13 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
         $process = Process::fromShellCommandline($command, NULL, NULL, NULL, $timeout);
         $process->mustRun(function($type, $buffer) use ($process, &$pids): void {});
       }
-      catch (ProcessFailedException $e) {
+      catch (ProcessFailedException) {
         $this->logger->warning("Command @command Failed executing", [
           '@command' => $command
         ]);
         $failed = TRUE;
       }
-      catch (ProcessTimedOutException $e) {
+      catch (ProcessTimedOutException) {
         $this->logger->warning("Command @command timed out", [
           '@command' => $command
         ]);

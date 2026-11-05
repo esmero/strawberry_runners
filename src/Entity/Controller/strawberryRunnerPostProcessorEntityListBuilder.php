@@ -128,11 +128,11 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
     foreach ($hash as $entity_id => $original_numeric_id) {
       $id_of_parent = $entities[$original_numeric_id]->getParent();
       if ($id_of_parent !== '') {
-          $hierarchical[$hash[$id_of_parent]] = $hierarchical[$hash[$id_of_parent]] ?? [];
+          $hierarchical[$hash[$id_of_parent]] ??= [];
           $hierarchical[$hash[$id_of_parent]][$hash[$entity_id]]  = $hash[$entity_id];
       }
       else {
-        $hierarchical[$hash[$entity_id]] = $hierarchical[$hash[$entity_id]] ?? [];
+        $hierarchical[$hash[$entity_id]] ??= [];
       }
     }
     $added = [];
@@ -141,9 +141,7 @@ class strawberryRunnerPostProcessorEntityListBuilder extends DraggableListBuilde
     }
     $added = array_flip($added);
     uksort($entities,
-      function ($a, $b) use ($added) {
-        return $added[$a] <=> $added[$b];
-      });
+      fn($a, $b) => $added[$a] <=> $added[$b]);
 
     return $entities;
   }

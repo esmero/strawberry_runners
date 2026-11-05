@@ -4,55 +4,57 @@ namespace Drupal\strawberry_runners\Entity;
 
 use Drupal\Core\Config\Entity\ConfigEntityBase;
 use Drupal\Core\Config\Entity\ConfigEntityInterface;
-
+use Drupal\Core\Entity\Attribute\ConfigEntityType;
+use Drupal\Core\Entity\EntityViewBuilder;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Entity\Controller\strawberryRunnerPostProcessorEntityListBuilder;
+use Drupal\strawberry_runners\Form\strawberryRunnerPostprocessorEntityDeleteForm;
+use Drupal\strawberry_runners\Form\strawberryRunnerPostprocessorEntityForm;
+use Drupal\strawberry_runners\strawberryRunnerPostProcessorEntityHtmlRouteProvider;
 
 /**
  * Defines the Strawberry Key Name Providers entity.
- *
- * @ConfigEntityType(
- *   id = "strawberry_runners_postprocessor",
- *   label = @Translation("Strawberry Runners Post Processor"),
- *   handlers = {
- *     "view_builder" = "Drupal\Core\Entity\EntityViewBuilder",
- *     "list_builder" = "Drupal\strawberry_runners\Entity\Controller\strawberryRunnerPostProcessorEntityListBuilder",
- *     "form" = {
- *       "add" = "Drupal\strawberry_runners\Form\strawberryRunnerPostprocessorEntityForm",
- *       "edit" = "Drupal\strawberry_runners\Form\strawberryRunnerPostprocessorEntityForm",
- *       "delete" = "Drupal\strawberry_runners\Form\strawberryRunnerPostprocessorEntityDeleteForm"
- *     },
- *     "route_provider" = {
- *       "html" = "Drupal\strawberry_runners\strawberryRunnerPostProcessorEntityHtmlRouteProvider",
- *     },
- *   },
- *   config_prefix = "strawberry_runners_postprocessor",
- *   admin_permission = "administer site configuration",
- *   entity_keys = {
- *     "id" = "id",
- *     "label" = "label",
- *     "uuid" = "uuid",
- *     "weight" = "weight",
- *     "active" = "active"
- *   },
- *   config_export = {
- *     "id",
- *     "label",
- *     "uuid",
- *     "weight",
- *     "pluginconfig",
- *     "pluginid",
- *     "active",
- *     "parent",
- *     "depth"
- *   },
- *   links = {
- *     "canonical" = "/admin/config/archipelago/strawberry_runner_postprocessor/{strawberry_runners_postprocessor}",
- *     "add-form" = "/admin/config/archipelago/strawberry_runner_postprocessor/add",
- *     "edit-form" = "/admin/config/archipelago/strawberry_runner_postprocessor/{strawberry_runners_postprocessor}/edit",
- *     "delete-form" = "/admin/config/archipelago/strawberry_runner_postprocessor/{strawberry_runners_postprocessor}/delete",
- *     "collection" = "/admin/config/archipelago/strawberry_runner_postprocessor"
- *   }
- * )
  */
+#[ConfigEntityType(
+  id: 'strawberry_runners_postprocessor',
+  label: new TranslatableMarkup('Strawberry Runners Post Processor'),
+  config_prefix: 'strawberry_runners_postprocessor', entity_keys: [
+    'id' => 'id',
+    'label' => 'label',
+    'uuid' => 'uuid',
+    'weight' => 'weight',
+    'active' => 'active'
+  ],
+  handlers: [
+    'view_builder' => EntityViewBuilder::class,
+    'list_builder' => strawberryRunnerPostProcessorEntityListBuilder::class,
+    'form' => [
+      'add' => strawberryRunnerPostprocessorEntityForm::class,
+      'edit' => strawberryRunnerPostprocessorEntityForm::class,
+      'delete' => strawberryRunnerPostprocessorEntityDeleteForm::class],
+    'route_provider' => [
+      'html' => strawberryRunnerPostProcessorEntityHtmlRouteProvider::class]
+  ],
+  links: [
+    'canonical' => '/admin/config/archipelago/strawberry_runner_postprocessor/{strawberry_runners_postprocessor}',
+    'add-form' => '/admin/config/archipelago/strawberry_runner_postprocessor/add',
+    'edit-form' => '/admin/config/archipelago/strawberry_runner_postprocessor/{strawberry_runners_postprocessor}/edit',
+    'delete-form' => '/admin/config/archipelago/strawberry_runner_postprocessor/{strawberry_runners_postprocessor}/delete',
+    'collection' => '/admin/config/archipelago/strawberry_runner_postprocessor'
+  ],
+  admin_permission: 'administer site configuration',
+  config_export: [
+    'id',
+    'label',
+    'uuid',
+    'weight',
+    'pluginconfig',
+    'pluginid',
+    'active',
+    'parent',
+    'depth'
+  ]
+)]
 class strawberryRunnerPostprocessorEntity extends ConfigEntityBase implements strawberryRunnerPostprocessorEntityInterface {
 
   /**
@@ -202,11 +204,11 @@ class strawberryRunnerPostprocessorEntity extends ConfigEntityBase implements st
    * Helper callback for uasort() to sort configuration entities by weight, parent and label.
    */
   public static function hierarchicalSort(ConfigEntityInterface $a, ConfigEntityInterface $b) {
-    $a_parent = isset($a->parent) ? $a->parent : '';
-    $b_parent = isset($b->parent) ? $b->parent : '';
+    $a_parent = $a->parent ?? '';
+    $b_parent = $b->parent ?? '';
 
-    $a_weight = isset($a->weight) ? $a->weight : 0;
-    $b_weight = isset($b->weight) ? $b->weight : 0;
+    $a_weight = $a->weight ?? 0;
+    $b_weight = $b->weight ?? 0;
     if ($a_parent == $b->id()) {
       return -1;
     }

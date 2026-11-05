@@ -12,29 +12,25 @@ class UpdateCodeMirrorCommand implements CommandInterface
 {
 
   /**
-   * The Content that will be updated on the Code Mirror text area
-   *
-   * @var \stdClass;
-   */
-  protected $content;
-
-  /**
-   * The JQuery() selector
-   *
-   * @var string
-   */
-  protected $selector;
-
-  /**
    * Constructs an AlertCommand object.
    *
    * @param string $text
    *   The text to be displayed in the alert box.
+   * @param string $selector
    */
-  public function __construct($selector, $content) {
-    $this->selector = $selector;
-    $this->content = $content;
-
+  public function __construct(
+      /**
+       * The JQuery() selector
+       */
+      protected $selector,
+      /**
+       * The Content that will be updated on the Code Mirror text area
+       *
+       * @var \stdClass;
+       */
+      protected $content
+  )
+  {
   }
 
   /**

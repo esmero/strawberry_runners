@@ -8,11 +8,10 @@
 
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
-use Drupal\Component\Utility\Environment;
 use Drupal\Core\File\Exception\FileNotExistsException;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\StringTranslation\ByteSizeMarkup;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 
@@ -20,18 +19,19 @@ use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterfa
 /**
  *
  * System Binary Post processor Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "binary",
- *    label = @Translation("Post processor that uses a System Binary to process
- *   files"), input_type = "entity:file", input_property = "filepath",
- *   input_argument = NULL
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'binary',
+  label: new TranslatableMarkup('Post processor that uses a System Binary to process
+   files'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: null
+)]
 class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase {
 
   /**
-   * Keeps track of a the expected output file in case there is any of course.
+   * Keeps track of the expected output file in case there is any of course.
    *
    * @var string|null
    */
@@ -156,7 +156,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
       '#type' => 'textfield',
       '#title' => $this->t('File Size(s) to limit this Processor to.'),
       '#description' => $this->t('Enter a value like "512" (bytes), "80 KB" (kilobytes) or "50 MB" (megabytes) in order to restrict processing to the previous condition.'),
-      '#element_validate' => [[get_class($this), 'validateMaxFilesize']],
+      '#element_validate' => [[static::class, 'validateMaxFilesize']],
       '#size' => 100,
       '#default_value' => $this->getConfiguration()['file_limit_value_bytes'],
       '#states' => [
@@ -347,7 +347,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
     $input_argument = $this->pluginDefinition['input_argument'];
 
     // Sets the default page to 1 if not passed.
-    $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+    $file_path = $io->input->{$input_property} ?? NULL;
     $out_file_path = NULL;
     //@ todo all this should be base methods, each method should check and validate what is needed
     // So one of the output types and output destinations can operate or not
@@ -359,12 +359,12 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
         // No input, returning
         return NULL;
       }
-      //Ok, let's try to get the an extension if there is one
+      //Ok, let's try to get an extension if there is one
       // will be 4 characters after
-      // What if its more? like tar.gz ?
+      // What if it is more? like tar.gz ?
       $extension = substr($arguments, (int) $pos + 8, 5);
       $extension = trim($extension ?? '');
-      $extension = (strpos($extension, '.') === 0) && strlen($extension) >= 4 ? $extension : '';
+      $extension = (str_starts_with($extension, '.')) && strlen($extension) >= 4 ? $extension : '';
 
       $out_file_path = $this->temporary_directory . '/' . pathinfo($file_path, PATHINFO_FILENAME);
       $this->out_file_path = $out_file_path . $extension;
@@ -375,7 +375,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
     }
 
     if (\Drupal::service('strawberryfield.utility')
-        ->verifyCommand($execpath) && (strpos($arguments, '%file') !== FALSE)) {
+        ->verifyCommand($execpath) && (str_contains($arguments, '%file'))) {
       // Adds single quote around %s just in case the filenames contain (should not) a space
       $arguments = str_replace('%s', '', $arguments);
       $arguments = $this->strReplaceFirst('%file', "'%s'", $arguments);
@@ -390,7 +390,7 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
       $command = escapeshellcmd($execpath . ' ' . $arguments);
     }
     // Only return $command if it contains the original filepath somewhere
-    if (strpos($command, $file_path) !== FALSE) {
+    if (str_contains($command, $file_path)) {
       return $command;
     }
     return '';

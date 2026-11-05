@@ -1,42 +1,44 @@
 {
-    "name": "strawberryfield/strawberry_runners",
-    "description": "Strawberryfield post processing module for Drupal 11 using PHP React",
-    "type": "drupal-module",
-    "license": "GPL-2.0+",
-    "homepage": "https://github.com/esmero/strawberry_runners",
-    "authors": [
-        {
-            "name": "Giancarlo Birello",
-            "email": "giancarlo.birello@gmail.com",
-            "homepage": "https://github.com/giancarlobi",
-            "role": "Owner"
-        },
-        {
-            "name": "Diego Pino Navarro",
-            "email": "dpino@metro.org",
-            "homepage": "https://github.com/DiegoPino",
-            "role": "Owner"
-        }
-    ],
-    "require": {
-        "php": ">=8.1",
-        "ext-zip": "*",
-        "ext-json": "*",
-        "drupal/views_bulk_operations": ">=4.4.1",
-        "drupal/core": "^11",
-        "drupal/search_api_solr": "~4.3",
-        "strawberryfield/strawberryfield": "2.1.0.x-dev",
-        "strawberryfield/format_strawberryfield": "2.1.0.x-dev",
-        "react/event-loop": "^1.1",
-        "react/child-process": "^0.6",
-        "react/stream": "^1.1",
-        "web64/php-nlp-client" : ">=0.4",
-        "mixnode/mixnode-warcreader-php":">=0.0",
-        "ext-simplexml": "*",
-        "ext-libxml": "*",
-        "ext-xmlwriter": "*"
+  "name": "strawberryfield/strawberry_runners",
+  "description": "Strawberryfield post processing module for Drupal 11 using PHP React",
+  "type": "drupal-module",
+  "license": "GPL-2.0+",
+  "homepage": "https://github.com/esmero/strawberry_runners",
+  "authors": [
+    {
+      "name": "Giancarlo Birello",
+      "email": "giancarlo.birello@gmail.com",
+      "homepage": "https://github.com/giancarlobi",
+      "role": "Owner"
     },
-    "conflict": {
-        "drupal/views_bulk_operations": "<4.4.1"
+    {
+      "name": "Diego Pino Navarro",
+      "email": "dpino@metro.org",
+      "homepage": "https://github.com/DiegoPino",
+      "role": "Owner"
     }
+  ],
+  "require": {
+    "php": ">=8.1",
+    "ext-zip": "*",
+    "ext-json": "*",
+    "drupal/views_bulk_operations": ">=4.4.1",
+    "drupal/core": "^11.4",
+    "drupal/search_api_solr": "~4.3",
+    "strawberryfield/strawberryfield": "2.2.0.x-dev",
+    "strawberryfield/format_strawberryfield": "2.2.0.x-dev",
+    "react/event-loop": "^1.1",
+    "react/child-process": "^0.6",
+    "react/stream": "^1.1",
+    "web64/php-nlp-client" : ">=0.4",
+    "mixnode/mixnode-warcreader-php":">=0.0",
+    "ext-simplexml": "*",
+    "ext-libxml": "*",
+    "ext-xmlwriter": "*",
+    "ext-zlib": "*",
+    "ext-curl": "*"
+  },
+  "conflict": {
+    "drupal/views_bulk_operations": "<4.4.1"
+  }
 }

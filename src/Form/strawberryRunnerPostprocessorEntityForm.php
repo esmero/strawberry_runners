@@ -60,7 +60,7 @@ class strawberryRunnerPostprocessorEntityForm extends EntityForm {
     ];
 
     $ajax = [
-      'callback' => [get_class($this), 'ajaxCallback'],
+      'callback' => [static::class, 'ajaxCallback'],
       'wrapper' => 'postprocessorentity-ajax-container',
     ];
     /* @var \Drupal\strawberryfield\Plugin\StrawberryfieldKeyNameProviderManager $keyprovider_plugin_definitions */
@@ -133,18 +133,14 @@ class strawberryRunnerPostprocessorEntityForm extends EntityForm {
     Cache::invalidateTags([$cache_id]);
     $status = $strawberry_processor->save();
 
-    switch ($status) {
-      case SAVED_NEW:
-        $this->messenger->addStatus($this->t('Created the %label Strawberry Runner Post Processor.', [
+    match ($status) {
+        SAVED_NEW => $this->messenger->addStatus($this->t('Created the %label Strawberry Runner Post Processor.', [
           '%label' => $strawberry_processor->label(),
-        ]));
-        break;
-
-      default:
-        $this->messenger->addStatus($this->t('Saved the %label Strawberry Runner Post Processor.', [
+        ])),
+        default => $this->messenger->addStatus($this->t('Saved the %label Strawberry Runner Post Processor.', [
           '%label' => $strawberry_processor->label(),
-        ]));
-    }
+        ])),
+    };
    $form_state->setRedirectUrl($strawberry_processor->toUrl('collection'));
   }
 

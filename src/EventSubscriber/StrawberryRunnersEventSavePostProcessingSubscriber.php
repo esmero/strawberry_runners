@@ -81,7 +81,7 @@ class StrawberryRunnersEventSavePostProcessingSubscriber extends Strawberryfield
     $entity = $event->getEntity();
     $sbf_fields = $event->getFields();
     $this->strawberryRunnerUtilityService->invokeProcessorForAdo($entity, $sbf_fields);
-    $current_class = get_called_class();
+    $current_class = static::class;
     $event->setProcessedBy($current_class, TRUE);
     if ($this->account->hasPermission('display strawberry messages')) {
       $this->messenger->addStatus($this->t('Post processor was invoked'));

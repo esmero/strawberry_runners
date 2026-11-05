@@ -91,11 +91,6 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   protected $parseModeManager;
 
   /**
-   * @var \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager
-   */
-  private $strawberryRunnerProcessorPluginManager;
-
-  /**
    * An array containing files that can be deleted.
    *
    * @var array
@@ -121,7 +116,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    * @param string $plugin_id
    * @param mixed $plugin_definition
    * @param \Drupal\Core\Entity\EntityTypeManagerInterface $entity_type_manager
-   * @param \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager $strawberry_runner_processor_plugin_manager
+   * @param \Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager $strawberryRunnerProcessorPluginManager
    * @param \Drupal\Core\File\FileSystemInterface $file_system
    * @param \Drupal\Core\StreamWrapper\StreamWrapperManagerInterface $stream_wrapper_manager
    * @param \Drupal\Core\KeyValueStore\KeyValueFactoryInterface $key_value
@@ -130,10 +125,9 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
    * @param \Symfony\Component\EventDispatcher\EventDispatcherInterface $event_dispatcher
    * @param \Drupal\strawberry_runners\strawberryRunnerUtilityServiceInterface $utilityService
    */
-  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, StrawberryRunnersPostProcessorPluginManager $strawberry_runner_processor_plugin_manager, FileSystemInterface $file_system, StreamWrapperManagerInterface $stream_wrapper_manager, KeyValueFactoryInterface $key_value, LoggerInterface $logger, ParseModePluginManager $parse_mode_manager, EventDispatcherInterface $event_dispatcher, strawberryRunnerUtilityServiceInterface $utilityService) {
+  public function __construct(array $configuration, $plugin_id, $plugin_definition, EntityTypeManagerInterface $entity_type_manager, private StrawberryRunnersPostProcessorPluginManager $strawberryRunnerProcessorPluginManager, FileSystemInterface $file_system, StreamWrapperManagerInterface $stream_wrapper_manager, KeyValueFactoryInterface $key_value, LoggerInterface $logger, ParseModePluginManager $parse_mode_manager, EventDispatcherInterface $event_dispatcher, strawberryRunnerUtilityServiceInterface $utilityService) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->entityTypeManager = $entity_type_manager;
-    $this->strawberryRunnerProcessorPluginManager = $strawberry_runner_processor_plugin_manager;
     $this->fileSystem = $file_system;
     $this->streamWrapperManager = $stream_wrapper_manager;
     $this->keyValue = $key_value;
@@ -258,7 +252,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     // If a child processor at any level will eventually chain up to a leaf (means generate queue items again)
     $will_chain_future = FALSE;
     // Just in case someone decides to avoid setting this one up
-    $data->sbr_cleanedup_before = $data->sbr_cleanedup_before ?? FALSE;
+    $data->sbr_cleanedup_before ??= FALSE;
 
     if (!$data->sbr_cleanedup_before) {
       foreach ($childprocessorschain as $plugin_info) {
@@ -321,7 +315,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           // But still need a sequence_number, we will check if data contains either one
           // or a FIXED ->sequence_number
           if ($input_argument && $input_argument == "sequence_number") {
-            $data->{$input_argument} = $data->{$input_argument} ?? 1;
+            $data->{$input_argument} ??= 1;
             // In case $data->{$input_argument} is an array/data we will use the key as "sequence"
             // Each processor needs to be sure it passes a single item and with a unique key
             if (is_array($data->{$input_argument})) {
@@ -392,7 +386,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
           }
           // May 2024. Allow a Processor that is to be indexed, already was processed and has data in the key store
           // To use that data as input for a child one, if chained too. But only if nothing has set $io->output->plugin before
-          // This is needed for Processors (e.g OCR) that have already processed everything and then get a new chained
+          // This is needed for Processors (e.g. OCR) that have already processed everything and then get a new chained
           // Child that was never processed before. Would be terrible to have to re-process OCR completely just to get
           // A Child to trigger. We will only provide $io->input->plugin['searchapi'] bc that is what we know
           // Any other type of child won't be able to feed from pre-existing.
@@ -552,7 +546,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
 
           // May 2024, Most cases, like Pagers (PDF page extractors) $input_argument_value will be an array, a sequence
           // Leading to many children.
-          // But for chained processors like ML ones, e.g each OCR will generate exactly ONE ML
+          // But for chained processors like ML ones, e.g. each OCR will generate exactly ONE ML
           // using the same input property of OCR.
           // So we can no longer assume/not depend on $input_argument_value as we did until 0.7.0
 
@@ -576,10 +570,10 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
                     $childdata->{$input_property} = $input_property_value[$value];
                   }
 
-                  $childdata->sequence_id = $childdata->sequence_id ?? 1;
+                  $childdata->sequence_id ??= 1;
                   // I know sequence_number and sequence_id are the same. But we have been using this silly mapping
                   // for years.
-                  $childdata->sequence_number = $childdata->sequence_number ?? $childdata->sequence_id;
+                  $childdata->sequence_number ??= $childdata->sequence_id;
 
                   $childdata->internal_sequence_id = $input_argument_index + 1;
                   Drupal::queue($queue_name, TRUE)
@@ -591,11 +585,11 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
               // WE Have a single one. e.g. Generated by a Double chaining. For 0.8.0 we will accept this option
               $childdata->{$input_argument} = $input_argument_value;
               $childdata->{$input_property} = $input_property_value;
-              $childdata->siblings = $childdata->siblings ?? 1;
+              $childdata->siblings ??= 1;
 
-              $childdata->sequence_id = $childdata->sequence_id ?? 1;
-              $childdata->sequence_number = $childdata->sequence_number ?? $childdata->sequence_id;
-              $childdata->internal_sequence_id = $childdata->internal_sequence_id ?? 1;
+              $childdata->sequence_id ??= 1;
+              $childdata->sequence_number ??= $childdata->sequence_id;
+              $childdata->internal_sequence_id ??= 1;
 
               Drupal::queue($queue_name, TRUE)
                 ->createItem($childdata);
@@ -616,7 +610,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       // Note for 1.1.0 and 2.1.0
       // There is a problem with this approach.
       // Imagine a Processor that has is root and leaf at the same time
-      // We have 1000 Enqueued (e.g system binary)
+      // We have 1000 Enqueued (e.g. system binary)
       // Each one for a different ADO.
       // BY enqueuing at the end, first clean up will happen at 1001
       // By then we will be out of space.
@@ -756,7 +750,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $templocation = $this->fileSystem->realpath(
           $templocation
         );
-      } catch (FileException $exception) {
+      } catch (FileException) {
         // Means the original file is not longer there
         // This could happen if a file was added and shortly after that removed and replaced
         // by a new one.
@@ -836,8 +830,8 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
       $count = $count + (int) $results->getResultCount();
 
     }
-    // This is a good one. If I have multiple indexes, but one is missing the I assume
-    // reprocessing is needed
+    // This is a good one. If I have multiple indexes, but one is missing, then
+    // I assume reprocessing is needed
     // But if not, then I return 1, which means we have them all
     // FUTURE thinking is the best.
     return ($count == count($indexes)) ? 1 : 0;
@@ -997,7 +991,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
         $message_params
       );
     }
-    // This will delete if it was there and we did not update OR if it failed to update.
+    // This will delete, if it was there, and we did not update OR if it failed to update.
     // But on proper update we return sooner.
     unlink($io->output->file);
   }
@@ -1058,7 +1052,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
   }
 
   /**
-   * Helper method to get the real path from an uri.
+   * Helper method to get the real path from a uri.
    *
    * @param string $uri
    *   The URI of the file, e.g. public://directory/file.jpg.

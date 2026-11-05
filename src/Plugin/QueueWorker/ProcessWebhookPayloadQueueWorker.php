@@ -10,19 +10,22 @@ namespace Drupal\strawberry_runners\Plugin\QueueWorker;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Plugin\ContainerFactoryPluginInterface;
+use Drupal\Core\Queue\Attribute\QueueWorker;
 use Drupal\Core\Queue\QueueWorkerBase;
 use Drupal\Component\Serialization\Json;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
 /**
  * Process the JSON payload provided by the webhook.
- *
- * @QueueWorker(
- *   id = "strawberryrunners_process_webhook_payload",
- *   title = @Translation("Strawberry Runners Process Webhook Payload Queue Worker"),
- *   cron = {"time" = 5}
- * )
  */
+#[QueueWorker(
+  id: 'strawberryrunners_process_webhook_payload',
+  title: new TranslatableMarkup('Strawberry Runners Process Webhook Payload Queue Worker'),
+  cron: [
+    'time' => 5
+  ]
+)]
 class ProcessWebhookPayloadQueueWorker extends QueueWorkerBase implements ContainerFactoryPluginInterface {
 
   /**
@@ -68,73 +71,7 @@ class ProcessWebhookPayloadQueueWorker extends QueueWorkerBase implements Contai
    * {@inheritdoc}
    */
   public function processItem($data) {
-    // $data will have S3 API 2.1 Event structure
-    /* {
-   "Records":[
-      {
-         "eventVersion":"2.1",
-         "eventSource":"aws:s3",
-         "awsRegion":"us-west-2",
-         "eventTime":The time, in ISO-8601 format, for example, 1970-01-01T00:00:00.000Z, when Amazon S3 finished processing the request,
-         "eventName":"event-type",
-         "userIdentity":{
-            "principalId":"Amazon-customer-ID-of-the-user-who-caused-the-event"
-         },
-         "requestParameters":{
-            "sourceIPAddress":"ip-address-where-request-came-from"
-         },
-         "responseElements":{
-            "x-amz-request-id":"Amazon S3 generated request ID",
-            "x-amz-id-2":"Amazon S3 host that processed the request"
-         },
-         "s3":{
-            "s3SchemaVersion":"1.0",
-            "configurationId":"ID found in the bucket notification configuration",
-            "bucket":{
-               "name":"bucket-name",
-               "ownerIdentity":{
-                  "principalId":"Amazon-customer-ID-of-the-bucket-owner"
-               },
-               "arn":"bucket-ARN"
-            },
-            "object":{
-               "key":"object-key",
-               "size":object-size,
-               "eTag":"object eTag",
-               "versionId":"object version if bucket is versioning-enabled, otherwise null",
-               "sequencer": "a string representation of a hexadecimal value used to determine event sequence,
-                   only used with PUTs and DELETEs"
-            }
-         },
-         "glacierEventData": {
-            "restoreEventData": {
-               "lifecycleRestorationExpiryTime": "The time, in ISO-8601 format, for example, 1970-01-01T00:00:00.000Z, of Restore Expiry",
-               "lifecycleRestoreStorageClass": "Source storage class for restore"
-            }
-         }
-      }
-   ]
-}
-    */
-
-
-    // Decode the JSON that was captured.
-    $decode = Json::decode($data);
-    /*
-    // Pull out applicable values.
-    // You may want to do more validation!
-    $nodeValues = [
-      'type' => 'machine_name_here',
-      'status' => 1,
-      'title' => $decode['title'],
-      'field_custom_field' => $decode['something'],
-    ];
-
-    // Create a node.
-    $storage = $this->entityTypeManager->getStorage('node');
-    $node = $storage->create($nodeValues);
-    $node->save();*/
-
+    // @TODO. To be implemented. Marked for removal in 2.2.0
   }
 
 }

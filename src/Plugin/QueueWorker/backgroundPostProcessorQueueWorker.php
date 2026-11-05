@@ -8,30 +8,15 @@
 
 namespace Drupal\strawberry_runners\Plugin\QueueWorker;
 
-use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\TranslatableInterface;
-use Drupal\Core\File\FileSystemInterface;
-use Drupal\Core\KeyValueStore\KeyValueFactoryInterface;
-use Drupal\Core\StreamWrapper\StreamWrapperInterface;
-use Drupal\Core\StreamWrapper\StreamWrapperManagerInterface;
-use Drupal\file\FileInterface;
-use Drupal\search_api\Query\QueryInterface;
-use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
-use Psr\Log\LoggerInterface;
-use Psr\Log\LogLevel;
-use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginManager;
-use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
-use Drupal\search_api\ParseMode\ParseModePluginManager;
-
+use Drupal\Core\Queue\Attribute\QueueWorker;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
 
 /**
  * Process the JSON payload provided by the webhook.
- *
- * @QueueWorker(
- *   id = "strawberryrunners_process_background",
- *   title = @Translation("Strawberry Runners Process on Background Queue Worker"),
- * )
  */
+#[QueueWorker(
+  id: 'strawberryrunners_process_background',
+  title: new TranslatableMarkup('Strawberry Runners Process on Background Queue Worker')
+)]
 class backgroundPostProcessorQueueWorker extends AbstractPostProcessorQueueWorker {
 }
