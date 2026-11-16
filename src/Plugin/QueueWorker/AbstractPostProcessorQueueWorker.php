@@ -1113,7 +1113,7 @@ abstract class AbstractPostProcessorQueueWorker extends QueueWorkerBase implemen
     $this->instanceFiles = [];
     foreach($data->filepath_to_clean ?? [] as $instanceFile) {
       $event_type = StrawberryfieldEventType::TEMP_FILE_CREATION;
-      $current_timestamp = (new DrupalDateTime())->getTimestamp();
+      $current_timestamp = new DrupalDateTime()->getTimestamp();
       $event = new StrawberryfieldFileEvent($event_type, 'strawberry_runners', $instanceFile, $current_timestamp);
       // This will allow any temp file on ADO save to be managed
       // IN a queue by \Drupal\strawberryfield\EventSubscriber\StrawberryfieldEventCompostBinSubscriber
