@@ -353,8 +353,8 @@ class SystemBinaryPostProcessor extends StrawberryRunnersPostProcessorPluginBase
     // So one of the output types and output destinations can operate or not
     if (($file_path) && ($output_type == 'entity:file') && in_array('file', $output_destination)) {
       $extension = '';
-      $arguments = function_exists('mb_convert_encoding') ? mb_convert_encoding($arguments, 'UTF-8', mb_list_encodings()) : utf8_encode($arguments);
-      $pos = strpos($arguments,  function_exists('mb_convert_encoding') ? mb_convert_encoding('%outfile', 'UTF-8', 'ISO-8859-1') : utf8_encode('%outfile'));
+      $arguments = function_exists('mb_convert_encoding') ? mb_convert_encoding($arguments, 'UTF-8', mb_list_encodings()) : mb_convert_encoding($arguments, 'UTF-8', 'ISO-8859-1');
+      $pos = strpos($arguments,  function_exists('mb_convert_encoding') ? mb_convert_encoding('%outfile', 'UTF-8', 'ISO-8859-1') : mb_convert_encoding('%outfile', 'UTF-8', 'ISO-8859-1'));
       if ($pos === FALSE) {
         // No input, returning
         return NULL;
