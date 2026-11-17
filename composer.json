@@ -19,7 +19,7 @@
     }
   ],
   "require": {
-    "php": ">=8.1",
+    "php": ">=8.4",
     "ext-zip": "*",
     "ext-json": "*",
     "drupal/views_bulk_operations": ">=4.4.1",
@@ -31,7 +31,6 @@
     "react/child-process": "^0.6",
     "react/stream": "^1.1",
     "web64/php-nlp-client" : ">=0.4",
-    "mixnode/mixnode-warcreader-php":">=0.0",
     "ext-simplexml": "*",
     "ext-libxml": "*",
     "ext-xmlwriter": "*",
