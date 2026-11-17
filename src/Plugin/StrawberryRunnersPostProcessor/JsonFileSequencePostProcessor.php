@@ -9,24 +9,22 @@
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\SystemBinaryPostProcessor;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
-
 
 /**
  *
  * File sequence Post processor Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "filesequence",
- *    label = @Translation("Post processor that extracts/generates Ordered Sequences of files/pages/children using Files present in an ADO"),
- *    input_type = "entity:file",
- *    input_property = "filepath",
- *    input_argument = NULL
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'filesequence',
+  label: new TranslatableMarkup('Post processor that extracts/generates Ordered Sequences of files/pages/children using Files present in an ADO'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: null
+)]
 class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPluginBase {
 
   /**
@@ -175,8 +173,8 @@ class JsonFileSequencePostProcessor extends StrawberryRunnersPostProcessorPlugin
     // Needed since this executes locally on the server via SHELL.
 
     $input_property = $this->pluginDefinition['input_property'];
-    $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
+    $file_uuid = $io->input->metadata['dr:uuid'] ?? NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
     $config = $this->getConfiguration();
     $sequence_number = [];
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {

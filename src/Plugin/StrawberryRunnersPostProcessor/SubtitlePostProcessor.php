@@ -10,27 +10,26 @@ namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
 use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberry_runners\VTTLine;
 use Drupal\strawberry_runners\VTTProcessor;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
-use Laracasts\Transcriptions\Transcription;
 
 
 /**
  *
  * Sub title (VTT) Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "subtitle",
- *    label = @Translation("Post processor that extracts subtitles and generates time/space transmutated OCR"),
- *    input_type = "entity:file",
- *    input_property = "filepath",
- *    input_argument = NULL
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'subtitle',
+  label: new TranslatableMarkup('Post processor that extracts subtitles and generates time/space transmutated OCR'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: null
+)]
 class SubtitlePostProcessor extends TextPostProcessor {
 
   public $pluginDefinition;
@@ -253,9 +252,9 @@ class SubtitlePostProcessor extends TextPostProcessor {
 
     $input_property = $this->pluginDefinition['input_property'];
 
-    $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
-    $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+    $file_uuid = $io->input->metadata['dr:uuid'] ?? NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
+    $file_path = $io->input->{$input_property} ?? NULL;
     $config = $this->getConfiguration();
     // For subtitles we might have to use NLP in the actual Solr DOC for the language. The ADO might not be enough,
     // But still OK  to have as a fallback.
@@ -264,7 +263,7 @@ class SubtitlePostProcessor extends TextPostProcessor {
       $output = new \stdClass();
       $output->plugin = NULL;
       // Let's see if we need an output path or not
-      $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
+      $file_path = $io->input->{$input_property} ?? NULL;
       $out_file_path = NULL;
       $sequence_number = isset($io->input->metadata['sequence']) ? (int) $io->input->metadata['sequence'] : 1;
       $file_mime = $io->input->metadata["dr:mimetype"] ?? NULL;

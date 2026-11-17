@@ -229,13 +229,13 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
         $process = Process::fromShellCommandline($command, NULL, NULL, NULL, $timeout);
         $process->mustRun(function($type, $buffer) use ($process, &$pids): void {});
       }
-      catch (ProcessFailedException $e) {
+      catch (ProcessFailedException) {
         $this->logger->warning("Command @command Failed executing", [
           '@command' => $command
         ]);
         $failed = TRUE;
       }
-      catch (ProcessTimedOutException $e) {
+      catch (ProcessTimedOutException) {
         $this->logger->warning("Command @command timed out", [
           '@command' => $command
         ]);
@@ -375,7 +375,7 @@ abstract class StrawberryRunnersPostProcessorPluginBase extends PluginBase imple
   public function __destruct() {
     foreach($this->instanceFiles as $instanceFile) {
       $event_type = StrawberryfieldEventType::TEMP_FILE_CREATION;
-      $current_timestamp = (new DrupalDateTime())->getTimestamp();
+      $current_timestamp = new DrupalDateTime()->getTimestamp();
       $event = new StrawberryfieldFileEvent($event_type, 'strawberry_runners', $instanceFile, $current_timestamp);
       // This will allow any temp file on ADO save to be managed
       // IN a queue by \Drupal\strawberryfield\EventSubscriber\StrawberryfieldEventCompostBinSubscriber

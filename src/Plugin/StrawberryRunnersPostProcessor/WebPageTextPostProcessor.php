@@ -2,25 +2,25 @@
 
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 use Drupal\Core\Cache\CacheBackendInterface;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\strawberryfield\Plugin\search_api\datasource\StrawberryfieldFlavorDatasource;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Drupal\strawberry_runners\Web64\Nlp\NlpClient;
 
 /**
  *
  * System Binary Post processor Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "webpage",
- *    label = @Translation("Post processor that Indexes WACZ Frictionless data Search Index to Search API"),
- *    input_type = "json",
- *    input_property = "plugin_metadata",
- *    input_argument = "sequence_number"
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'webpage',
+  label: new TranslatableMarkup('Post processor that Indexes WACZ Frictionless data Search Index to Search API'),
+  input_type: 'json',
+  input_property: 'plugin_metadata',
+  input_argument: 'sequence_number'
+)]
 class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase {
 
   /**
@@ -203,7 +203,7 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
    */
   public function run(\stdClass $io, $context = StrawberryRunnersPostProcessorPluginInterface::PROCESS) {
     $input_property = $this->pluginDefinition['input_property'];
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
     $output = new \stdClass();
     $output->searchapi['fulltext'] = StrawberryfieldFlavorDatasource::EMPTY_MINIOCR_XML;
     $output->searchapi['metadata'] = [];
@@ -213,7 +213,7 @@ class WebPageTextPostProcessor extends StrawberryRunnersPostProcessorPluginBase 
       if (json_last_error() == JSON_ERROR_NONE) {
         $page_title = $page_info['title'] ?? NULL;
         $page_url = $page_info['url'] ?? '';
-        $page_title = $page_title ?? $page_url;
+        $page_title ??= $page_url;
         $page_text = $page_info['text'] ?? '';
         $page_text = preg_replace('/[\x0D]/', '', $page_text);
         $page_ts = $page_info['ts'] ?? date("c");

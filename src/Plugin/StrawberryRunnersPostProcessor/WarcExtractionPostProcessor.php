@@ -9,7 +9,8 @@
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
 
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 use Mixnode\WarcReader;
@@ -18,14 +19,13 @@ use Mixnode\WarcReader;
 /**
  *
  * System Binary Post processor Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "warc",
- *    label = @Translation("Post processor that extracts info and data from WARC files"),
- *    input_type = "entity:file",
- *    input_property = "filepath"
- * )
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'warc',
+  label: new TranslatableMarkup('Post processor that extracts info and data from WARC files'),
+  input_type: 'entity:file',
+  input_property: 'filepath'
+)]
 class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBase{
 
   /**
@@ -210,7 +210,6 @@ class WarcExtractionPostProcessor extends StrawberryRunnersPostProcessorPluginBa
         // A WARC record is broken into two parts: header and content.
         // header contains metadata about content, while content is the actual resource captured.
         $output[] = $record['header'];
-        //print_r($record['content']);
       }
       if (is_null($output)) {
         throw new \Exception("Could not execute WarcReader");

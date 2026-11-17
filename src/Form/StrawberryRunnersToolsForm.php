@@ -50,7 +50,7 @@ class StrawberryRunnersToolsForm extends FormBase {
     return 'strawberry_runners_tools_form';
   }
 
-  public function buildForm(array $form, FormStateInterface $form_state, NodeInterface $node = NULL) {
+  public function buildForm(array $form, FormStateInterface $form_state, ?NodeInterface $node = NULL) {
 
     // For code Mirror
     // @TODO make this module dependant

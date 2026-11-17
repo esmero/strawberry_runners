@@ -5,6 +5,7 @@ namespace Drupal\strawberry_runners\Plugin\views\filter;
 use Drupal\Core\Form\FormStateInterface;
 use Drupal\search_api\Entity\Index;
 use Drupal\search_api\Plugin\views\query\SearchApiQuery;
+use Drupal\views\Attribute\ViewsFilter;
 use Drupal\views\Plugin\views\filter\FilterPluginBase;
 use Drupal\search_api\Plugin\views\filter\SearchApiFilterTrait;
 use Drupal\Core\Entity\EntityStorageInterface;
@@ -17,9 +18,8 @@ use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\abstractMLPo
  * Defines a filter that handles Text Similarity.
  *
  * @ingroup views_filter_handlers
- *
- * @ViewsFilter("sbr_textml_filter")
  */
+#[ViewsFilter('sbr_textml_filter')]
 class StrawberryRunnersMLTextfilter extends FilterPluginBase /* FilterPluginBase */ {
 
   use SearchApiFilterTrait;
@@ -403,7 +403,7 @@ class StrawberryRunnersMLTextfilter extends FilterPluginBase /* FilterPluginBase
         try {
           $response = $plugin_instance->callTextML($this->value, TRUE);
         }
-        catch (\Exception $exception) {
+        catch (\Exception) {
           // Give user feedback
           return;
         }

@@ -7,24 +7,23 @@
  */
 
 namespace Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\Core\Form\FormStateInterface;
-use frictionlessdata\datapackage\Package;
-use Drupal\strawberry_runners\Annotation\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 
 /**
  *
- * System Binary Post processor Plugin Implementation
- *
- * @StrawberryRunnersPostProcessor(
- *    id = "datapackage",
- *    label = @Translation("Post processor that writes/reads Frictionless Data Packages"),
- *    input_type = "entity:file",
- *    input_property = "filepath",
- *    input_argument = "sequence_number"
- * )
+ * Deprecated Frictionless Post processor Plugin Implementation
  */
+#[StrawberryRunnersPostProcessor(
+  id: 'datapackage',
+  label: new TranslatableMarkup('(Deprecated) Post processor that writes/reads Frictionless Data Packages'),
+  input_type: 'entity:file',
+  input_property: 'filepath',
+  input_argument: 'sequence_number'
+)]
 class FrictionlessDataPackagePostProcessor extends StrawberryRunnersPostProcessorPluginBase {
 
   /**
@@ -227,29 +226,19 @@ class FrictionlessDataPackagePostProcessor extends StrawberryRunnersPostProcesso
 
     $input_property = $this->pluginDefinition['input_property'];
     $input_argument = $this->pluginDefinition['input_argument'];
-    $file_uuid = isset($io->input->metadata['dr:uuid']) ? $io->input->metadata['dr:uuid'] : NULL;
-    $node_uuid = isset($io->input->nuuid) ? $io->input->nuuid : NULL;
+    $file_uuid = $io->input->metadata['dr:uuid'] ?? NULL;
+    $node_uuid = $io->input->nuuid ?? NULL;
     $config = $this->getConfiguration();
-    $timeout = $config['timeout']; // in seconds
 
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
-      // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
       $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
-      $file_path = isset($io->input->{$input_property}) ? $io->input->{$input_property} : NULL;
-      $package = Package::load($file_path);
-      foreach ($package as $resource) {
-        echo $resource->name();
-        foreach ($resource as $row) {
-          echo $row;
-        }
-      }
-          $output = new \stdClass();
-          $output->searchapi['fulltext'] = NULL;
-          $output->plugin = NULL;
-          $io->output = $output;
-        }
-      // Lastly plain text version of the XML.
-      $io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
+      $file_path = $io->input->{$input_property} ?? NULL;
+      $output = new \stdClass();
+      $output->searchapi['fulltext'] = NULL;
+      $output->plugin = NULL;
+      $io->output = $output;
+    }
+    $io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
   }
 
   /**
@@ -265,7 +254,7 @@ class FrictionlessDataPackagePostProcessor extends StrawberryRunnersPostProcesso
    */
   public function buildExecutableCommand(\stdClass $io) {
 
-      return NULL;
+    return NULL;
   }
 
 }

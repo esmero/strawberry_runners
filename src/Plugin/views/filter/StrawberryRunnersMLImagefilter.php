@@ -2,101 +2,82 @@
 
 namespace Drupal\strawberry_runners\Plugin\views\filter;
 
-use Drupal\Core\Cache\CacheableMetadata;
-use Drupal\Core\Cache\RefinableCacheableDependencyInterface;
-use Drupal\Core\Entity\EntityTypeManagerInterface;
-use Drupal\Core\Entity\TypedData\EntityDataDefinitionInterface;
-use Drupal\Core\Field\TypedData\FieldItemDataDefinitionInterface;
 use Drupal\Core\Form\FormStateInterface;
-use Drupal\Core\Form\OptGroup;
-use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManager;
-use Drupal\Core\TypedData\ComplexDataDefinitionInterface;
-use Drupal\Core\TypedData\DataDefinitionInterface;
-use Drupal\node\NodeStorageInterface;
 use Drupal\search_api\Entity\Index;
-use Drupal\search_api\IndexInterface;
-use Drupal\search_api\ParseMode\ParseModePluginManager;
-use Drupal\search_api\Plugin\views\filter\SearchApiFulltext;
 use Drupal\search_api\Plugin\views\query\SearchApiQuery;
-use Drupal\search_api\SearchApiException;
-use Drupal\search_api_solr\Utility\Utility;
 use Drupal\strawberryfield\Tools\StrawberryfieldJsonHelper;
+use Drupal\views\Attribute\ViewsFilter;
 use Drupal\views\Plugin\views\filter\FilterPluginBase;
 use Drupal\search_api\Plugin\views\filter\SearchApiFilterTrait;
-use Drupal\views\Plugin\views\filter\InOperator;
-use Drupal\views\Views;
 use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\search_api\Utility\FieldsHelperInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
-use Drupal\Core\Entity\Element\EntityAutocomplete;
 use Drupal\Core\Cache\CacheBackendInterface;
-use Drupal\Core\Render\RenderContext;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessor\abstractMLPostProcessor;
 
 /**
  * Defines a filter that handles Image Similarity.
  *
  * @ingroup views_filter_handlers
- *
- * @ViewsFilter("sbr_imageml_filter")
  */
+#[ViewsFilter('sbr_imageml_filter')]
 class StrawberryRunnersMLImagefilter extends FilterPluginBase /* FilterPluginBase */
 {
 
-  const IMAGEML_INPUT_SCHEMA = <<<'JSON'
-{
-    "title": "Image ML filter Input structure",
-    "description": "A JSON Schema describing what this filter accepts.",
-    "type": "object",
-    "properties": {
-      "iiif_image_id": {
-        "type": "string"
-      },
-      "image_uuid": {
-        "type": "string"
-      },
-      "bbox": {
-        "type": "object",
-        "properties": {
-          "x": {
-            "type": "number"
-          },
-          "y": {
-            "type": "number"
-          },
-          "w": {
-            "type": "number"
-          },
-          "h": {
-            "type": "number"
-          }
+  const IMAGEML_INPUT_SCHEMA = <<<'JSON_WRAP'
+  {
+      "title": "Image ML filter Input structure",
+      "description": "A JSON Schema describing what this filter accepts.",
+      "type": "object",
+      "properties": {
+        "iiif_image_id": {
+          "type": "string"
         },
-        "required": [
-          "x",
-          "y",
-          "w",
-          "h"
-        ]
-      }
-    },
-    "oneOf": [
-      {
-        "required": [
-          "iiif_image_id"
-        ]
+        "image_uuid": {
+          "type": "string"
+        },
+        "bbox": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "type": "number"
+            },
+            "y": {
+              "type": "number"
+            },
+            "w": {
+              "type": "number"
+            },
+            "h": {
+              "type": "number"
+            }
+          },
+          "required": [
+            "x",
+            "y",
+            "w",
+            "h"
+          ]
+        }
       },
-      {
-        "required": [
-          "image_uuid"
-        ]
-      }
-    ],
-    "required": [
-      "bbox"
-    ]
-}
-JSON;
+      "oneOf": [
+        {
+          "required": [
+            "iiif_image_id"
+          ]
+        },
+        {
+          "required": [
+            "image_uuid"
+          ]
+        }
+      ],
+      "required": [
+        "bbox"
+      ]
+  }
+  JSON_WRAP;
 
 
   use SearchApiFilterTrait;
@@ -494,7 +475,7 @@ JSON;
         try {
           $response = $plugin_instance->callImageML($iiif_image_url, []);
         }
-        catch (\Exception $exception) {
+        catch (\Exception) {
           // Give user feedback
           return;
         }
@@ -608,7 +589,7 @@ JSON;
       }
     }
     else {
-      // Do for non exposed. Should be directly a JSON?
+      // @TODO for non exposed. Should be directly a JSON?
     }
   }
 
