@@ -11,16 +11,15 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
 use Drupal\strawberry_runners\Attribute\StrawberryRunnersPostProcessor;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginBase;
 use Drupal\Core\Form\FormStateInterface;
-use frictionlessdata\datapackage\Package;
 use Drupal\strawberry_runners\Plugin\StrawberryRunnersPostProcessorPluginInterface;
 
 /**
  *
- * System Binary Post processor Plugin Implementation
+ * Deprecated Frictionless Post processor Plugin Implementation
  */
 #[StrawberryRunnersPostProcessor(
   id: 'datapackage',
-  label: new TranslatableMarkup('Post processor that writes/reads Frictionless Data Packages'),
+  label: new TranslatableMarkup('(Deprecated) Post processor that writes/reads Frictionless Data Packages'),
   input_type: 'entity:file',
   input_property: 'filepath',
   input_argument: 'sequence_number'
@@ -230,26 +229,16 @@ class FrictionlessDataPackagePostProcessor extends StrawberryRunnersPostProcesso
     $file_uuid = $io->input->metadata['dr:uuid'] ?? NULL;
     $node_uuid = $io->input->nuuid ?? NULL;
     $config = $this->getConfiguration();
-    $timeout = $config['timeout']; // in seconds
 
     if (isset($io->input->{$input_property}) && $file_uuid && $node_uuid) {
-      // To be used by miniOCR as id in the form of {nodeuuid}/canvas/{fileuuid}/p{pagenumber}
       $sequence_number = isset($io->input->{$input_argument}) ? (int) $io->input->{$input_argument} : 1;
       $file_path = $io->input->{$input_property} ?? NULL;
-      $package = Package::load($file_path);
-      foreach ($package as $resource) {
-        echo $resource->name();
-        foreach ($resource as $row) {
-          echo $row;
-        }
-      }
-          $output = new \stdClass();
-          $output->searchapi['fulltext'] = NULL;
-          $output->plugin = NULL;
-          $io->output = $output;
-        }
-      // Lastly plain text version of the XML.
-      $io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
+      $output = new \stdClass();
+      $output->searchapi['fulltext'] = NULL;
+      $output->plugin = NULL;
+      $io->output = $output;
+    }
+    $io->output->searchapi['plaintext'] = isset($output->searchapi['fulltext']) ? strip_tags(str_replace("<l>", PHP_EOL . "<l> ", $output->searchapi['fulltext'])) : '';
   }
 
   /**
@@ -265,7 +254,7 @@ class FrictionlessDataPackagePostProcessor extends StrawberryRunnersPostProcesso
    */
   public function buildExecutableCommand(\stdClass $io) {
 
-      return NULL;
+    return NULL;
   }
 
 }
